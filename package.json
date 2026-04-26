@@ -1,0 +1,40 @@
+{
+  "name": "open-context-engine",
+  "version": "0.1.0",
+  "description": "Context engine for codebase indexing and retrieval",
+  "main": "dist/index.js",
+  "bin": {
+    "oce": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.10.0",
+    "chokidar": "^4.0.3",
+    "commander": "^12.0.0",
+    "ignore": "^6.0.0",
+    "minimatch": "^10.0.0",
+    "openai": "^4.70.0",
+    "sqlite-vec": "^0.1.9",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.25.10",
+    "zod": "^3.23.0"
+  },
+  "optionalDependencies": {
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^1.6.1"
+  }
+}

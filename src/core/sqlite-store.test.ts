@@ -1,0 +1,151 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { SqliteStore } from "./sqlite-store";
+import { Chunk } from "./types";
+
+const DIM = 4;
+
+function makeVec(seed: number, dim = DIM): number[] {
+  const v = new Array(dim).fill(0).map((_, i) => Math.sin(seed + i * 0.37));
+  const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+  return v.map(x => x / norm);
+}
+
+function makeChunk(id: string, opts: Partial<Chunk> = {}): Chunk {
+  return {
+    id,
+    path: opts.path ?? `src/${id}.ts`,
+    startLine: opts.startLine ?? 1,
+    endLine: opts.endLine ?? 10,
+    contents: opts.contents ?? `function ${id}() { return ${id}; }`,
+    vector: opts.vector ?? makeVec(id.charCodeAt(0)),
+    symbolName: opts.symbolName,
+    symbolKind: opts.symbolKind,
+    parentSymbol: opts.parentSymbol,
+    language: opts.language,
+  };
+}
+
+async function freshStore(): Promise<{ store: SqliteStore; dir: string }> {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-test-"));
+  const store = new SqliteStore(dir, DIM);
+  await store.initialize();
+  return { store, dir };
+}
+
+describe("SqliteStore", () => {
+  let store: SqliteStore;
+  let dir: string;
+
+  beforeEach(async () => {
+    ({ store, dir } = await freshStore());
+  });
+
+  afterEach(async () => {
+    try { store.close(); } catch {}
+    try { await fs.promises.rm(dir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("starts empty", () => {
+    expect(store.getChunkCount()).toBe(0);
+    expect(store.getFileCount()).toBe(0);
+    expect(store.getIndexedPaths()).toEqual([]);
+  });
+
+  it("adds a chunk and reports counts", () => {
+    store.add(makeChunk("a"));
+    expect(store.getChunkCount()).toBe(1);
+    expect(store.getIndexedPaths()).toEqual(["src/a.ts"]);
+  });
+
+  it("addBatch is transactional", () => {
+    store.addBatch([makeChunk("a"), makeChunk("b"), makeChunk("c")]);
+    expect(store.getChunkCount()).toBe(3);
+  });
+
+  it("rejects chunks without a vector", () => {
+    const bad: Chunk = { ...makeChunk("a"), vector: undefined };
+    expect(() => store.add(bad)).toThrow(/embedding vector/);
+  });
+
+  it("rejects chunks with the wrong dimension", () => {
+    const bad = makeChunk("a", { vector: [0, 0, 0] });
+    expect(() => store.add(bad)).toThrow(/dimension mismatch/);
+  });
+
+  it("removeByPath deletes chunks, vectors, and fts rows", () => {
+    store.add(makeChunk("a"));
+    store.add(makeChunk("b", { path: "src/b.ts" }));
+    const removed = store.removeByPath("src/a.ts");
+    expect(removed).toBe(1);
+    expect(store.getIndexedPaths()).toEqual(["src/b.ts"]);
+  });
+
+  it("upsertFile records file hashes", () => {
+    store.upsertFile("src/a.ts", "hash-1");
+    store.upsertFile("src/a.ts", "hash-2");
+    const hashes = store.getFileHashes();
+    expect(hashes.get("src/a.ts")).toBe("hash-2");
+    expect(store.getFileCount()).toBe(1);
+  });
+
+  it("vectorSearch returns nearest chunk first", () => {
+    const anchor = makeVec(1);
+    store.add(makeChunk("near", { vector: anchor }));
+    store.add(makeChunk("far", { vector: makeVec(1000) }));
+    const results = store.vectorSearch(anchor, 2);
+    expect(results).toHaveLength(2);
+    expect(results[0].chunk.id).toBe("near");
+  });
+
+  it("vectorSearch respects pathPrefix", () => {
+    store.add(makeChunk("a", { path: "src/a.ts" }));
+    store.add(makeChunk("b", { path: "tests/b.ts" }));
+    const results = store.vectorSearch(makeVec(1), 10, "tests/");
+    expect(results.map(r => r.chunk.path)).toEqual(["tests/b.ts"]);
+  });
+
+  it("bm25Search finds keyword matches", () => {
+    store.add(makeChunk("login", { contents: "function authenticateUser(password: string) {}" }));
+    store.add(makeChunk("misc", { contents: "function renderButton() {}" }));
+    const results = store.bm25Search("authenticateUser", 5);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].chunk.id).toBe("login");
+  });
+
+  it("bm25Search returns [] for gibberish with no tokens", () => {
+    store.add(makeChunk("a"));
+    expect(store.bm25Search("!!!", 5)).toEqual([]);
+  });
+
+  it("getChunksBySymbol indexes by symbol_name", () => {
+    store.add(makeChunk("a", { symbolName: "renderHeader", symbolKind: "function" }));
+    store.add(makeChunk("b", { symbolName: "renderFooter", symbolKind: "function" }));
+    const hits = store.getChunksBySymbol("renderHeader");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].id).toBe("a");
+  });
+
+  it("auto-deletes legacy JSON files on first open", async () => {
+    const legacyDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "legacy-"));
+    await fs.promises.writeFile(path.join(legacyDir, "store.json"), "{}");
+    await fs.promises.writeFile(path.join(legacyDir, "vectors.json"), "[]");
+    const s = new SqliteStore(legacyDir, DIM);
+    await s.initialize();
+    expect(fs.existsSync(path.join(legacyDir, "store.json"))).toBe(false);
+    expect(fs.existsSync(path.join(legacyDir, "vectors.json"))).toBe(false);
+    s.close();
+    await fs.promises.rm(legacyDir, { recursive: true, force: true });
+  });
+
+  it("persists across reopen", async () => {
+    store.add(makeChunk("a"));
+    store.close();
+    const s2 = new SqliteStore(dir, DIM);
+    await s2.initialize();
+    expect(s2.getChunkCount()).toBe(1);
+    s2.close();
+  });
+});

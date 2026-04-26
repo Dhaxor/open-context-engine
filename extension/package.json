@@ -1,0 +1,366 @@
+{
+  "name": "open-context-engine",
+  "displayName": "Open Context Engine",
+  "description": "AI-powered codebase indexing, semantic search, and context-aware chat",
+  "version": "0.1.0",
+  "publisher": "open-context",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Chat"
+  ],
+  "keywords": [
+    "semantic search",
+    "code indexing",
+    "AI",
+    "embeddings",
+    "RAG"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "openContext.indexWorkspace",
+        "title": "Index Workspace",
+        "category": "Open Context",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "openContext.reindexFile",
+        "title": "Re-index Current File",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.searchCodebase",
+        "title": "Search Codebase",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.quickSearch",
+        "title": "Quick Search",
+        "category": "Open Context",
+        "icon": "$(search)"
+      },
+      {
+        "command": "openContext.openChat",
+        "title": "Open Chat",
+        "category": "Open Context",
+        "icon": "$(comments-view-icon)"
+      },
+      {
+        "command": "openContext.clearChat",
+        "title": "New Chat",
+        "category": "Open Context",
+        "icon": "$(add)"
+      },
+      {
+        "command": "openContext.showStatus",
+        "title": "Show Status",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.openSettings",
+        "title": "Open Settings",
+        "category": "Open Context",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "openContext.explainWithContext",
+        "title": "Explain with Context",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.findSimilar",
+        "title": "Find Similar Code",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.removeFromIndex",
+        "title": "Remove from Index",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.setEmbeddingApiKey",
+        "title": "Set Embedding API Key",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.setLLMApiKey",
+        "title": "Set LLM API Key",
+        "category": "Open Context"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "openContext.quickSearch",
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "openContext",
+          "title": "Open Context",
+          "icon": "$(beaker)"
+        }
+      ]
+    },
+    "views": {
+      "openContext": [
+        {
+          "id": "openContext.chat",
+          "name": "Chat",
+          "icon": "$(comments-view-icon)",
+          "type": "webview"
+        },
+        {
+          "id": "indexedFiles",
+          "name": "Indexed Files",
+          "icon": "$(file-code)",
+          "type": "tree",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "indexedFiles",
+        "contents": "No files indexed yet. [Index Workspace](command:openContext.indexWorkspace)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "openContext.explainWithContext",
+          "when": "editorHasSelection",
+          "group": "openContext@1"
+        },
+        {
+          "command": "openContext.findSimilar",
+          "when": "editorHasSelection",
+          "group": "openContext@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "openContext.reindexFile",
+          "when": "view == indexedFiles && viewItem == file",
+          "group": "inline"
+        },
+        {
+          "command": "openContext.removeFromIndex",
+          "when": "view == indexedFiles && viewItem == file",
+          "group": "navigation@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "openContext.clearChat",
+          "when": "view == openContext.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "openContext.indexWorkspace",
+          "when": "view == openContext.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "openContext.openSettings",
+          "when": "view == openContext.chat",
+          "group": "navigation@3"
+        },
+        {
+          "command": "openContext.indexWorkspace",
+          "when": "view == indexedFiles",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Open Context Engine",
+      "properties": {
+        "openContext.embedding.provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "voyage",
+            "ollama"
+          ],
+          "enumDescriptions": [
+            "OpenAI embeddings",
+            "Voyage AI embeddings (recommended for code, supports voyage-code-3)",
+            "Ollama local embeddings"
+          ],
+          "default": "voyage",
+          "description": "Embedding provider (voyage-code-3 recommended for code)",
+          "order": 1
+        },
+        "openContext.embedding.model": {
+          "type": "string",
+          "enum": [
+            "voyage-code-3",
+            "text-embedding-3-large",
+            "text-embedding-3-small",
+            "nomic-embed-text"
+          ],
+          "enumDescriptions": [
+            "Voyage code-3 (recommended, 32K context, best for code)",
+            "OpenAI text-embedding-3-large (3072 dim)",
+            "OpenAI text-embedding-3-small (1536 dim)",
+            "Nomic embed text via Ollama (768 dim)"
+          ],
+          "default": "voyage-code-3",
+          "description": "Embedding model name",
+          "order": 2
+        },
+        "openContext.embedding.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Embedding API key. **Deprecated:** use the command *Open Context: Set Embedding API Key* so the key is stored in VS Code SecretStorage.",
+          "deprecationMessage": "Use the command 'Open Context: Set Embedding API Key' instead; plain-text settings are synced and not secure.",
+          "order": 3
+        },
+        "openContext.llm.provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "google"
+          ],
+          "enumDescriptions": [
+            "OpenAI (GPT-5.4, GPT-5 Codex, GPT-5)",
+            "Anthropic (Claude Opus 4.7, Sonnet 4.6, Haiku 4.5)",
+            "Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5)"
+          ],
+          "default": "openai",
+          "description": "LLM provider for chat and agent",
+          "order": 4
+        },
+        "openContext.llm.model": {
+          "type": "string",
+          "default": "gpt-5.4",
+          "markdownDescription": "LLM model for chat and agent. Common choices:\n\n**OpenAI:** `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-codex`, `gpt-5.3-codex`, `gpt-5.1-codex-max`, `gpt-5`, `gpt-4.1`\n\n**Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`\n\n**Google:** `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`, `gemini-2.5-pro`, `gemini-2.5-flash`",
+          "order": 5
+        },
+        "openContext.llm.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "LLM API key. **Deprecated:** use the command *Open Context: Set LLM API Key* so the key is stored in VS Code SecretStorage.",
+          "deprecationMessage": "Use the command 'Open Context: Set LLM API Key' instead; plain-text settings are synced and not secure.",
+          "order": 6
+        },
+        "openContext.agent.maxSteps": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum tool-use steps per agent turn"
+        },
+        "openContext.agent.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum tokens per agent LLM call"
+        },
+        "openContext.agent.historyTokenBudget": {
+          "type": "number",
+          "default": 120000,
+          "description": "Approximate token budget for conversation history; older messages are compacted when exceeded"
+        },
+        "openContext.agent.maxToolResultChars": {
+          "type": "number",
+          "default": 24000,
+          "description": "Maximum characters from a tool result kept in history (longer results are truncated with a marker)"
+        },
+        "openContext.agent.maxRetries": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum retries on transient LLM errors (429, 5xx, network)"
+        },
+        "openContext.agent.allowEdits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Give the agent tools to edit, create, and delete files in the workspace"
+        },
+        "openContext.agent.shell.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Give the agent a run-command tool to execute non-interactive shell commands in the workspace root"
+        },
+        "openContext.agent.shell.allowlist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "markdownDescription": "Allowlist of command names the agent may run (e.g. `[\"npm\",\"git\",\"ls\"]`). Empty means any command is allowed. Matching is done against the first whitespace-delimited token in the command string."
+        },
+        "openContext.agent.shell.timeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "description": "Default timeout for each shell command in milliseconds (1000..300000)"
+        },
+        "openContext.agent.webSearch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Give the agent a web-search tool backed by Tavily (requires API key in the chat settings drawer)"
+        },
+        "openContext.autoIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically re-index on file changes"
+        },
+        "openContext.indexOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Index workspace on extension startup"
+        },
+        "openContext.search.topK": {
+          "type": "number",
+          "default": 20,
+          "description": "Number of search results to return"
+        },
+        "openContext.search.minScore": {
+          "type": "number",
+          "default": 0.15,
+          "description": "Minimum similarity score threshold"
+        },
+        "openContext.chunkSize": {
+          "type": "number",
+          "default": 80,
+          "description": "Chunk size in lines"
+        },
+        "openContext.chunkOverlap": {
+          "type": "number",
+          "default": 15,
+          "description": "Chunk overlap in lines"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node build.js --minify",
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "chokidar": "^4.0.3",
+    "ignore": "^6.0.0",
+    "minimatch": "^10.0.0",
+    "openai": "^4.70.0",
+    "sqlite-vec": "^0.1.9",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.25.10"
+  }
+}
