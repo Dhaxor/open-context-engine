@@ -27,6 +27,12 @@ const external = [
   "@ai-sdk/anthropic",
   "@ai-sdk/google",
   "@ai-sdk/openai",
+  // Additional runtime deps imported from ../src/
+  "openai",
+  "minimatch",
+  "ignore",
+  "commander",
+  "zod",
 ];
 
 const options = {
