@@ -7,6 +7,7 @@
     "oce": "dist/cli/index.js"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",

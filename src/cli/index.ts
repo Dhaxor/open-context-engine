@@ -1,12 +1,25 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { OpenContext } from "../core/context";
-import { OpenContextConfig, DEFAULT_EMBEDDING_CONFIG, EMBEDDING_MODELS } from "../core/types";
+import { OpenContextConfig, EMBEDDING_MODELS } from "../core/types";
 import { runMCPServer } from "../mcp/server";
 import { ContextAgent, defaultAgentTools, LLMProvider } from "../agent/agent";
 import * as readline from "readline";
 
 const program = new Command();
+
+function validateConfig(config: OpenContextConfig): void {
+  const { provider, apiKey, baseUrl } = config.embedding;
+  if (provider === "openai" && !apiKey) {
+    throw new Error("OPENAI_API_KEY is required for OpenAI embeddings. Set it via --api-key, OPENAI_API_KEY env var, or OCE_EMBEDDING_API_KEY env var.");
+  }
+  if (provider === "voyage" && !apiKey) {
+    throw new Error("VOYAGE_API_KEY is required for Voyage embeddings. Set it via --api-key, VOYAGE_API_KEY env var, or OCE_EMBEDDING_API_KEY env var.");
+  }
+  if (provider === "ollama" && !baseUrl) {
+    throw new Error("OLLAMA_BASE_URL is required for Ollama. Set it via --base-url, OLLAMA_BASE_URL env var, or OCE_EMBEDDING_BASE_URL env var.");
+  }
+}
 
 function resolveConfig(opts: any): OpenContextConfig {
   const provider = opts.provider || process.env.OCE_EMBEDDING_PROVIDER || "voyage";
@@ -18,7 +31,9 @@ function resolveConfig(opts: any): OpenContextConfig {
   if (provider === "openai") { apiKey = opts.apiKey || process.env.OPENAI_API_KEY; baseUrl = opts.baseUrl; }
   else if (provider === "voyage") { apiKey = opts.apiKey || process.env.VOYAGE_API_KEY; }
   else { baseUrl = opts.baseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434"; }
-  return { workspaceRoot: workspace, embedding: { provider, model, apiKey, baseUrl, dimension, batchSize }, storePath: opts.storePath, maxFileSize: opts.maxFileSize, chunkSize: opts.chunkSize, chunkOverlap: opts.chunkOverlap };
+  const config: OpenContextConfig = { workspaceRoot: workspace, embedding: { provider, model, apiKey, baseUrl, dimension, batchSize }, storePath: opts.storePath, maxFileSize: opts.maxFileSize, chunkSize: opts.chunkSize, chunkOverlap: opts.chunkOverlap };
+  validateConfig(config);
+  return config;
 }
 
 program.name("oce").description("Open Context Engine").version("0.1.0");

@@ -1,5 +1,5 @@
 import { OpenContext } from "../core/context";
-import { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall, ToolDefinition } from "./types";
+import { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolDefinition } from "./types";
 import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
 import { compactHistory, truncateToolResult, withRetry } from "./utils";
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";

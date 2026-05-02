@@ -53,6 +53,16 @@ export class ContextService implements vscode.Disposable {
         });
     }
 
+    public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
+        await this.dispose();
+        const config = await this.getConfigForPath(dirPath);
+        this._context = await OpenContext.create(config);
+        await this._context.indexWorkspace((stage, current, total) => {
+            if (token?.isCancellationRequested) throw new vscode.CancellationError();
+            onProgress?.(stage, current, total);
+        });
+    }
+
     public async startWatching(): Promise<void> {
         if (this._watcher) return;
         const ctx = await this.getContext();
@@ -158,10 +168,13 @@ export class ContextService implements vscode.Disposable {
     }
 
     public async getWorkspaceConfig(): Promise<OpenContextConfig> {
-        const cfg = vscode.workspace.getConfiguration("openContext");
         const workspaceRoot = this.resolveWorkspaceRoot();
         if (!workspaceRoot) throw new Error("No workspace folder found. Please open a folder first.");
+        return this.getConfigForPath(workspaceRoot);
+    }
 
+    private async getConfigForPath(workspaceRoot: string): Promise<OpenContextConfig> {
+        const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<"openai" | "voyage" | "ollama">("embedding.provider", "voyage");
         const model = cfg.get<string>("embedding.model", DEFAULT_MODEL_BY_PROVIDER[provider] ?? "voyage-code-3");
         const modelInfo = EMBEDDING_MODELS[model];

@@ -120,22 +120,28 @@ export class VoyageEmbeddingProvider implements EmbeddingProvider {
 }
 
 export class OllamaEmbeddingProvider implements EmbeddingProvider {
-  private baseUrl: string; private model: string; private dimension: number;
+  private baseUrl: string; private model: string; private dimension: number; private batchSize: number;
 
   constructor(config: EmbeddingConfig) {
     this.baseUrl = (config.baseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
     this.model = config.model || "nomic-embed-text";
     this.dimension = config.dimension || 768;
+    this.batchSize = config.batchSize || 64;
   }
 
   async embed(texts: string[]): Promise<number[][]> {
-    const json: any = await retry("ollama.embed", () => postJSON(
-      `${this.baseUrl}/api/embed`,
-      {},
-      { model: this.model, input: texts },
-    ));
-    if (!Array.isArray(json.embeddings)) throw new Error("Ollama: unexpected response shape (missing embeddings[])");
-    return json.embeddings;
+    const out: number[][] = [];
+    for (let i = 0; i < texts.length; i += this.batchSize) {
+      const batch = texts.slice(i, i + this.batchSize);
+      const json: any = await retry("ollama.embed", () => postJSON(
+        `${this.baseUrl}/api/embed`,
+        {},
+        { model: this.model, input: batch },
+      ));
+      if (!Array.isArray(json.embeddings)) throw new Error("Ollama: unexpected response shape (missing embeddings[])");
+      out.push(...json.embeddings);
+    }
+    return out;
   }
 
   getDimension(): number { return this.dimension; }

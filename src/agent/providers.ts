@@ -35,7 +35,7 @@ export class OpenAICaller implements LLMCaller {
     const req: any = { model: this.model, messages: oaiMessages, tools: toolDefs.length ? toolDefs : undefined, stream: true };
     if (usesMaxCompletionTokens(this.model)) req.max_completion_tokens = this.maxTokens;
     else req.max_tokens = this.maxTokens;
-    const stream = await client.chat.completions.create(req, { signal });
+    const stream = (await client.chat.completions.create(req, { signal })) as unknown as AsyncIterable<any>;
     let text = "";
     const toolAccum: Record<number, { id: string; name: string; args: string }> = {};
     let stopReason: LLMResponse["stopReason"] = "stop";

@@ -1,5 +1,5 @@
 import { SqliteStore } from "./sqlite-store";
-import { SearchResult, SearchConfig, Chunk } from "./types";
+import { SearchResult, SearchConfig } from "./types";
 import { EmbeddingProvider } from "./embedder";
 import { Reranker } from "./reranker";
 

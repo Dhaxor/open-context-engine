@@ -11,5 +11,5 @@ export type { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall,
 export type { EditApplier } from "./agent/edit-tools";
 export { unifiedDiff } from "./core/diff";
 export { createMCPServer, runMCPServer } from "./mcp/server";
-export type { File, Chunk, SearchResult, IndexingResult, OpenContextState, OpenContextConfig, EmbeddingConfig, SearchConfig, RerankerConfig } from "./core/types";
+export type { File, Chunk, SearchResult, IndexingResult, OpenContextState, OpenContextConfig, EmbeddingConfig, SearchConfig, RerankerConfig, FreshnessReport, GitState, IndexMetadata } from "./core/types";
 export { OpenAIEmbeddingProvider, VoyageEmbeddingProvider, OllamaEmbeddingProvider, createEmbeddingProvider } from "./core/embedder";

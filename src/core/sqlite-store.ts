@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
 import type { Database as BetterSqlite3Database, Statement } from "better-sqlite3";
-import { Chunk, ChunkMetadata, SearchResult, OpenContextState, FileIndexEntry, SymbolKind } from "./types";
+import { Chunk, SearchResult, OpenContextState, SymbolKind } from "./types";
 
 const requireFromHere = createRequire(__filename);
 
@@ -124,6 +124,10 @@ export class SqliteStore {
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("embedding_dimension", String(this.expectedDim));
     if (storedDim && Number(storedDim) !== this.expectedDim) {
+      console.warn(
+        `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}. ` +
+        `Re-indexing is required. Clearing existing chunks and file records...`
+      );
       this.db.exec("DELETE FROM chunks; DELETE FROM files;");
     }
   }

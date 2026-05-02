@@ -38,6 +38,20 @@ export interface SearchResult {
 export interface IndexingResult { newlyIndexed: string[]; alreadyIndexed: string[]; removed: string[]; duration: number; }
 export interface OpenContextState { version: 1; files: FileIndexEntry[]; storePath: string; workspaceRoot: string; lastSynced: string; embeddingProvider: string; embeddingModel: string; embeddingDimension: number; }
 export interface FileIndexEntry { path: string; hash: string; chunkIds: string[]; lastModified: number; }
+export interface GitState { available: boolean; branch?: string; commit?: string; gitDir?: string; }
+export interface IndexMetadata { lastIndexedAt?: number; git?: GitState; }
+export interface FreshnessReport {
+  state: "fresh" | "stale";
+  stale: boolean;
+  checkedAt: number;
+  lastIndexedAt?: number;
+  added: string[];
+  changed: string[];
+  removed: string[];
+  hiddenPathCount: number;
+  reasons: string[];
+  git: { indexed?: GitState; current: GitState; changed: boolean };
+}
 export interface EmbeddingConfig { provider: "openai" | "voyage" | "ollama"; model: string; apiKey?: string; baseUrl?: string; dimension: number; batchSize: number; }
 export interface RerankerConfig { provider: "voyage" | "cohere" | "none"; model?: string; apiKey?: string; baseUrl?: string; }
 export interface SearchConfig {

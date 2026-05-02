@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { OpenContextConfig, EmbeddingConfig, SearchConfig, RerankerConfig, File, Chunk, IndexingResult, SearchResult, DEFAULT_EMBEDDING_CONFIG, DEFAULT_SEARCH_CONFIG, EMBEDDING_MODELS } from "./types";
+import { OpenContextConfig, EmbeddingConfig, SearchConfig, File, Chunk, IndexingResult, SearchResult, DEFAULT_EMBEDDING_CONFIG, DEFAULT_SEARCH_CONFIG, EMBEDDING_MODELS } from "./types";
 import { EmbeddingProvider, createEmbeddingProvider } from "./embedder";
 import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
 import { AstChunker } from "./ast-chunker";
 import { FileFilter } from "./file-filter";
-import { computeBlobName } from "./utils";
+import { computeBlobName, isBinaryBuffer } from "./utils";
 import { formatSearchOutput } from "./search";
 import { HybridRetriever } from "./retriever";
 import { Reranker, createReranker } from "./reranker";
@@ -14,7 +14,6 @@ import { Reranker, createReranker } from "./reranker";
 const CONCURRENT_EMBED_BATCHES = 2;
 
 export class OpenContext {
-  private config!: OpenContextConfig;
   private embeddingConfig!: EmbeddingConfig;
   private searchConfig!: SearchConfig;
   private embedder!: EmbeddingProvider;
@@ -24,13 +23,12 @@ export class OpenContext {
   private fileFilter!: FileFilter;
   private retriever!: HybridRetriever;
   private workspaceRoot: string = "";
-  private indexingLock: Promise<void> = Promise.resolve();
+  private _indexingMutex: Promise<void> = Promise.resolve();
 
   private constructor() {}
 
   static async create(config: OpenContextConfig): Promise<OpenContext> {
     const ctx = new OpenContext();
-    ctx.config = config;
     ctx.workspaceRoot = config.workspaceRoot;
     ctx.embeddingConfig = { ...DEFAULT_EMBEDDING_CONFIG, ...config.embedding };
     ctx.searchConfig = { ...DEFAULT_SEARCH_CONFIG, ...config.search };
@@ -45,6 +43,26 @@ export class OpenContext {
     await ctx.store.initialize();
     ctx.retriever = new HybridRetriever(ctx.store, ctx.embedder, ctx.searchConfig, ctx.reranker);
     return ctx;
+  }
+
+  private async acquireLock(): Promise<() => void> {
+    let release: () => void = () => {};
+    const prev = this._indexingMutex;
+    let resolve: () => void;
+    const next = new Promise<void>(r => { resolve = r; });
+    this._indexingMutex = next;
+    await prev;
+    release = () => { resolve(); };
+    return release;
+  }
+
+  private async withLock<T>(op: () => Promise<T>): Promise<T> {
+    const release = await this.acquireLock();
+    try {
+      return await op();
+    } finally {
+      release();
+    }
   }
 
   async indexWorkspace(onProgress?: ProgressCb): Promise<IndexingResult> {
@@ -136,12 +154,6 @@ export class OpenContext {
     for (const { file } of fileChunks) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
   }
 
-  private withLock<T>(op: () => Promise<T>): Promise<T> {
-    const next = this.indexingLock.then(op, op);
-    this.indexingLock = next.then(() => undefined, () => undefined);
-    return next;
-  }
-
   async search(query: string, maxOutputLength?: number): Promise<string> {
     const results = await this.retriever.retrieve(query);
     return formatSearchOutput(results, {
@@ -166,7 +178,10 @@ export class OpenContext {
 
   async readFile(filePath: string, startLine?: number, endLine?: number): Promise<string | null> {
     try {
-      const full = await fs.promises.readFile(path.join(this.workspaceRoot, filePath), "utf8");
+      const fullPath = path.join(this.workspaceRoot, filePath);
+      const buf = await fs.promises.readFile(fullPath);
+      if (isBinaryBuffer(buf)) return `Cannot read '${filePath}': binary file (this model does not support image or binary input).`;
+      const full = buf.toString("utf8");
       if (startLine != null || endLine != null) {
         const lines = full.split("\n");
         const s = (startLine ?? 1) - 1;
