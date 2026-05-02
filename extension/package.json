@@ -33,6 +33,12 @@
         "icon": "$(sync)"
       },
       {
+        "command": "openContext.selectIndexWorkspace",
+        "title": "Select Index Workspace",
+        "category": "Open Context",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "openContext.reindexFile",
         "title": "Re-index Current File",
         "category": "Open Context"
@@ -133,7 +139,7 @@
     "viewsWelcome": [
       {
         "view": "indexedFiles",
-        "contents": "No files indexed yet. [Index Workspace](command:openContext.indexWorkspace)"
+        "contents": "No files indexed yet. [Index Workspace](command:openContext.indexWorkspace) or [Select Folder to Index](command:openContext.selectIndexWorkspace)"
       }
     ],
     "menus": {
@@ -173,14 +179,24 @@
           "group": "navigation@2"
         },
         {
-          "command": "openContext.openSettings",
+          "command": "openContext.selectIndexWorkspace",
           "when": "view == openContext.chat",
           "group": "navigation@3"
+        },
+        {
+          "command": "openContext.openSettings",
+          "when": "view == openContext.chat",
+          "group": "navigation@4"
         },
         {
           "command": "openContext.indexWorkspace",
           "when": "view == indexedFiles",
           "group": "navigation@1"
+        },
+        {
+          "command": "openContext.selectIndexWorkspace",
+          "when": "view == indexedFiles",
+          "group": "navigation@2"
         }
       ]
     },

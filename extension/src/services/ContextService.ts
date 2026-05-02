@@ -4,12 +4,15 @@ import { OpenContext } from "../../../src/core/context";
 import { FileWatcher } from "../../../src/core/file-watcher";
 import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult } from "../../../src/core/types";
 
+const INDEX_WORKSPACE_ROOT_KEY = "openContext.indexWorkspaceRoot";
+
 export interface ContextStatus {
     indexedFiles: number;
     totalChunks: number;
     embeddingProvider: string;
     embeddingModel: string;
     lastSynced: string;
+    workspaceRoot: string;
 }
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
@@ -37,6 +40,22 @@ export class ContextService implements vscode.Disposable {
         this._extContext = ctx;
     }
 
+    public getIndexWorkspaceRoot(): string {
+        return this.resolveWorkspaceRoot();
+    }
+
+    public async setIndexWorkspaceRoot(dirPath: string): Promise<void> {
+        const resolved = this.resolveFsPath(dirPath);
+        if (!resolved || !this.pathExists(resolved)) throw new Error(`Workspace path does not exist: ${dirPath}`);
+        await this._extContext?.globalState.update(INDEX_WORKSPACE_ROOT_KEY, resolved);
+        await this.dispose();
+    }
+
+    public async clearIndexWorkspaceRoot(): Promise<void> {
+        await this._extContext?.globalState.update(INDEX_WORKSPACE_ROOT_KEY, undefined);
+        await this.dispose();
+    }
+
     public async getContext(): Promise<OpenContext> {
         if (!this._context) {
             const config = await this.getWorkspaceConfig();
@@ -54,8 +73,8 @@ export class ContextService implements vscode.Disposable {
     }
 
     public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
-        await this.dispose();
-        const config = await this.getConfigForPath(dirPath);
+        await this.setIndexWorkspaceRoot(dirPath);
+        const config = await this.getConfigForPath(this.resolveWorkspaceRoot());
         this._context = await OpenContext.create(config);
         await this._context.indexWorkspace((stage, current, total) => {
             if (token?.isCancellationRequested) throw new vscode.CancellationError();
@@ -88,6 +107,7 @@ export class ContextService implements vscode.Disposable {
             embeddingProvider: inner.provider,
             embeddingModel: inner.model,
             lastSynced: inner.lastSynced,
+            workspaceRoot: ctx.getWorkspaceRoot(),
         };
     }
 
@@ -163,8 +183,8 @@ export class ContextService implements vscode.Disposable {
 
     public async dispose(): Promise<void> {
         await this.stopWatching();
+        this._context?.close();
         this._context = null;
-        this._onReindex.dispose();
     }
 
     public async getWorkspaceConfig(): Promise<OpenContextConfig> {
@@ -201,17 +221,26 @@ export class ContextService implements vscode.Disposable {
     }
 
     private resolveWorkspaceRoot(): string {
+        const selected = this._extContext?.globalState.get<string>(INDEX_WORKSPACE_ROOT_KEY);
+        const selectedPath = this.resolveFsPath(selected ?? "");
+        if (selectedPath && this.pathExists(selectedPath)) return selectedPath;
+
         const wsFolder = vscode.workspace.workspaceFolders?.[0];
         if (!wsFolder) return "";
-        const fsPath = wsFolder.uri.fsPath;
-        if (this.pathExists(fsPath)) return fsPath;
-        const converted = this.uncToLinux(fsPath);
-        if (converted && this.pathExists(converted)) return converted;
+        const fsPath = this.resolveFsPath(wsFolder.uri.fsPath);
+        if (fsPath && this.pathExists(fsPath)) return fsPath;
         try {
             const uriPath = decodeURIComponent(wsFolder.uri.path);
-            if (uriPath && this.pathExists(uriPath)) return uriPath;
+            const resolvedUriPath = this.resolveFsPath(uriPath);
+            if (resolvedUriPath && this.pathExists(resolvedUriPath)) return resolvedUriPath;
         } catch {}
-        return fsPath;
+        return fsPath ?? "";
+    }
+
+    private resolveFsPath(p: string): string | null {
+        if (!p) return null;
+        const converted = this.uncToLinux(p);
+        return converted || p;
     }
 
     private pathExists(p: string): boolean {

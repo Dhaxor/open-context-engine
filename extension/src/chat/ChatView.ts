@@ -91,6 +91,10 @@ export class ChatView implements vscode.WebviewViewProvider {
                 case "openSettings":
                     vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
                     break;
+                case "chooseIndexWorkspace":
+                    await vscode.commands.executeCommand("openContext.selectIndexWorkspace");
+                    await this._sendConfig();
+                    break;
                 case "setLLMKey":
                     vscode.commands.executeCommand("openContext.setLLMApiKey");
                     break;
@@ -155,6 +159,10 @@ export class ChatView implements vscode.WebviewViewProvider {
         this._startNewSession();
     }
 
+    public refreshConfig(): void {
+        void this._sendConfig();
+    }
+
     private _startNewSession(): void {
         this._abort?.abort();
         this._agent.reset();
@@ -215,7 +223,7 @@ export class ChatView implements vscode.WebviewViewProvider {
             google: await svc.hasLLMApiKey("google"),
         };
         const hasWebSearchKey = await svc.hasWebSearchApiKey();
-        this._view?.webview.postMessage({ type: "config", provider, model, hasKey, hasWebSearchKey });
+        this._view?.webview.postMessage({ type: "config", provider, model, hasKey, hasWebSearchKey, indexWorkspaceRoot: svc.getIndexWorkspaceRoot() });
     }
 
     private async _processSearch(query: string): Promise<void> {
@@ -247,9 +255,8 @@ export class ChatView implements vscode.WebviewViewProvider {
     }
 
     private async _openFile(relPath: string, line: number): Promise<void> {
-        const ws = vscode.workspace.workspaceFolders?.[0];
-        if (!ws) return;
-        const uri = vscode.Uri.file(path.resolve(ws.uri.fsPath, relPath));
+        const ctx = await ContextService.getInstance().getContext();
+        const uri = vscode.Uri.file(path.resolve(ctx.getWorkspaceRoot(), relPath));
         try {
             const doc = await vscode.workspace.openTextDocument(uri);
             const ed = await vscode.window.showTextDocument(doc, { preview: false });
@@ -310,9 +317,11 @@ export class ChatView implements vscode.WebviewViewProvider {
 <body>
 <header id="hdr">
   <div class="title">Open Context</div>
+	  <div id="idx" class="badge" title="Current index workspace">—</div>
   <div id="mdl" class="badge" title="Click to change model">—</div>
   <div class="spacer"></div>
   <button id="stop" class="iconbtn" title="Stop generation" style="display:none">◼</button>
+	  <button id="workspaceBtn" class="iconbtn" title="Select index workspace">📁</button>
   <button id="historyBtn" class="iconbtn" title="Chat history">📜</button>
   <button id="settingsBtn" class="iconbtn" title="Model &amp; keys">⚙</button>
   <button id="cbtn" class="iconbtn" title="New chat">⟲</button>

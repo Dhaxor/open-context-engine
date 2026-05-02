@@ -32,30 +32,65 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const refreshStatus = async () => {
         try {
             const s = await svc.getStatus();
-            statusBarItem.text = `$(database) Open Context: ${s.indexedFiles} files, ${s.totalChunks} chunks`;
+            const rootName = path.basename(s.workspaceRoot) || s.workspaceRoot;
+            statusBarItem.text = `$(database) Open Context: ${rootName} · ${s.indexedFiles} files`;
+            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks`;
             treeProvider.refresh();
         } catch {}
     };
     context.subscriptions.push(svc.onReindex(refreshStatus));
 
+    const restartWatching = async () => {
+        if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
+            await svc.startWatching().catch((err) => console.error("[openContext] watcher failed:", err));
+        }
+    };
+
+    const runIndex = async (label: string, op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>) => {
+        await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: label, cancellable: true },
+            async (progress, token) => {
+                try {
+                    await op(progress, token);
+                    await refreshStatus();
+                    const s = await svc.getStatus();
+                    vscode.window.showInformationMessage(`Indexed ${path.basename(s.workspaceRoot)}: ${s.indexedFiles} files (${s.totalChunks} chunks)`);
+                } catch (err: any) {
+                    if (err instanceof vscode.CancellationError) return;
+                    vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
+                }
+            },
+        );
+    };
+
     context.subscriptions.push(
         vscode.commands.registerCommand("openContext.indexWorkspace", async () => {
-            await vscode.window.withProgress(
-                { location: vscode.ProgressLocation.Notification, title: "Indexing workspace...", cancellable: true },
-                async (progress, token) => {
-                    try {
-                        await svc.indexWorkspace((status, current, total) => {
-                            progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
-                        }, token);
-                        await refreshStatus();
-                        const s = await svc.getStatus();
-                        vscode.window.showInformationMessage(`Indexed ${s.indexedFiles} files (${s.totalChunks} chunks)`);
-                    } catch (err: any) {
-                        if (err instanceof vscode.CancellationError) return;
-                        vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
-                    }
-                },
-            );
+            await runIndex("Indexing workspace...", async (progress, token) => {
+                await svc.indexWorkspace((status, current, total) => {
+                    progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
+                }, token);
+            });
+        }),
+
+        vscode.commands.registerCommand("openContext.selectIndexWorkspace", async () => {
+            const current = svc.getIndexWorkspaceRoot();
+            const picked = await vscode.window.showOpenDialog({
+                title: "Select folder to index",
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: "Index Folder",
+                defaultUri: current ? vscode.Uri.file(current) : undefined,
+            });
+            const dir = picked?.[0]?.fsPath;
+            if (!dir) return;
+            await runIndex(`Indexing ${path.basename(dir)}...`, async (progress, token) => {
+                await svc.indexDirectory(dir, (status, current, total) => {
+                    progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
+                }, token);
+            });
+            await restartWatching();
+            chatView.refreshConfig();
         }),
 
         vscode.commands.registerCommand("openContext.reindexFile", async (uri?: vscode.Uri) => {
@@ -63,7 +98,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (!fileUri) return;
             try {
                 const ctx = await svc.getContext();
-                const filePath = vscode.workspace.asRelativePath(fileUri);
+                const root = ctx.getWorkspaceRoot();
+                const filePath = path.relative(root, fileUri.fsPath);
+                if (!filePath || filePath.startsWith("..") || path.isAbsolute(filePath)) {
+                    throw new Error(`Current file is not under the indexed workspace: ${root}`);
+                }
                 const content = await vscode.workspace.fs.readFile(fileUri);
                 await ctx.addFiles([{ path: filePath, contents: new TextDecoder().decode(content) }]);
                 vscode.window.showInformationMessage(`Re-indexed: ${filePath}`);
@@ -74,11 +113,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.removeFromIndex", async (item: any) => {
-            if (!item?.file?.path) return;
+            const indexedPath = item?.file?.path ?? item?.path;
+            if (!indexedPath) return;
             try {
                 const ctx = await svc.getContext();
-                await ctx.removeFromIndex([item.file.path]);
-                vscode.window.showInformationMessage(`Removed: ${item.file.path}`);
+                await ctx.removeFromIndex([indexedPath]);
+                vscode.window.showInformationMessage(`Removed: ${indexedPath}`);
                 treeProvider.refresh();
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Remove failed: ${err.message}`);
@@ -104,7 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("openContext.showStatus", async () => {
             try {
                 const s = await svc.getStatus();
-                vscode.window.showInformationMessage(`Open Context: ${s.indexedFiles} files, ${s.totalChunks} chunks | ${s.embeddingProvider}/${s.embeddingModel} | Last: ${s.lastSynced || "never"}`);
+                vscode.window.showInformationMessage(`Open Context: ${s.workspaceRoot} | ${s.indexedFiles} files, ${s.totalChunks} chunks | ${s.embeddingProvider}/${s.embeddingModel} | Last: ${s.lastSynced || "never"}`);
             } catch {
                 vscode.window.showInformationMessage("Open Context: Not initialized yet");
             }
@@ -147,8 +187,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 const ctx = await svc.getContext();
                 const results = await ctx.searchRaw(selection);
                 if (!results.length) { vscode.window.showInformationMessage("No similar code found."); return; }
-                const wsFolder = vscode.workspace.workspaceFolders?.[0];
-                const wsRoot = wsFolder?.uri.fsPath ?? "";
+                const wsRoot = ctx.getWorkspaceRoot();
                 const items = results.slice(0, 10).map((r: SearchResult) => ({
                     label: r.chunk.path,
                     description: `${(r.score * 100).toFixed(1)}%`,

@@ -1,12 +1,12 @@
 export const chatScript = `
 (function(){
 var V=acquireVsCodeApi();
-var msgs=document.getElementById('messages'),q=document.getElementById('q'),go=document.getElementById('go'),stopBtn=document.getElementById('stop'),cbtn=document.getElementById('cbtn'),mdl=document.getElementById('mdl');
+var msgs=document.getElementById('messages'),q=document.getElementById('q'),go=document.getElementById('go'),stopBtn=document.getElementById('stop'),cbtn=document.getElementById('cbtn'),mdl=document.getElementById('mdl'),idx=document.getElementById('idx');
 var settingsBtn=document.getElementById('settingsBtn'),settings=document.getElementById('settings'),modeEl=document.getElementById('mode');
 var modelSel=document.getElementById('modelSel'),modelCustom=document.getElementById('modelCustom'),apiKey=document.getElementById('apiKey'),keyStatus=document.getElementById('keyStatus');
 var tavilyKey=document.getElementById('tavilyKey'),tavilyStatus=document.getElementById('tavilyStatus');
 var saveCfg=document.getElementById('saveCfg'),closeCfg=document.getElementById('closeCfg');
-var historyBtn=document.getElementById('historyBtn'),historyEl=document.getElementById('history'),histList=document.getElementById('histList'),histEmpty=document.getElementById('histEmpty'),closeHist=document.getElementById('closeHist');
+var historyBtn=document.getElementById('historyBtn'),workspaceBtn=document.getElementById('workspaceBtn'),historyEl=document.getElementById('history'),histList=document.getElementById('histList'),histEmpty=document.getElementById('histEmpty'),closeHist=document.getElementById('closeHist');
 var cur=null,fullText='',busy=false,tools={},edits={},mode='agent',uiHasTavily=false;
 var MODELS={
   openai:['gpt-5.4','gpt-5.4-mini','gpt-5.4-nano','gpt-5-codex','gpt-5.3-codex','gpt-5.1-codex-max','gpt-5.1-codex-mini','gpt-5','gpt-4.1'],
@@ -39,6 +39,7 @@ function md(s){
   }).join('');
 }
 function scroll(){msgs.scrollTop=msgs.scrollHeight}
+function shortPath(p){var parts=String(p||'').split(/[\\/]+/).filter(Boolean);return parts.length?parts[parts.length-1]:'No workspace'}
 function removeWelcome(){var w=document.getElementById('wel');if(w)w.remove()}
 function addUser(t){removeWelcome();var d=document.createElement('div');d.className='msg user';d.textContent=t;msgs.appendChild(d);scroll()}
 function startBot(){removeWelcome();var d=document.createElement('div');d.className='msg bot';d.innerHTML='<span class="cursor"></span>';msgs.appendChild(d);cur=d;fullText='';scroll()}
@@ -197,6 +198,8 @@ cbtn.onclick=function(){V.postMessage({type:'newSession'})};
 mdl.onclick=function(){toggleSettings()};
 settingsBtn.onclick=function(){toggleSettings()};
 historyBtn.onclick=function(){toggleHistory()};
+workspaceBtn.onclick=function(){V.postMessage({type:'chooseIndexWorkspace'})};
+idx.onclick=function(){V.postMessage({type:'chooseIndexWorkspace'})};
 closeHist.onclick=function(){toggleHistory(false)};
 closeCfg.onclick=function(){toggleSettings(false)};
 saveCfg.onclick=function(){
@@ -235,7 +238,7 @@ window.addEventListener('message',function(e){
   else if(m.type==='compaction')notice('Compacted '+m.dropped+' older messages to fit context budget',null);
   else if(m.type==='addUserMessage')addUser(m.text);
   else if(m.type==='model'){mdl.textContent=m.provider+' · '+m.model;mdl.title='Click to change model ('+m.provider+'/'+m.model+')'}
-  else if(m.type==='config'){uiHasKey=m.hasKey||{};uiHasTavily=!!m.hasWebSearchKey;setProviderUI(m.provider||'openai');if(m.model)modelSel.value=m.model;}
+  else if(m.type==='config'){uiHasKey=m.hasKey||{};uiHasTavily=!!m.hasWebSearchKey;setProviderUI(m.provider||'openai');if(m.model)modelSel.value=m.model;if(idx){idx.textContent='Index: '+shortPath(m.indexWorkspaceRoot);idx.title='Index workspace: '+(m.indexWorkspaceRoot||'not selected')+' (click to change)';}}
   else if(m.type==='search_start'){removeWelcome()}
   else if(m.type==='search_result'){renderSearchResults(m.results)}
   else if(m.type==='history_list'){renderHistory(m.sessions,m.currentId)}

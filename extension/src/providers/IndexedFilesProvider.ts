@@ -1,3 +1,4 @@
+import * as pathModule from "path";
 import * as vscode from "vscode";
 import { ContextService } from "../services/ContextService";
 
@@ -20,7 +21,7 @@ export class IndexedFilesProvider implements vscode.TreeDataProvider<FileItem> {
         try {
             const ctx = await ContextService.getInstance().getContext();
             const paths = await ctx.listFiles();
-            return paths.map((p: string) => new FileItem(p));
+            return paths.map((p: string) => new FileItem(ctx.getWorkspaceRoot(), p));
         } catch {
             return [];
         }
@@ -28,13 +29,13 @@ export class IndexedFilesProvider implements vscode.TreeDataProvider<FileItem> {
 }
 
 class FileItem extends vscode.TreeItem {
-    constructor(public readonly path: string) {
+    constructor(workspaceRoot: string, public readonly path: string) {
         super(path, vscode.TreeItemCollapsibleState.None);
         this.contextValue = "file";
         this.command = {
             command: "vscode.open",
             title: "Open File",
-            arguments: [vscode.Uri.file(path)],
+            arguments: [vscode.Uri.file(pathModule.resolve(workspaceRoot, path))],
         };
     }
 }

@@ -91,19 +91,19 @@ export class AgentService {
         if (!apiKey) {
             throw new Error(buildMissingKeyMessage(provider));
         }
-        const key = `${provider}|${model}|${apiKey.slice(0, 6)}`;
         const includeEdits = cfg.get<boolean>("agent.allowEdits", true);
         const shellEnabled = cfg.get<boolean>("agent.shell.enabled", true);
         const shellAllowlist = cfg.get<string[]>("agent.shell.allowlist", []) ?? [];
         const shellTimeoutMs = cfg.get<number>("agent.shell.timeoutMs", 60000);
         const webSearchEnabled = cfg.get<boolean>("agent.webSearch.enabled", true);
         const webSearchKey = webSearchEnabled ? await svc.getWebSearchApiKey() : undefined;
+        const ctx = await svc.getContext();
+        const key = `${provider}|${model}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
         const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}`;
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
-        const ctx = await svc.getContext();
         const applier = new VSCodeEditApplier(ctx.getWorkspaceRoot());
         this.editForwarder = events.onEdit;
         this.agent = new ContextAgent({

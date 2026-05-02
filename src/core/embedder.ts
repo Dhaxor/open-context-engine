@@ -11,6 +11,7 @@ export interface EmbeddingProvider {
 
 interface RetryOptions { maxAttempts: number; baseDelayMs: number; maxDelayMs: number; }
 const DEFAULT_RETRY: RetryOptions = { maxAttempts: 5, baseDelayMs: 500, maxDelayMs: 15000 };
+const VOYAGE_MAX_BATCH_CHARS = 100_000;
 
 function shouldRetryStatus(status: number | undefined): boolean {
   return status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500);
@@ -33,6 +34,32 @@ async function retry<T>(label: string, fn: () => Promise<T>, opts: RetryOptions 
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(`${label}: ${String(lastErr)}`);
+}
+
+export function chunkTextsByBatchBudget(texts: string[], maxItems: number, maxBatchChars: number): string[][] {
+  const batches: string[][] = [];
+  const itemLimit = Math.max(1, maxItems);
+  const charLimit = Math.max(1, maxBatchChars);
+  let current: string[] = [];
+  let currentChars = 0;
+
+  for (const text of texts) {
+    const chars = text.length;
+    if (current.length > 0 && (current.length >= itemLimit || currentChars + chars > charLimit)) {
+      batches.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(text);
+    currentChars += chars;
+    if (current.length >= itemLimit) {
+      batches.push(current);
+      current = [];
+      currentChars = 0;
+    }
+  }
+  if (current.length) batches.push(current);
+  return batches;
 }
 
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
@@ -102,8 +129,7 @@ export class VoyageEmbeddingProvider implements EmbeddingProvider {
   async embed(texts: string[], inputType: EmbeddingInputType = "document"): Promise<number[][]> {
     if (!this.apiKey) throw new Error("VOYAGE_API_KEY is required. Set it via environment variable or config.");
     const out: number[][] = [];
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const batch = texts.slice(i, i + this.batchSize);
+    for (const batch of chunkTextsByBatchBudget(texts, this.batchSize, VOYAGE_MAX_BATCH_CHARS)) {
       const json: any = await retry("voyage.embeddings", () => postJSON(
         `${this.baseUrl}/embeddings`,
         { Authorization: `Bearer ${this.apiKey}` },
