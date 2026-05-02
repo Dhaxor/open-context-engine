@@ -299,7 +299,7 @@ src/
 
 ## 📄 License
 
-MIT © [Your Name](https://github.com/yourusername)
+MIT © [Gain](https://github.com/dhaxor)
 
 ---
 
