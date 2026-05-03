@@ -4,6 +4,8 @@ import { ContextService } from "./services/ContextService";
 import { ChatView } from "./chat/ChatView";
 import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
+import { IndexHealthPanel } from "./health/IndexHealthPanel";
+import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
 import { SearchResult } from "../../src/core/types";
 
 let statusBarItem: vscode.StatusBarItem;
@@ -140,6 +142,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("openContext.quickSearch", async () => SearchProvider.search()),
         vscode.commands.registerCommand("openContext.openChat", () => chatView.focus()),
         vscode.commands.registerCommand("openContext.clearChat", () => chatView.clearChat()),
+        vscode.commands.registerCommand("openContext.showIndexHealth", () => IndexHealthPanel.show()),
+        vscode.commands.registerCommand("openContext.debugRetrieval", () => RetrievalDebugPanel.show()),
+        vscode.commands.registerCommand("openContext.openIndexedFile", async (relPath: string, line?: number) => {
+            const ctx = await svc.getContext();
+            const uri = vscode.Uri.file(path.resolve(ctx.getWorkspaceRoot(), relPath));
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const ed = await vscode.window.showTextDocument(doc, { preview: false });
+            if (line && line > 0) {
+                const pos = new vscode.Position(line - 1, 0);
+                ed.selection = new vscode.Selection(pos, pos);
+                ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+            }
+        }),
 
         vscode.commands.registerCommand("openContext.showStatus", async () => {
             try {
@@ -185,7 +200,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (!selection) return;
             try {
                 const ctx = await svc.getContext();
-                const results = await ctx.searchRaw(selection);
+                const results = await svc.searchRaw(selection);
                 if (!results.length) { vscode.window.showInformationMessage("No similar code found."); return; }
                 const wsRoot = ctx.getWorkspaceRoot();
                 const items = results.slice(0, 10).map((r: SearchResult) => ({

@@ -1,4 +1,5 @@
 import { OpenContext } from "../core/context";
+import { RetrieveOptions } from "../core/retriever";
 import { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolDefinition } from "./types";
 import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
 import { compactHistory, truncateToolResult, withRetry } from "./utils";
@@ -19,7 +20,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an expert coding assistant with tools to 
 - Cite file paths and line ranges when you reference code.
 - Do not fabricate file paths or symbols — verify them with the tools first.`;
 
-export function defaultCodebaseTools(context: OpenContext): ToolDefinition[] {
+export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>): ToolDefinition[] {
   return [
     {
       name: "codebase-retrieval",
@@ -31,7 +32,7 @@ export function defaultCodebaseTools(context: OpenContext): ToolDefinition[] {
         },
         required: ["information_request"],
       },
-      handler: async (args) => context.search(args.information_request),
+      handler: async (args) => context.search(args.information_request, undefined, await retrieveOptions?.()),
     },
     {
       name: "list-files",
@@ -69,10 +70,11 @@ export interface DefaultToolsOptions {
   onEdit?: (edit: import("./types").EditProposal) => void;
   shell?: Omit<ShellToolOptions, "workspaceRoot"> | false;
   webSearch?: WebSearchOptions | false;
+  retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>;
 }
 
 export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
-  let tools: ToolDefinition[] = defaultCodebaseTools(opts.context);
+  let tools: ToolDefinition[] = defaultCodebaseTools(opts.context, opts.retrieveOptions);
   if (opts.includeEdits !== false) {
     const applier = opts.applier ?? new FsEditApplier(opts.context.getWorkspaceRoot());
     tools = tools.concat(editTools({ context: opts.context, applier, onEdit: opts.onEdit }));

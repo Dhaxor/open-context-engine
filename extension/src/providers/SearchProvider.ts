@@ -10,8 +10,8 @@ export class SearchProvider {
         if (!query) return;
 
         try {
-            const ctx = await ContextService.getInstance().getContext();
-            const results = await ctx.searchRaw(query);
+            const svc = ContextService.getInstance();
+            const results = await svc.searchRaw(query);
             if (!results.length) {
                 vscode.window.showInformationMessage("No results found.");
                 return;

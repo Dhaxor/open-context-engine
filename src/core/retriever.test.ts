@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { reciprocalRankFusion } from "./retriever";
+import { applyEditorContextBoost, applySymbolAwareBoost, extractRelativeImportSpecifiers, reciprocalRankFusion, resolveRelativeImportPaths } from "./retriever";
 import { Chunk, SearchResult } from "./types";
 
 function chunk(id: string): Chunk {
@@ -8,6 +8,10 @@ function chunk(id: string): Chunk {
 
 function result(id: string, score = 0): SearchResult {
   return { chunk: chunk(id), score };
+}
+
+function symbolResult(id: string, symbolName?: string, path?: string, score = 1): SearchResult {
+  return { chunk: { ...chunk(id), path: path ?? `src/${id}.ts`, symbolName }, score };
 }
 
 describe("reciprocalRankFusion", () => {
@@ -65,5 +69,68 @@ describe("reciprocalRankFusion", () => {
     ], 10);
     expect(fused[0].vectorScore).toBe(0.9);
     expect(fused[0].bm25Score).toBe(-2.5);
+  });
+});
+
+describe("applySymbolAwareBoost", () => {
+  it("promotes exact symbol matches for identifier queries", () => {
+    const boosted = applySymbolAwareBoost([
+      symbolResult("generic", "UnrelatedHelper", "src/generic.ts", 1.1),
+      symbolResult("target", "OpenContext", "src/core/context.ts", 1),
+    ], "where is OpenContext created");
+
+    expect(boosted[0].chunk.id).toBe("target");
+    expect(boosted[0].score).toBeGreaterThan(boosted[1].score);
+  });
+
+  it("uses path matches as a weaker signal", () => {
+    const boosted = applySymbolAwareBoost([
+      symbolResult("a", "Thing", "src/agent/providers.ts", 1),
+      symbolResult("b", "Thing", "src/core/context.ts", 1),
+    ], "providers streaming");
+
+    expect(boosted[0].chunk.id).toBe("a");
+  });
+});
+
+describe("applyEditorContextBoost", () => {
+  it("promotes results from the active editor path", () => {
+    const boosted = applyEditorContextBoost([
+      symbolResult("other", "Thing", "src/other.ts", 1.1),
+      symbolResult("active", "Thing", "src/active.ts", 1),
+    ], { activePath: "src/active.ts" });
+
+    expect(boosted[0].chunk.id).toBe("active");
+  });
+
+  it("uses selected text identifiers as extra ranking context", () => {
+    const boosted = applyEditorContextBoost([
+      symbolResult("generic", "OtherThing", "src/other.ts", 1.05),
+      symbolResult("selected", "SelectedSymbol", "src/selected.ts", 1),
+    ], { contextText: "SelectedSymbol is highlighted in the editor" });
+
+    expect(boosted[0].chunk.id).toBe("selected");
+  });
+});
+
+describe("import-aware retrieval helpers", () => {
+  it("extracts relative imports from common JS/TS forms", () => {
+    const specs = extractRelativeImportSpecifiers(`
+      import { A } from "./a";
+      export { B } from '../b';
+      const c = require("./c/index");
+      import z from "react";
+    `);
+
+    expect(specs).toEqual(["./a", "../b", "./c/index"]);
+  });
+
+  it("resolves relative imports to indexed files", () => {
+    const resolved = resolveRelativeImportPaths("src/core/retriever.ts", ["./sqlite-store", "../agent/types"], [
+      "src/core/sqlite-store.ts",
+      "src/agent/types.ts",
+    ]);
+
+    expect(resolved).toEqual(["src/core/sqlite-store.ts", "src/agent/types.ts"]);
   });
 });

@@ -2,7 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { AgentService } from "../services/AgentService";
 import { ContextService } from "../services/ContextService";
-import { ChatHistoryStore, StoredSession } from "../services/ChatHistoryStore";
+import { ChatHistoryStore } from "../services/ChatHistoryStore";
 import { chatCss, chatScript } from "./chat-assets";
 import { SearchResult } from "../../../src/core/types";
 
@@ -34,11 +34,9 @@ export class ChatView implements vscode.WebviewViewProvider {
     private _agent: AgentService = new AgentService();
     private _abort: AbortController | null = null;
     private _busy = false;
-    private _mode: ChatMode = "agent";
     private _history?: ChatHistoryStore;
     private _sessionId: string | null = null;
     private _pendingAssistant: string[] = [];
-    private _pendingUser: string | null = null;
 
     constructor(extensionUri: vscode.Uri, extCtx?: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -66,7 +64,6 @@ export class ChatView implements vscode.WebviewViewProvider {
                 case "query":
                     if (msg.text?.trim()) {
                         const mode: ChatMode = msg.mode === "search" ? "search" : "agent";
-                        this._mode = mode;
                         if (mode === "search") await this._processSearch(msg.text.trim());
                         else this._processQuery(msg.text.trim());
                     }
@@ -99,7 +96,6 @@ export class ChatView implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand("openContext.setLLMApiKey");
                     break;
                 case "setMode":
-                    this._mode = msg.mode === "search" ? "search" : "agent";
                     break;
                 case "setLLMSelection":
                     if (msg.provider && msg.model) {
@@ -168,7 +164,6 @@ export class ChatView implements vscode.WebviewViewProvider {
         this._agent.reset();
         this._sessionId = null;
         this._pendingAssistant = [];
-        this._pendingUser = null;
         this._view?.webview.postMessage({ type: "clear" });
         this._sendHistoryList();
     }
@@ -197,7 +192,6 @@ export class ChatView implements vscode.WebviewViewProvider {
         this._agent.reset();
         this._sessionId = s.id;
         this._pendingAssistant = [];
-        this._pendingUser = null;
         this._view?.webview.postMessage({
             type: "history_load",
             session: { id: s.id, title: s.title, provider: s.provider, model: s.model, messages: s.messages },
@@ -285,6 +279,7 @@ export class ChatView implements vscode.WebviewViewProvider {
             this._sendHistoryList();
         };
         try {
+            post({ type: "task_plan", plan: buildTaskPlan(query) });
             await this._agent.run(query, {
                 onText: (delta) => { this._pendingAssistant.push(delta); post({ type: "chunk", text: delta }); },
                 onToolCall: (info) => {
@@ -296,6 +291,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                 onEdit: (edit) => post({ type: "edit", edit }),
                 onRetry: (info) => post({ type: "retry", attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
                 onCompaction: (info) => post({ type: "compaction", dropped: info.dropped }),
+                onStep: (info) => post({ type: "agent_step", step: info.step, status: info.status }),
                 onDone: () => { post({ type: "done" }); this._busy = false; flush(); },
                 onError: (err) => { post({ type: "error", text: err.message }); this._busy = false; flush(); },
             }, this._abort.signal);
@@ -390,6 +386,16 @@ export class ChatView implements vscode.WebviewViewProvider {
 </body>
 </html>`;
     }
+}
+
+function buildTaskPlan(query: string): string[] {
+    const q = query.toLowerCase();
+    const plan = ["Ground the request with codebase retrieval", "Inspect the most relevant files and symbols"];
+    if (/fix|error|bug|fail|broken|issue|ts[0-9]{4}/.test(q)) plan.push("Identify the failing path and apply a minimal fix");
+    if (/add|implement|change|update|refactor|option|feature|ui/.test(q)) plan.push("Make focused code changes and keep existing patterns");
+    if (/test|lint|build|verify|make sure|works/.test(q) || /fix|add|implement|change|update/.test(q)) plan.push("Run the smallest relevant validation command");
+    plan.push("Summarize changes, validation, and any follow-up risks");
+    return [...new Set(plan)].slice(0, 6);
 }
 
 function defaultModelFor(provider: string): string {

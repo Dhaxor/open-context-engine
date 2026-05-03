@@ -15,6 +15,7 @@ body{background:var(--vscode-sideBar-background);color:var(--vscode-editor-foreg
 .msg{max-width:100%;word-wrap:break-word;line-height:1.55}
 .msg.user{align-self:flex-end;background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:12px 12px 4px 12px;padding:8px 12px;max-width:88%;white-space:pre-wrap}
 .msg.bot{align-self:stretch;max-width:100%}
+	.msg.bot.streaming::after{content:"";display:inline-block;width:2px;height:14px;background:var(--vscode-editor-foreground);animation:bl 1s steps(1,end) infinite;vertical-align:text-bottom;margin-left:2px}
 .msg.bot p{margin:4px 0}
 .msg.bot pre{background:var(--vscode-textCodeBlock-background,rgba(0,0,0,.25));border:1px solid var(--vscode-panel-border);border-radius:6px;margin:8px 0;overflow:hidden;font-size:12px}
 .msg.bot pre code{display:block;padding:10px 12px;overflow-x:auto;font-family:var(--vscode-editor-font-family,monospace);white-space:pre}
@@ -23,6 +24,7 @@ body{background:var(--vscode-sideBar-background);color:var(--vscode-editor-foreg
 .msg.bot em{font-style:italic}
 .msg.bot a{color:var(--vscode-textLink-foreground);text-decoration:none}
 .msg.bot a:hover{text-decoration:underline}
+	.msg.bot a.file-link{cursor:pointer;font-family:var(--vscode-editor-font-family,monospace);font-size:.95em}
 .msg.bot h1,.msg.bot h2,.msg.bot h3{margin:10px 0 4px;font-weight:600}
 .msg.bot ul,.msg.bot ol{margin:4px 0 4px 22px}
 .msg.bot li{margin:2px 0}
@@ -46,9 +48,12 @@ body{background:var(--vscode-sideBar-background);color:var(--vscode-editor-foreg
 .tool.running .dot{color:var(--vscode-charts-blue,#3b82f6)}
 .tool.complete .dot{color:var(--vscode-charts-green,#10b981)}
 .tool.error .dot{color:var(--vscode-errorForeground,#f48771)}
+	.task-plan{align-self:stretch;border:1px solid var(--vscode-panel-border);border-radius:6px;background:rgba(59,130,246,.08);overflow:hidden}
+	.task-plan .hdr{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;cursor:pointer}.task-plan .name{flex:1;font-weight:600}.task-plan ol{display:none;margin:0;padding:4px 12px 10px 28px;color:var(--vscode-descriptionForeground);font-size:12px}.task-plan.open ol{display:block}.task-plan li{margin:4px 0}.task-plan .dot{color:var(--vscode-charts-blue,#60a5fa)}
+	.agent-step{align-self:stretch;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--vscode-descriptionForeground);padding:2px 8px;border-left:2px solid rgba(128,128,128,.35)}.agent-step.complete .dot{color:var(--vscode-charts-green,#10b981)}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--vscode-descriptionForeground);border-top-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
-.cursor{display:inline-block;width:2px;height:14px;background:var(--vscode-editor-foreground);animation:bl 1s step-end infinite;vertical-align:text-bottom;margin-left:1px}
+	.cursor{display:inline-block;width:2px;height:14px;background:var(--vscode-editor-foreground);animation:bl 1s steps(1,end) infinite;vertical-align:text-bottom;margin-left:1px}
 @keyframes bl{50%{opacity:0}}
 .edit{align-self:stretch;border:1px solid var(--vscode-panel-border);border-radius:6px;background:rgba(128,128,128,.06);overflow:hidden}
 .edit .hdr{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid transparent}

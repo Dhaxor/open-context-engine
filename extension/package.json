@@ -72,6 +72,18 @@
         "category": "Open Context"
       },
       {
+        "command": "openContext.showIndexHealth",
+        "title": "Show Index Health / Debug",
+        "category": "Open Context",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "openContext.debugRetrieval",
+        "title": "Debug Retrieval for Query",
+        "category": "Open Context",
+        "icon": "$(search-view-icon)"
+      },
+      {
         "command": "openContext.openSettings",
         "title": "Open Settings",
         "category": "Open Context",
@@ -184,9 +196,19 @@
           "group": "navigation@3"
         },
         {
-          "command": "openContext.openSettings",
+          "command": "openContext.showIndexHealth",
           "when": "view == openContext.chat",
           "group": "navigation@4"
+        },
+        {
+          "command": "openContext.debugRetrieval",
+          "when": "view == openContext.chat",
+          "group": "navigation@5"
+        },
+        {
+          "command": "openContext.openSettings",
+          "when": "view == openContext.chat",
+          "group": "navigation@6"
         },
         {
           "command": "openContext.indexWorkspace",
@@ -197,6 +219,16 @@
           "command": "openContext.selectIndexWorkspace",
           "when": "view == indexedFiles",
           "group": "navigation@2"
+        },
+        {
+          "command": "openContext.showIndexHealth",
+          "when": "view == indexedFiles",
+          "group": "navigation@3"
+        },
+        {
+          "command": "openContext.debugRetrieval",
+          "when": "view == indexedFiles",
+          "group": "navigation@4"
         }
       ]
     },

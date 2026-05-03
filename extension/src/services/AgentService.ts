@@ -21,6 +21,7 @@ export interface AgentEvents {
     onEdit?: (edit: EditProposal) => void;
     onRetry?: (info: RetryInfo) => void;
     onCompaction?: (info: CompactionInfo) => void;
+    onStep?: (info: { step: number; status: "running" | "complete" }) => void;
     onDone: () => void;
     onError: (err: Error) => void;
 }
@@ -65,6 +66,10 @@ export class AgentService {
                         events.onRetry?.({ attempt: ev.retryAttempt ?? 0, delayMs: ev.retryDelayMs ?? 0, reason: ev.retryReason ?? "" });
                     } else if (ev.type === "history_compacted") {
                         events.onCompaction?.({ dropped: ev.droppedMessages ?? 0 });
+                    } else if (ev.type === "step_start") {
+                        events.onStep?.({ step: ev.step ?? 0, status: "running" });
+                    } else if (ev.type === "step_end") {
+                        events.onStep?.({ step: ev.step ?? 0, status: "complete" });
                     }
                 },
             });
@@ -122,6 +127,7 @@ export class AgentService {
                 onEdit: (edit) => this.editForwarder?.(edit),
                 shell: shellEnabled ? { enabled: true, allowlist: shellAllowlist, timeoutMs: shellTimeoutMs } : false,
                 webSearch: webSearchEnabled ? { enabled: true, apiKey: webSearchKey } : false,
+                retrieveOptions: () => svc.getIdeRetrieveOptionsForCurrentContext(),
             }),
         });
         this.currentProviderKey = cacheKey;

@@ -230,6 +230,11 @@ export class SqliteStore {
     return row.n;
   }
 
+  getLastIndexedAt(): number | undefined {
+    const row = this.db.prepare("SELECT MAX(last_indexed) AS ts FROM files").get() as { ts: number | null };
+    return row.ts ?? undefined;
+  }
+
   vectorSearch(queryVec: number[], topK: number, pathPrefix?: string): SearchResult[] {
     if (queryVec.length !== this.expectedDim) {
       throw new Error(`Query dim ${queryVec.length} != store dim ${this.expectedDim}`);
@@ -284,6 +289,37 @@ export class SqliteStore {
     return rows.map(rowToChunk);
   }
 
+  getChunksByPath(pathName: string, limit = 5): Chunk[] {
+    const rows = this.db.prepare("SELECT * FROM chunks WHERE path = ? ORDER BY start_line LIMIT ?").all(pathName, limit) as ChunkRow[];
+    return rows.map(rowToChunk);
+  }
+
+  getChunksReferencingIdentifier(identifier: string, pathFilter?: string, limit = 8): Chunk[] {
+    const like = `%${identifier.replace(/[\\%_]/g, "\\$&")}%`;
+    const rows = pathFilter
+      ? this.db.prepare("SELECT * FROM chunks WHERE path = ? AND contents LIKE ? ESCAPE '\\' LIMIT ?").all(pathFilter, like, limit * 3) as ChunkRow[]
+      : this.db.prepare("SELECT * FROM chunks WHERE contents LIKE ? ESCAPE '\\' LIMIT ?").all(like, limit * 3) as ChunkRow[];
+    const re = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(identifier)}([^A-Za-z0-9_]|$)`);
+    return rows.map(rowToChunk).filter(c => re.test(c.contents)).slice(0, limit);
+  }
+
+  getChunksByParentSymbol(parentSymbol: string, pathFilter?: string, limit = 5): Chunk[] {
+    const rows = pathFilter
+      ? this.db.prepare("SELECT * FROM chunks WHERE parent_symbol = ? AND path = ? ORDER BY start_line LIMIT ?").all(parentSymbol, pathFilter, limit) as ChunkRow[]
+      : this.db.prepare("SELECT * FROM chunks WHERE parent_symbol = ? ORDER BY path, start_line LIMIT ?").all(parentSymbol, limit) as ChunkRow[];
+    return rows.map(rowToChunk);
+  }
+
+  getChunksNear(pathName: string, startLine: number, endLine: number, limit = 4): Chunk[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM chunks
+      WHERE path = ? AND NOT (start_line = ? AND end_line = ?)
+      ORDER BY CASE WHEN end_line < ? THEN ? - end_line ELSE start_line - ? END ASC
+      LIMIT ?
+    `).all(pathName, startLine, endLine, startLine, startLine, endLine, limit) as ChunkRow[];
+    return rows.map(rowToChunk);
+  }
+
   getState(wr: string, prov: string, mod: string): OpenContextState {
     const files = (this.db.prepare("SELECT path, hash, last_indexed FROM files").all() as { path: string; hash: string; last_indexed: number }[]).map(r => ({
       path: r.path,
@@ -328,6 +364,8 @@ function sanitizeFtsQuery(q: string): string {
   const unique = [...new Set(tokens)].slice(0, 16);
   return unique.map(t => `"${t}"`).join(" OR ");
 }
+
+function escapeRegExp(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
 export function vectorToBlob(vec: number[]): Buffer {
   const buf = Buffer.alloc(vec.length * 4);

@@ -1,8 +1,11 @@
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { OpenContext } from "../../../src/core/context";
+import { FileFilter, FilterStats } from "../../../src/core/file-filter";
 import { FileWatcher } from "../../../src/core/file-watcher";
-import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult } from "../../../src/core/types";
+import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult, FreshnessReport } from "../../../src/core/types";
+import { RetrievalDebugReport, RetrieveOptions } from "../../../src/core/retriever";
 
 const INDEX_WORKSPACE_ROOT_KEY = "openContext.indexWorkspaceRoot";
 
@@ -13,6 +16,22 @@ export interface ContextStatus {
     embeddingModel: string;
     lastSynced: string;
     workspaceRoot: string;
+}
+
+export interface IndexHealthReport {
+    generatedAt: string;
+    workspaceRoot: string;
+    selectedWorkspaceRoot?: string;
+    vscodeWorkspaceRoot?: string;
+    contextReady: boolean;
+    initializationError?: string;
+    lastIndexError?: string;
+    embedding: { provider: string; model: string; apiKeyRequired: boolean; apiKeyPresent: boolean; dimension: number; batchSize: number };
+    index: { storeDir: string; dbPath: string; storeExists: boolean; dbExists: boolean; dbSizeBytes?: number; indexedFiles?: number; totalChunks?: number; potentiallyStale?: boolean };
+    fileScan?: FilterStats;
+    freshness?: FreshnessReport;
+    activeFile?: { path?: string; indexed: boolean; reason?: string };
+    notes: string[];
 }
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
@@ -27,6 +46,7 @@ export class ContextService implements vscode.Disposable {
     private _watcher: FileWatcher | null = null;
     private _extContext: vscode.ExtensionContext | null = null;
     private _onReindex = new vscode.EventEmitter<IndexingResult>();
+    private _lastIndexError: string | undefined;
     readonly onReindex = this._onReindex.event;
 
     private constructor() {}
@@ -65,21 +85,33 @@ export class ContextService implements vscode.Disposable {
     }
 
     public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
-        const ctx = await this.getContext();
-        await ctx.incrementalIndex((stage, current, total) => {
-            if (token?.isCancellationRequested) throw new vscode.CancellationError();
-            onProgress?.(stage, current, total);
-        });
+        try {
+            const ctx = await this.getContext();
+            await ctx.incrementalIndex((stage, current, total) => {
+                if (token?.isCancellationRequested) throw new vscode.CancellationError();
+                onProgress?.(stage, current, total);
+            });
+            this._lastIndexError = undefined;
+        } catch (err: any) {
+            this._lastIndexError = err?.message ?? String(err);
+            throw err;
+        }
     }
 
     public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
-        await this.setIndexWorkspaceRoot(dirPath);
-        const config = await this.getConfigForPath(this.resolveWorkspaceRoot());
-        this._context = await OpenContext.create(config);
-        await this._context.indexWorkspace((stage, current, total) => {
-            if (token?.isCancellationRequested) throw new vscode.CancellationError();
-            onProgress?.(stage, current, total);
-        });
+        try {
+            await this.setIndexWorkspaceRoot(dirPath);
+            const config = await this.getConfigForPath(this.resolveWorkspaceRoot());
+            this._context = await OpenContext.create(config);
+            await this._context.indexWorkspace((stage, current, total) => {
+                if (token?.isCancellationRequested) throw new vscode.CancellationError();
+                onProgress?.(stage, current, total);
+            });
+            this._lastIndexError = undefined;
+        } catch (err: any) {
+            this._lastIndexError = err?.message ?? String(err);
+            throw err;
+        }
     }
 
     public async startWatching(): Promise<void> {
@@ -113,12 +145,22 @@ export class ContextService implements vscode.Disposable {
 
     public async search(query: string): Promise<string> {
         const ctx = await this.getContext();
-        return ctx.search(query);
+        return ctx.search(query, undefined, this.getIdeRetrieveOptions(ctx.getWorkspaceRoot()));
     }
 
     public async searchRaw(query: string, topK?: number): Promise<SearchResult[]> {
         const ctx = await this.getContext();
-        return ctx.searchRaw(query, topK);
+        return ctx.searchRaw(query, topK, this.getIdeRetrieveOptions(ctx.getWorkspaceRoot()));
+    }
+
+    public async searchDebug(query: string, topK?: number): Promise<RetrievalDebugReport> {
+        const ctx = await this.getContext();
+        return ctx.searchDebug(query, topK, this.getIdeRetrieveOptions(ctx.getWorkspaceRoot()));
+    }
+
+    public async getIdeRetrieveOptionsForCurrentContext(): Promise<RetrieveOptions> {
+        const ctx = await this.getContext();
+        return this.getIdeRetrieveOptions(ctx.getWorkspaceRoot());
     }
 
     public async setLLMSelection(provider: string, model: string): Promise<void> {
@@ -179,6 +221,46 @@ export class ContextService implements vscode.Disposable {
 
     public async hasWebSearchApiKey(): Promise<boolean> {
         return (await this.getWebSearchApiKey()) != null;
+    }
+
+    public async getIndexHealthReport(): Promise<IndexHealthReport> {
+        const workspaceRoot = this.resolveWorkspaceRoot();
+        const config = workspaceRoot ? await this.getConfigForPath(workspaceRoot) : null;
+        const selectedWorkspaceRoot = this._extContext?.globalState.get<string>(INDEX_WORKSPACE_ROOT_KEY);
+        const vscodeWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const provider = config?.embedding.provider ?? "voyage";
+        const storeDir = config?.storePath || (workspaceRoot ? path.join(workspaceRoot, ".open-context") : "");
+        const dbPath = storeDir ? path.join(storeDir, "context.db") : "";
+        const notes: string[] = [];
+        const embeddingKeyPresent = provider === "ollama" || Boolean(await this.getEmbeddingApiKey());
+        let contextReady = false, initializationError: string | undefined, indexedFiles: number | undefined, totalChunks: number | undefined, freshness: FreshnessReport | undefined, activeFile: IndexHealthReport["activeFile"];
+        try {
+            if (workspaceRoot) {
+                const ctx = await this.getContext();
+                const status = await this.getStatus();
+                contextReady = true; indexedFiles = status.indexedFiles; totalChunks = status.totalChunks;
+                freshness = await ctx.checkFreshness();
+                activeFile = await this.getActiveFileHealth(ctx.getWorkspaceRoot(), await ctx.listFiles());
+            }
+        } catch (err: any) { initializationError = err?.message ?? String(err); }
+        let fileScan: FilterStats | undefined;
+        try { if (workspaceRoot && config) fileScan = await new FileFilter(config.maxFileSize).collectStats(workspaceRoot); }
+        catch (err: any) { notes.push(`File scan failed: ${err?.message ?? String(err)}`); }
+        const dbStat = statMaybe(dbPath);
+        if (!workspaceRoot) notes.push("No index workspace is selected and no VS Code workspace folder is open.");
+        if (provider !== "ollama" && !embeddingKeyPresent) notes.push(`Missing ${provider} embedding API key.`);
+        if (selectedWorkspaceRoot && vscodeWorkspaceRoot && selectedWorkspaceRoot !== vscodeWorkspaceRoot) notes.push("Index workspace differs from the first VS Code workspace folder.");
+        if (initializationError && /better-sqlite3|NODE_MODULE_VERSION|DLOPEN|self-register/i.test(initializationError)) notes.push("SQLite native dependency appears incompatible with the current Node runtime; rebuild/reinstall better-sqlite3.");
+        if (this._lastIndexError) notes.push("The last indexing attempt failed; see Last index error.");
+        const potentiallyStale = freshness?.stale ?? (fileScan && indexedFiles !== undefined ? fileScan.includedFiles !== indexedFiles : undefined);
+        if (potentiallyStale) notes.push("Indexed file count differs from current includable file count; index may be stale.");
+        if (activeFile && !activeFile.indexed) notes.push(activeFile.reason ?? "Active editor file is not indexed.");
+        return {
+            generatedAt: new Date().toISOString(), workspaceRoot, selectedWorkspaceRoot, vscodeWorkspaceRoot, contextReady, initializationError, lastIndexError: this._lastIndexError,
+            embedding: { provider, model: config?.embedding.model ?? "", apiKeyRequired: provider !== "ollama", apiKeyPresent: embeddingKeyPresent, dimension: config?.embedding.dimension ?? 0, batchSize: config?.embedding.batchSize ?? 0 },
+            index: { storeDir, dbPath, storeExists: this.pathExists(storeDir), dbExists: this.pathExists(dbPath), dbSizeBytes: dbStat?.size, indexedFiles, totalChunks, potentiallyStale },
+            fileScan, freshness, activeFile, notes,
+        };
     }
 
     public async dispose(): Promise<void> {
@@ -243,6 +325,34 @@ export class ContextService implements vscode.Disposable {
         return converted || p;
     }
 
+    private getIdeRetrieveOptions(workspaceRoot: string): RetrieveOptions {
+        const toRel = (fsPath: string | undefined): string | undefined => {
+            if (!fsPath) return undefined;
+            const rel = path.relative(workspaceRoot, this.resolveFsPath(fsPath) ?? fsPath).replace(/\\/g, "/");
+            if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+            return rel;
+        };
+        const active = vscode.window.activeTextEditor;
+        const activePath = toRel(active?.document.uri.fsPath);
+        const openPaths = vscode.window.visibleTextEditors
+            .map(e => toRel(e.document.uri.fsPath))
+            .filter((p): p is string => Boolean(p));
+        const selectedText = active && !active.selection.isEmpty ? active.document.getText(active.selection) : "";
+        return {
+            activePath,
+            openPaths: [...new Set(openPaths)],
+            contextText: selectedText.slice(0, 4000),
+        };
+    }
+
+    private async getActiveFileHealth(workspaceRoot: string, indexedPaths: string[]): Promise<IndexHealthReport["activeFile"]> {
+        const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+        if (!active) return { indexed: false, reason: "No active editor file." };
+        const rel = path.relative(workspaceRoot, this.resolveFsPath(active) ?? active).replace(/\\/g, "/");
+        if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return { path: rel, indexed: false, reason: "Active editor file is outside the indexed workspace." };
+        return { path: rel, indexed: indexedPaths.includes(rel), reason: indexedPaths.includes(rel) ? undefined : "Active editor file is not indexed." };
+    }
+
     private pathExists(p: string): boolean {
         try { fs.accessSync(p); return true; } catch { return false; }
     }
@@ -253,4 +363,8 @@ export class ContextService implements vscode.Disposable {
         const skipCount = parts[0] === "wsl$" ? 2 : parts[0] === "wsl" ? 2 : 0;
         return "/" + parts.slice(skipCount).join("/");
     }
+}
+
+function statMaybe(p: string): fs.Stats | undefined {
+    try { return p ? fs.statSync(p) : undefined; } catch { return undefined; }
 }

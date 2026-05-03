@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { OpenContextConfig, EmbeddingConfig, SearchConfig, File, Chunk, IndexingResult, SearchResult, DEFAULT_EMBEDDING_CONFIG, DEFAULT_SEARCH_CONFIG, EMBEDDING_MODELS } from "./types";
+import { OpenContextConfig, EmbeddingConfig, SearchConfig, File, Chunk, IndexingResult, SearchResult, FreshnessReport, DEFAULT_EMBEDDING_CONFIG, DEFAULT_SEARCH_CONFIG, EMBEDDING_MODELS } from "./types";
 import { EmbeddingProvider, createEmbeddingProvider } from "./embedder";
 import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
@@ -8,8 +8,9 @@ import { AstChunker } from "./ast-chunker";
 import { FileFilter } from "./file-filter";
 import { computeBlobName, isBinaryBuffer } from "./utils";
 import { formatSearchOutput } from "./search";
-import { HybridRetriever } from "./retriever";
+import { HybridRetriever, RetrievalDebugReport, RetrieveOptions } from "./retriever";
 import { Reranker, createReranker } from "./reranker";
+import { compareFreshness, getGitState } from "./freshness";
 
 const CONCURRENT_EMBED_BATCHES = 2;
 
@@ -154,16 +155,20 @@ export class OpenContext {
     for (const { file } of fileChunks) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
   }
 
-  async search(query: string, maxOutputLength?: number): Promise<string> {
-    const results = await this.retriever.retrieve(query);
+  async search(query: string, maxOutputLength?: number, retrieveOptions?: RetrieveOptions): Promise<string> {
+    const results = await this.retriever.retrieve(query, retrieveOptions);
     return formatSearchOutput(results, {
       ...this.searchConfig,
       ...(maxOutputLength != null ? { maxOutputLength } : {}),
     });
   }
 
-  async searchRaw(query: string, topK?: number): Promise<SearchResult[]> {
-    return this.retriever.retrieve(query, { topK });
+  async searchRaw(query: string, topK?: number, retrieveOptions?: RetrieveOptions): Promise<SearchResult[]> {
+    return this.retriever.retrieve(query, { ...retrieveOptions, topK });
+  }
+
+  async searchDebug(query: string, topK?: number, retrieveOptions?: RetrieveOptions): Promise<RetrievalDebugReport> {
+    return this.retriever.retrieveDebug(query, { ...retrieveOptions, topK });
   }
 
   async listFiles(directory?: string, pattern?: string): Promise<string[]> {
@@ -209,6 +214,16 @@ export class OpenContext {
       model: this.embedder.getModel(),
       lastSynced: new Date().toISOString(),
     };
+  }
+
+  async checkFreshness(): Promise<FreshnessReport> {
+    const files = await this.fileFilter.collectFiles(this.workspaceRoot);
+    return compareFreshness(
+      files,
+      this.store.getFileHashes(),
+      { lastIndexedAt: this.store.getLastIndexedAt() },
+      await getGitState(this.workspaceRoot),
+    );
   }
 
   close(): void {
