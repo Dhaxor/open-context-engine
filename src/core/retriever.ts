@@ -4,6 +4,10 @@ import { SearchResult, SearchConfig } from "./types";
 import { EmbeddingProvider } from "./embedder";
 import { Reranker } from "./reranker";
 import { packSearchResults, PackingDecision } from "./context-packer";
+import { RecencyScores, applyRecencyBoost } from "./git-recency";
+import { expandQuery } from "./query-expander";
+import { QueryCache } from "./query-cache";
+import { GraphExpander } from "./graph-expander";
 
 export interface RetrieveOptions {
   pathPrefix?: string;
@@ -42,18 +46,41 @@ export interface RetrievalDebugReport {
 }
 
 export class HybridRetriever {
+  private cache: QueryCache;
+  private recency: RecencyScores | null = null;
+  private graphExpander: GraphExpander | null = null;
+
   constructor(
     private store: SqliteStore,
     private embedder: EmbeddingProvider,
     private search: SearchConfig,
     private reranker?: Reranker,
-  ) {}
+    cache?: QueryCache,
+  ) {
+    this.cache = cache ?? new QueryCache();
+  }
+
+  setRecencyScores(scores: RecencyScores): void {
+    this.recency = scores;
+  }
+
+  setGraphExpander(expander: GraphExpander): void {
+    this.graphExpander = expander;
+  }
+
+  getCache(): QueryCache {
+    return this.cache;
+  }
 
   async retrieve(query: string, opts: RetrieveOptions = {}): Promise<SearchResult[]> {
     const ranked = await this.rank(query, opts);
     const trimmed = ranked.results.slice(0, ranked.finalK);
-    if (opts.expandSymbols ?? this.search.expandSymbols ?? true) return this.expandResults(trimmed, query).results;
-    return trimmed;
+    if (!(opts.expandSymbols ?? this.search.expandSymbols ?? true)) return trimmed;
+    if (this.graphExpander) {
+      const { results } = this.graphExpander.expand(trimmed, query);
+      return results;
+    }
+    return this.expandResults(trimmed, query).results;
   }
 
   async retrieveDebug(query: string, opts: RetrieveOptions = {}): Promise<RetrievalDebugReport> {
@@ -83,13 +110,21 @@ export class HybridRetriever {
     const candidateK = opts.topK != null ? Math.max(opts.topK * 4, 40) : (this.search.candidateK ?? 60);
     const finalK = opts.topK ?? this.search.topK;
 
-    const queryVec = (await this.embedder.embed([query], "query"))[0];
+    const { original, expanded } = expandQuery(query);
+    const vectorQuery = expanded;
+
+    let queryVec = this.cache.getEmbedding(vectorQuery);
+    if (!queryVec) {
+      queryVec = (await this.embedder.embed([vectorQuery], "query"))[0];
+      this.cache.setEmbedding(vectorQuery, queryVec);
+    }
+
     const [vectorHits, bm25Hits] = await Promise.all([
       Promise.resolve(this.store.vectorSearch(queryVec, candidateK, opts.pathPrefix)),
-      Promise.resolve(this.store.bm25Search(query, candidateK, opts.pathPrefix)),
+      Promise.resolve(this.store.bm25Search(original, candidateK, opts.pathPrefix)),
     ]);
 
-    const fused = applyEditorContextBoost(applySymbolAwareBoost(reciprocalRankFusion(
+    let fused = applyEditorContextBoost(applySymbolAwareBoost(reciprocalRankFusion(
       [
         { results: vectorHits, weight: this.search.vectorWeight ?? 1.0 },
         { results: bm25Hits, weight: this.search.bm25Weight ?? 1.0 },
@@ -97,10 +132,17 @@ export class HybridRetriever {
       this.search.candidateK ?? 60,
     ), query), opts);
 
+    if (this.recency) {
+      fused = applyRecencyBoost(fused, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+    }
+
     let results = fused;
     if (this.reranker && (this.search.rerank ?? true) && results.length > 1) {
       const reranked = await this.reranker.rerank(query, results.map(r => r.chunk), Math.max(finalK, 15));
       results = applyEditorContextBoost(applySymbolAwareBoost(reranked.map((r, i) => ({ ...r, score: 1 / (i + 1), rerankScore: r.rerankScore })), query), opts);
+      if (this.recency) {
+        results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+      }
     }
     return { vectorHits, bm25Hits, fused, results, finalK };
   }

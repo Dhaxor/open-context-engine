@@ -63,6 +63,8 @@ export interface SearchConfig {
   vectorWeight?: number;
   rerank?: boolean;
   expandSymbols?: boolean;
+  recencyWeight?: number;
+  queryCacheSize?: number;
 }
 export interface OpenContextConfig {
   workspaceRoot: string;

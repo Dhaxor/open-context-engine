@@ -5,6 +5,7 @@ import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
 import { compactHistory, truncateToolResult, withRetry } from "./utils";
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";
 import { shellTool, webSearchTool, ShellToolOptions, WebSearchOptions } from "./extra-tools";
+import { StepBudget } from "./step-budget";
 
 export { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./types";
 export { EditApplier, FsEditApplier, editTools } from "./edit-tools";
@@ -97,6 +98,7 @@ export class ContextAgent {
   private historyTokenBudget: number;
   private maxToolResultChars: number;
   private maxRetries: number;
+  private guidelinesProvider?: (query: string) => string | null;
 
   constructor(config: AgentConfig) {
     for (const t of config.tools) this.tools.set(t.name, t);
@@ -105,6 +107,7 @@ export class ContextAgent {
     this.historyTokenBudget = config.historyTokenBudget ?? 120_000;
     this.maxToolResultChars = config.maxToolResultChars ?? 24_000;
     this.maxRetries = config.maxRetries ?? 3;
+    this.guidelinesProvider = config.guidelinesProvider;
     const apiKey = config.apiKey ?? envKey(config.provider);
     if (!apiKey) throw new Error(`Missing API key for provider ${config.provider}`);
     if (config.provider === "openai") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
@@ -119,11 +122,18 @@ export class ContextAgent {
 
   async run(query: string, options: AgentRunOptions = {}): Promise<string> {
     this.messages.push({ role: "user", content: query });
-    for (let step = 0; step < this.maxSteps; step++) {
+    const budget = new StepBudget(query, {
+      baseSimple: this.maxSteps,
+      baseComplex: Math.min(this.maxSteps * 2, 25),
+      maxBudget: 25,
+    });
+    let step = 0;
+    while (budget.shouldContinue()) {
       options.onStream?.({ type: "step_start", step });
       this.compactIfNeeded(options);
+      const systemWithGuidelines = this.buildSystemPrompt(query);
       const resp = await withRetry(
-        () => this.caller.call(this.messages, [...this.tools.values()], this.system, options.onStream, options.signal),
+        () => this.caller.call(this.messages, [...this.tools.values()], systemWithGuidelines, options.onStream, options.signal),
         {
           maxRetries: this.maxRetries,
           signal: options.signal,
@@ -139,8 +149,15 @@ export class ContextAgent {
         options.onStream?.({ type: "step_end", step });
         return resp.text;
       }
+      let lastResultLength = 0;
       for (const tc of resp.toolCalls) {
         if (options.signal?.aborted) throw new Error("Aborted");
+        if (budget.isLooping(tc.name, tc.arguments)) {
+          const stored = "Loop detected: same tool called with identical arguments. Please try a different approach.";
+          this.messages.push({ role: "tool", content: stored, toolCallId: tc.id, toolName: tc.name });
+          options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: true } });
+          continue;
+        }
         options.onStream?.({ type: "tool_call", toolCall: tc });
         const tool = this.tools.get(tc.name);
         let result: string;
@@ -153,13 +170,25 @@ export class ContextAgent {
           isError = true;
         }
         const stored = truncateToolResult(result, this.maxToolResultChars);
+        lastResultLength = Math.max(lastResultLength, stored.length);
         this.messages.push({ role: "tool", content: stored, toolCallId: tc.id, toolName: tc.name });
         options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: isError } });
       }
+      if (budget.getRemaining() <= 1 && lastResultLength > 200) {
+        budget.requestExtension(lastResultLength);
+      }
       options.onStream?.({ type: "step_end", step });
+      step++;
     }
     const tail = this.messages[this.messages.length - 1];
-    return tail?.role === "assistant" ? tail.content : "Agent exceeded max steps without a final answer.";
+    return tail?.role === "assistant" ? tail.content : "Agent exceeded step budget without a final answer.";
+  }
+
+  private buildSystemPrompt(query: string): string {
+    if (!this.guidelinesProvider) return this.system;
+    const guidelines = this.guidelinesProvider(query);
+    if (!guidelines) return this.system;
+    return `${this.system}\n\n## Project Guidelines\n${guidelines}`;
   }
 
   private compactIfNeeded(options: AgentRunOptions): void {

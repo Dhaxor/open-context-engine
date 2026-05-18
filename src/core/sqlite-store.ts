@@ -3,6 +3,7 @@ import * as path from "path";
 import { createRequire } from "module";
 import type { Database as BetterSqlite3Database, Statement } from "better-sqlite3";
 import { Chunk, SearchResult, OpenContextState, SymbolKind } from "./types";
+import type { GraphEdge, EdgeKind } from "./code-graph";
 
 const requireFromHere = createRequire(__filename);
 
@@ -121,6 +122,20 @@ export class SqliteStore {
     }
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}])`);
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='unicode61 remove_diacritics 0')`);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS graph_edges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_path TEXT NOT NULL,
+        source_symbol TEXT,
+        target_path TEXT NOT NULL,
+        target_symbol TEXT,
+        kind TEXT NOT NULL,
+        confidence REAL DEFAULT 1.0
+      );
+      CREATE INDEX IF NOT EXISTS idx_edges_source ON graph_edges(source_path, source_symbol);
+      CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_path, target_symbol);
+      CREATE INDEX IF NOT EXISTS idx_edges_kind ON graph_edges(kind);
+    `);
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("embedding_dimension", String(this.expectedDim));
     if (storedDim && Number(storedDim) !== this.expectedDim) {
@@ -339,6 +354,47 @@ export class SqliteStore {
     };
   }
 
+  addGraphEdges(edges: GraphEdge[]): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO graph_edges (source_path, source_symbol, target_path, target_symbol, kind, confidence)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const tx = this.db.transaction((items: GraphEdge[]) => {
+      for (const e of items) {
+        stmt.run(e.sourcePath, e.sourceSymbol ?? null, e.targetPath, e.targetSymbol ?? null, e.kind, e.confidence);
+      }
+    });
+    tx(edges);
+  }
+
+  removeGraphEdgesByPath(filePath: string): void {
+    this.db.prepare("DELETE FROM graph_edges WHERE source_path = ? OR target_path = ?").run(filePath, filePath);
+  }
+
+  getGraphEdgesFrom(path: string, symbol?: string, kinds?: EdgeKind[]): GraphEdge[] {
+    let sql = "SELECT * FROM graph_edges WHERE source_path = ?";
+    const params: any[] = [path];
+    if (symbol) { sql += " AND source_symbol = ?"; params.push(symbol); }
+    if (kinds?.length) { sql += ` AND kind IN (${kinds.map(() => "?").join(",")})`; params.push(...kinds); }
+    sql += " LIMIT 50";
+    return (this.db.prepare(sql).all(...params) as any[]).map(rowToEdge);
+  }
+
+  getGraphEdgesTo(path: string | undefined, symbol?: string, kinds?: EdgeKind[]): GraphEdge[] {
+    let sql = "SELECT * FROM graph_edges WHERE 1=1";
+    const params: any[] = [];
+    if (path) { sql += " AND target_path = ?"; params.push(path); }
+    if (symbol) { sql += " AND target_symbol = ?"; params.push(symbol); }
+    if (kinds?.length) { sql += ` AND kind IN (${kinds.map(() => "?").join(",")})`; params.push(...kinds); }
+    sql += " LIMIT 50";
+    return (this.db.prepare(sql).all(...params) as any[]).map(rowToEdge);
+  }
+
+  getGraphEdgeCount(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM graph_edges").get() as { n: number };
+    return row.n;
+  }
+
   close(): void {
     try { this.db?.close(); } catch {}
   }
@@ -366,6 +422,17 @@ function sanitizeFtsQuery(q: string): string {
 }
 
 function escapeRegExp(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+function rowToEdge(r: any): GraphEdge {
+  return {
+    sourcePath: r.source_path,
+    sourceSymbol: r.source_symbol ?? undefined,
+    targetPath: r.target_path,
+    targetSymbol: r.target_symbol ?? undefined,
+    kind: r.kind,
+    confidence: r.confidence,
+  };
+}
 
 export function vectorToBlob(vec: number[]): Buffer {
   const buf = Buffer.alloc(vec.length * 4);

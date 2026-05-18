@@ -62,4 +62,5 @@ export interface AgentConfig {
   historyTokenBudget?: number;
   maxToolResultChars?: number;
   maxRetries?: number;
+  guidelinesProvider?: (query: string) => string | null;
 }

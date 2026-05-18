@@ -11,6 +11,12 @@ import { formatSearchOutput } from "./search";
 import { HybridRetriever, RetrievalDebugReport, RetrieveOptions } from "./retriever";
 import { Reranker, createReranker } from "./reranker";
 import { compareFreshness, getGitState } from "./freshness";
+import { getFileRecencyScores } from "./git-recency";
+import { QueryCache } from "./query-cache";
+import { loadGuidelines, Guidelines, getRelevantGuidelines } from "./guidelines";
+import { CodeGraph } from "./code-graph";
+import { extractEdgesFromSource } from "./graph-extractor";
+import { GraphExpander } from "./graph-expander";
 
 const CONCURRENT_EMBED_BATCHES = 2;
 
@@ -23,6 +29,10 @@ export class OpenContext {
   private chunker!: AstChunker;
   private fileFilter!: FileFilter;
   private retriever!: HybridRetriever;
+  private queryCache!: QueryCache;
+  private guidelines: Guidelines | null = null;
+  private codeGraph!: CodeGraph;
+  private graphExpander!: GraphExpander;
   private workspaceRoot: string = "";
   private _indexingMutex: Promise<void> = Promise.resolve();
 
@@ -42,8 +52,27 @@ export class OpenContext {
     const storePath = config.storePath || defaultStorePath(config.workspaceRoot);
     ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension());
     await ctx.store.initialize();
-    ctx.retriever = new HybridRetriever(ctx.store, ctx.embedder, ctx.searchConfig, ctx.reranker);
+    ctx.queryCache = new QueryCache(ctx.searchConfig.queryCacheSize ?? 128);
+    ctx.retriever = new HybridRetriever(ctx.store, ctx.embedder, ctx.searchConfig, ctx.reranker, ctx.queryCache);
+    ctx.codeGraph = new CodeGraph(ctx.store);
+    ctx.graphExpander = new GraphExpander(ctx.codeGraph, ctx.store);
+    ctx.retriever.setGraphExpander(ctx.graphExpander);
+    ctx.guidelines = loadGuidelines(config.workspaceRoot);
+    ctx.refreshRecencyScores();
     return ctx;
+  }
+
+  private refreshRecencyScores(): void {
+    const scores = getFileRecencyScores(this.workspaceRoot);
+    this.retriever.setRecencyScores(scores);
+  }
+
+  getGuidelines(): Guidelines | null {
+    return this.guidelines;
+  }
+
+  getGuidelinesText(context?: { paths?: string[]; query?: string }): string {
+    return getRelevantGuidelines(this.guidelines, context);
   }
 
   private async acquireLock(): Promise<() => void> {
@@ -72,6 +101,8 @@ export class OpenContext {
       const files = await this.fileFilter.collectFiles(this.workspaceRoot, (n) => onProgress?.("collecting", n, 0));
       for (const p of this.store.getIndexedPaths()) this.store.removeByPath(p);
       await this.embedAndStoreFiles(files, onProgress);
+      this.queryCache.invalidate();
+      this.refreshRecencyScores();
       return { newlyIndexed: files.map(f => f.path), alreadyIndexed: [], removed: [], duration: Date.now() - start };
     });
   }
@@ -97,6 +128,10 @@ export class OpenContext {
       }
       for (const f of toIndex) this.store.removeByPath(f.path);
       await this.embedAndStoreFiles(toIndex, onProgress);
+      if (toIndex.length || removed.length) {
+        this.queryCache.invalidate();
+        this.refreshRecencyScores();
+      }
       return { newlyIndexed: toIndex.map(f => f.path), alreadyIndexed, removed, duration: Date.now() - start };
     });
   }
@@ -120,7 +155,18 @@ export class OpenContext {
     onProgress?.("chunking", 0, files.length);
     const fileChunks: { file: File; chunks: Chunk[] }[] = [];
     for (let i = 0; i < files.length; i++) {
-      fileChunks.push({ file: files[i], chunks: await this.chunker.chunkFile(files[i]) });
+      const file = files[i];
+      fileChunks.push({ file, chunks: await this.chunker.chunkFile(file) });
+      const language = AstChunker.languageFor(file.path);
+      if (language) {
+        try {
+          const { edges } = extractEdgesFromSource(file.path, file.contents, language);
+          if (edges.length) {
+            this.store.removeGraphEdgesByPath(file.path);
+            this.store.addGraphEdges(edges);
+          }
+        } catch {}
+      }
       onProgress?.("chunking", i + 1, files.length);
     }
     const allChunks = fileChunks.flatMap(fc => fc.chunks);
