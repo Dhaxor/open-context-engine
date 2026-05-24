@@ -46,6 +46,15 @@ export class FileWatcher {
     this.watcher.on("unlink", onUnlink);
     this.watcher.on("error", (err: unknown) => events.onError?.(err instanceof Error ? err : new Error(String(err))));
     (this as any)._events = events;
+    // Resolve only once chokidar has finished its initial scan, so edits made
+    // immediately after start() aren't raced/dropped during the scan.
+    const watcher = this.watcher;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      watcher.once("ready", done);
+      setTimeout(done, 10_000);
+    });
   }
 
   async stop(): Promise<void> {

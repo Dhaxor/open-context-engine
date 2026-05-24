@@ -46,10 +46,37 @@ program.command("index").description("Index workspace").option("-w, --workspace 
 
 program.command("search <query>").description("Search codebase").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").action(async (query, opts) => { console.log(await (await OpenContext.create(resolveConfig(opts))).search(query)); });
 
-program.command("mcp").description("Run MCP server (stdio)").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").action(async (opts) => { await runMCPServer(resolveConfig(opts)); });
+program.command("mcp").description("Run MCP server (stdio). Indexes on startup and watches for changes by default.").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").option("--no-watch", "Do not keep the index live (no file watching)").action(async (opts) => { await runMCPServer(resolveConfig(opts), { watch: opts.watch }); });
 
-program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model", "gpt-4o").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").action(async (opts) => {
-  const ctx = await OpenContext.create(resolveConfig(opts));
+program.command("watch").description("Index the workspace and keep it live as files change").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").action(async (opts) => {
+  const config = resolveConfig(opts);
+  const { createLiveContext } = await import("../core/live-index");
+  console.log(`Indexing ${config.workspaceRoot} ...`);
+  const handle = await createLiveContext(config, {
+    onProgress: (s, c, t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}   `),
+    onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks`),
+    onError: (e) => console.error(`\n[watch error] ${e.message}`),
+  });
+  console.log(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
+  const stop = async () => { await handle.stop(); process.exit(0); };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+});
+
+program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model", "gpt-4o").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").action(async (opts) => {
+  const config = resolveConfig(opts);
+  const ctx = await OpenContext.create(config);
+  let watcher: import("../core/file-watcher").FileWatcher | null = null;
+  if (opts.index !== false) {
+    const { liveIndex } = await import("../core/live-index");
+    process.stderr.write("Indexing workspace...\n");
+    const { result, watcher: w } = await liveIndex(ctx, config, {
+      watch: !!opts.watch,
+      onProgress: (s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `),
+    });
+    watcher = w;
+    process.stderr.write(`\rIndexed ${ctx.getChunkCount()} chunks (+${result.newlyIndexed.length} new)${watcher ? "; watching for changes" : ""}.\n`);
+  }
   const agent = new ContextAgent({
     provider: (opts.provider || "openai") as LLMProvider,
     model: opts.llmModel || "gpt-4o",
@@ -63,8 +90,9 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     else if (ev.type === "retry") process.stdout.write(`\n[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);
     else if (ev.type === "history_compacted") process.stdout.write(`\n[compacted ${ev.droppedMessages} messages]\n`);
   };
-  if (opts.print) { await agent.run(opts.print, { onStream: stream }); process.stdout.write("\n"); return; }
+  if (opts.print) { await agent.run(opts.print, { onStream: stream }); process.stdout.write("\n"); await watcher?.stop(); ctx.close(); return; }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.on("close", () => { void watcher?.stop().then(() => ctx.close()); });
   console.log(`Open Context Agent | Type 'exit' to quit, 'reset' to clear\n`);
   const p = () => rl.question("> ", async (q) => {
     if (!q.trim()) return p();

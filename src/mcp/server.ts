@@ -3,6 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { OpenContext } from "../core/context";
 import { OpenContextConfig } from "../core/types";
+import { liveIndex } from "../core/live-index";
+import { FileWatcher } from "../core/file-watcher";
 
 export async function createMCPServer(context: OpenContext): Promise<McpServer> {
   const server = new McpServer({ name: "open-context-engine", version: "0.1.0" });
@@ -48,8 +50,40 @@ export async function createMCPServer(context: OpenContext): Promise<McpServer> 
   return server;
 }
 
-export async function runMCPServer(config: OpenContextConfig): Promise<void> {
+export interface RunMCPServerOptions {
+  /** Keep the index live by watching the workspace. Defaults to true. */
+  watch?: boolean;
+}
+
+export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServerOptions = {}): Promise<void> {
   const ctx = await OpenContext.create(config);
   const server = await createMCPServer(ctx);
+  // Connect before indexing so the MCP initialize handshake isn't blocked by a
+  // potentially slow first index. stdout is the protocol channel — all logs go to stderr.
   await server.connect(new StdioServerTransport());
+  const log = (m: string) => process.stderr.write(`[open-context] ${m}\n`);
+
+  let watcher: FileWatcher | null = null;
+  let closed = false;
+  const shutdown = async () => {
+    if (closed) return;
+    closed = true;
+    try { await watcher?.stop(); } catch {}
+    ctx.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
+  // Bring the index up to date and keep it live, without blocking startup.
+  void liveIndex(ctx, config, {
+    watch: opts.watch ?? true,
+    onReindex: (r) => log(`reindexed: +${r.newlyIndexed.length} ~${r.removed.length} removed (${r.duration}ms)`),
+    onError: (e) => log(`watch error: ${e.message}`),
+  })
+    .then(({ result, watcher: w }) => {
+      watcher = w;
+      log(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
+    })
+    .catch((e) => log(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));
 }

@@ -1,5 +1,7 @@
 export { OpenContext } from "./core/context";
 export { FileWatcher } from "./core/file-watcher";
+export { liveIndex, createLiveContext } from "./core/live-index";
+export type { LiveIndexOptions, LiveIndexHandle } from "./core/live-index";
 export { CodeChunker } from "./core/chunker";
 export { FileFilter } from "./core/file-filter";
 export { SqliteStore } from "./core/sqlite-store";
@@ -11,6 +13,7 @@ export type { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall,
 export type { EditApplier } from "./agent/edit-tools";
 export { unifiedDiff } from "./core/diff";
 export { createMCPServer, runMCPServer } from "./mcp/server";
+export type { RunMCPServerOptions } from "./mcp/server";
 export type { File, Chunk, SearchResult, IndexingResult, OpenContextState, OpenContextConfig, EmbeddingConfig, SearchConfig, RerankerConfig, FreshnessReport, GitState, IndexMetadata } from "./core/types";
 export { OpenAIEmbeddingProvider, VoyageEmbeddingProvider, OllamaEmbeddingProvider, createEmbeddingProvider } from "./core/embedder";
 export { getFileRecencyScores, applyRecencyBoost } from "./core/git-recency";
