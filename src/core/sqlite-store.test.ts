@@ -107,6 +107,33 @@ describe("SqliteStore", () => {
     expect(results.map(r => r.chunk.path)).toEqual(["tests/b.ts"]);
   });
 
+  it("vectorSearch over-fetches so a path-scoped hit isn't lost behind closer out-of-scope chunks", () => {
+    const anchor = makeVec(1);
+    // Many near, out-of-prefix chunks would fill a small KNN cut and starve the
+    // single in-prefix match if filtering happened only after the cut.
+    for (let i = 0; i < 40; i++) store.add(makeChunk(`src${i}`, { path: `src/f${i}.ts`, vector: makeVec(1 + i * 0.001) }));
+    store.add(makeChunk("target", { path: "tests/target.ts", vector: makeVec(1.05) }));
+    const results = store.vectorSearch(anchor, 3, "tests/");
+    expect(results.map(r => r.chunk.path)).toContain("tests/target.ts");
+  });
+
+  it("clears chunks, files, and graph edges when a re-index is forced", async () => {
+    store.add(makeChunk("a"));
+    store.upsertFile("src/a.ts", "hash-1");
+    store.addGraphEdges([{ sourcePath: "src/a.ts", targetPath: "src/b.ts", kind: "imports", confidence: 1 }]);
+    expect(store.getChunkCount()).toBe(1);
+    expect(store.getFileCount()).toBe(1);
+    expect(store.getGraphEdgeCount()).toBe(1);
+    store.close();
+    // Reopening with a different embedding dimension forces a clean re-index.
+    const s2 = new SqliteStore(dir, DIM + 4);
+    await s2.initialize();
+    expect(s2.getChunkCount()).toBe(0);
+    expect(s2.getFileCount()).toBe(0);
+    expect(s2.getGraphEdgeCount()).toBe(0);
+    s2.close();
+  });
+
   it("bm25Search finds keyword matches", () => {
     store.add(makeChunk("login", { contents: "function authenticateUser(password: string) {}" }));
     store.add(makeChunk("misc", { contents: "function renderButton() {}" }));
@@ -118,6 +145,33 @@ describe("SqliteStore", () => {
   it("bm25Search returns [] for gibberish with no tokens", () => {
     store.add(makeChunk("a"));
     expect(store.bm25Search("!!!", 5)).toEqual([]);
+  });
+
+  it("getChunksReferencingIdentifier finds whole-word references via FTS", () => {
+    store.add(makeChunk("a", { contents: "function authenticate() { return token; }" }));
+    store.add(makeChunk("b", { contents: "function renderButton() { return ui; }" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits.map(c => c.id)).toEqual(["a"]);
+  });
+
+  it("getChunksReferencingIdentifier does not match substrings of larger tokens", () => {
+    store.add(makeChunk("a", { contents: "function superAuthenticateUser() {}" }));
+    store.add(makeChunk("b", { contents: "function authenticate() {}" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits.map(c => c.id)).toEqual(["b"]);
+  });
+
+  it("getChunksReferencingIdentifier is case-sensitive (exact identifier)", () => {
+    store.add(makeChunk("a", { contents: "function Authenticate() {}" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits).toEqual([]);
+  });
+
+  it("getChunksReferencingIdentifier respects a path filter", () => {
+    store.add(makeChunk("a", { path: "src/a.ts", contents: "call doThing();" }));
+    store.add(makeChunk("b", { path: "tests/b.ts", contents: "call doThing();" }));
+    const hits = store.getChunksReferencingIdentifier("doThing", "tests/b.ts");
+    expect(hits.map(c => c.path)).toEqual(["tests/b.ts"]);
   });
 
   it("getChunksBySymbol indexes by symbol_name", () => {
@@ -138,6 +192,14 @@ describe("SqliteStore", () => {
     expect(fs.existsSync(path.join(legacyDir, "vectors.json"))).toBe(false);
     s.close();
     await fs.promises.rm(legacyDir, { recursive: true, force: true });
+  });
+
+  it("round-trips indexed git state", () => {
+    expect(store.getIndexedGit()).toBeUndefined();
+    store.setIndexedGit({ available: true, branch: "main", commit: "abc123" });
+    expect(store.getIndexedGit()).toEqual({ available: true, branch: "main", commit: "abc123" });
+    store.setIndexedGit(undefined);
+    expect(store.getIndexedGit()).toBeUndefined();
   });
 
   it("persists across reopen", async () => {

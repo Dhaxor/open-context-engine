@@ -11,6 +11,62 @@ afterEach(async () => {
   tmp = undefined;
 });
 
+async function write(root: string, rel: string, contents = "x\n"): Promise<void> {
+  const full = path.join(root, rel);
+  await fs.promises.mkdir(path.dirname(full), { recursive: true });
+  await fs.promises.writeFile(full, contents);
+}
+
+describe("FileFilter gitignore handling", () => {
+  it("honors nested .gitignore files", async () => {
+    tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-gi-"));
+    await write(tmp, "pkg/.gitignore", "generated/\n");
+    await write(tmp, "pkg/src/keep.ts");
+    await write(tmp, "pkg/generated/skip.ts");
+    await write(tmp, "root.ts");
+    const files = await new FileFilter().collectFiles(tmp);
+    const paths = files.map(f => f.path).sort();
+    expect(paths).toContain("pkg/src/keep.ts");
+    expect(paths).toContain("root.ts");
+    expect(paths).not.toContain("pkg/generated/skip.ts");
+  });
+
+  it("applies a root .gitignore dir pattern at any depth", async () => {
+    tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-gi-"));
+    await write(tmp, ".gitignore", "build/\n");
+    await write(tmp, "build/out.js");
+    await write(tmp, "a/build/out.js");
+    await write(tmp, "a/keep.ts");
+    const paths = (await new FileFilter().collectFiles(tmp)).map(f => f.path);
+    expect(paths).toContain("a/keep.ts");
+    expect(paths).not.toContain("build/out.js");
+    expect(paths).not.toContain("a/build/out.js");
+  });
+
+  it("honors .git/info/exclude", async () => {
+    tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-gi-"));
+    await write(tmp, ".git/info/exclude", "notes.txt\n");
+    await write(tmp, "notes.txt");
+    await write(tmp, "keep.ts");
+    const paths = (await new FileFilter().collectFiles(tmp)).map(f => f.path);
+    expect(paths).toContain("keep.ts");
+    expect(paths).not.toContain("notes.txt");
+  });
+
+  it("lets a deeper .gitignore re-include via negation", async () => {
+    tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-gi-"));
+    await write(tmp, ".gitignore", "*.log\n");
+    await write(tmp, "pkg/.gitignore", "!keep.log\n");
+    await write(tmp, "pkg/keep.log");
+    await write(tmp, "pkg/drop.log");
+    await write(tmp, "top.log");
+    const paths = (await new FileFilter().collectFiles(tmp)).map(f => f.path);
+    expect(paths).toContain("pkg/keep.log");
+    expect(paths).not.toContain("pkg/drop.log");
+    expect(paths).not.toContain("top.log");
+  });
+});
+
 describe("FileFilter.collectStats", () => {
   it("counts included and skipped files by reason", async () => {
     tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-filter-"));

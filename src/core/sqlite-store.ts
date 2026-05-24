@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
 import type { Database as BetterSqlite3Database, Statement } from "better-sqlite3";
-import { Chunk, SearchResult, OpenContextState, SymbolKind } from "./types";
+import { Chunk, SearchResult, OpenContextState, SymbolKind, GitState } from "./types";
 import type { GraphEdge, EdgeKind } from "./code-graph";
 
 const requireFromHere = createRequire(__filename);
@@ -44,7 +44,7 @@ interface ChunkRow {
   contents: string;
 }
 
-const SCHEMA_VERSION = "1";
+const SCHEMA_VERSION = "2";
 
 export class SqliteStore {
   private db!: BetterSqlite3Database;
@@ -114,13 +114,18 @@ export class SqliteStore {
     `);
     const storedDim = this.getMeta("embedding_dimension");
     const storedSchema = this.getMeta("schema_version");
-    if (storedSchema !== SCHEMA_VERSION || (storedDim && Number(storedDim) !== this.expectedDim)) {
+    const dimChanged = storedDim != null && Number(storedDim) !== this.expectedDim;
+    const schemaChanged = storedSchema != null && storedSchema !== SCHEMA_VERSION;
+    const needsReindex = dimChanged || schemaChanged;
+    if (needsReindex) {
+      // The vector/FTS layout or embedding space changed — drop the derived
+      // indexes so they can be recreated with the new definition.
       this.db.exec(`
         DROP TABLE IF EXISTS chunks_vec;
         DROP TABLE IF EXISTS chunks_fts;
       `);
     }
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}])`);
+    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}] distance_metric=cosine)`);
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='unicode61 remove_diacritics 0')`);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS graph_edges (
@@ -136,15 +141,18 @@ export class SqliteStore {
       CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_path, target_symbol);
       CREATE INDEX IF NOT EXISTS idx_edges_kind ON graph_edges(kind);
     `);
+    if (needsReindex) {
+      // Source rows would otherwise survive with no matching vectors (and file
+      // hashes would make an incremental index skip them), leaving a store that
+      // returns nothing. Clear them so the next index run repopulates cleanly.
+      const reason = dimChanged
+        ? `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}`
+        : `Store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
+      console.warn(`${reason}. Clearing existing index — a re-index is required.`);
+      this.db.exec("DELETE FROM chunks; DELETE FROM files; DELETE FROM graph_edges;");
+    }
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("embedding_dimension", String(this.expectedDim));
-    if (storedDim && Number(storedDim) !== this.expectedDim) {
-      console.warn(
-        `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}. ` +
-        `Re-indexing is required. Clearing existing chunks and file records...`
-      );
-      this.db.exec("DELETE FROM chunks; DELETE FROM files;");
-    }
   }
 
   private prepareStatements(): void {
@@ -174,6 +182,20 @@ export class SqliteStore {
   }
 
   getExpectedDimension(): number { return this.expectedDim; }
+
+  /** Record the git branch/commit the index was last built against. */
+  setIndexedGit(state: GitState | undefined): void {
+    this.setMeta("git_branch", state?.branch ?? "");
+    this.setMeta("git_commit", state?.commit ?? "");
+  }
+
+  /** The git state stored at the last index, or undefined if none was recorded. */
+  getIndexedGit(): GitState | undefined {
+    const branch = this.getMeta("git_branch");
+    const commit = this.getMeta("git_commit");
+    if (!branch && !commit) return undefined;
+    return { available: true, branch: branch || undefined, commit: commit || undefined };
+  }
 
   add(chunk: Chunk): void {
     if (!chunk.vector) throw new Error("Cannot add chunk without an embedding vector");
@@ -245,6 +267,13 @@ export class SqliteStore {
     return row.n;
   }
 
+  getChunkCountsByPath(): Map<string, number> {
+    const rows = this.db.prepare("SELECT path, COUNT(*) AS n FROM chunks GROUP BY path").all() as { path: string; n: number }[];
+    const out = new Map<string, number>();
+    for (const r of rows) out.set(r.path, r.n);
+    return out;
+  }
+
   getLastIndexedAt(): number | undefined {
     const row = this.db.prepare("SELECT MAX(last_indexed) AS ts FROM files").get() as { ts: number | null };
     return row.ts ?? undefined;
@@ -254,17 +283,24 @@ export class SqliteStore {
     if (queryVec.length !== this.expectedDim) {
       throw new Error(`Query dim ${queryVec.length} != store dim ${this.expectedDim}`);
     }
-    const sql = pathPrefix
-      ? `SELECT v.rowid, v.distance FROM chunks_vec v JOIN chunks c ON c.rowid = v.rowid
-         WHERE v.embedding MATCH ? AND k = ? AND c.path LIKE ? ORDER BY v.distance`
-      : "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance";
-    const rows = pathPrefix
-      ? (this.db.prepare(sql).all(vectorToBlob(queryVec), topK, pathPrefix + "%") as { rowid: number; distance: number }[])
-      : (this.db.prepare(sql).all(vectorToBlob(queryVec), topK) as { rowid: number; distance: number }[]);
-    return rows.map(r => {
-      const chunk = this.getChunkByRowId(r.rowid)!;
-      return { chunk, score: 1 / (1 + r.distance), vectorScore: r.distance };
-    });
+    let rows: { rowid: number; distance: number }[];
+    if (pathPrefix) {
+      // sqlite-vec applies the KNN cut before the path filter, so asking for
+      // exactly topK neighbors would yield far fewer after filtering. Over-fetch
+      // neighbors (bounded by total chunk count) and keep the top matches in-path.
+      const knnK = Math.min(this.getChunkCount() || topK, Math.max(topK * 10, 200));
+      rows = this.db.prepare(
+        `SELECT v.rowid, v.distance FROM chunks_vec v JOIN chunks c ON c.rowid = v.rowid
+         WHERE v.embedding MATCH ? AND k = ? AND c.path LIKE ? ORDER BY v.distance LIMIT ?`,
+      ).all(vectorToBlob(queryVec), knnK, pathPrefix + "%", topK) as { rowid: number; distance: number }[];
+    } else {
+      rows = this.db.prepare(
+        "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+      ).all(vectorToBlob(queryVec), topK) as { rowid: number; distance: number }[];
+    }
+    const chunks = this.getChunksByRowIds(rows.map(r => r.rowid));
+    return rows.map(r => ({ chunk: chunks.get(r.rowid)!, score: 1 / (1 + r.distance), vectorScore: r.distance }))
+      .filter(r => r.chunk);
   }
 
   bm25Search(query: string, topK: number, pathPrefix?: string): SearchResult[] {
@@ -282,16 +318,22 @@ export class SqliteStore {
     } catch {
       return [];
     }
-    return rows.map(r => {
-      const chunk = this.getChunkByRowId(r.rowid)!;
-      return { chunk, score: -r.score, bm25Score: r.score };
-    });
+    const chunks = this.getChunksByRowIds(rows.map(r => r.rowid));
+    return rows.map(r => ({ chunk: chunks.get(r.rowid)!, score: -r.score, bm25Score: r.score }))
+      .filter(r => r.chunk);
   }
 
-  private getChunkByRowId(rowid: number): Chunk | null {
-    const r = this.db.prepare("SELECT * FROM chunks WHERE rowid = ?").get(rowid) as ChunkRow | undefined;
-    if (!r) return null;
-    return rowToChunk(r);
+  // Hydrate many chunks in one round-trip instead of one query per rowid.
+  private getChunksByRowIds(rowids: number[]): Map<number, Chunk> {
+    const out = new Map<number, Chunk>();
+    if (!rowids.length) return out;
+    const CHUNK = 900; // stay under SQLite's bound-parameter limit
+    for (let i = 0; i < rowids.length; i += CHUNK) {
+      const slice = rowids.slice(i, i + CHUNK);
+      const rows = this.db.prepare(`SELECT * FROM chunks WHERE rowid IN (${slice.map(() => "?").join(",")})`).all(...slice) as ChunkRow[];
+      for (const r of rows) out.set(r.rowid, rowToChunk(r));
+    }
+    return out;
   }
 
   getChunkById(id: string): Chunk | null {
@@ -310,10 +352,24 @@ export class SqliteStore {
   }
 
   getChunksReferencingIdentifier(identifier: string, pathFilter?: string, limit = 8): Chunk[] {
-    const like = `%${identifier.replace(/[\\%_]/g, "\\$&")}%`;
-    const rows = pathFilter
-      ? this.db.prepare("SELECT * FROM chunks WHERE path = ? AND contents LIKE ? ESCAPE '\\' LIMIT ?").all(pathFilter, like, limit * 3) as ChunkRow[]
-      : this.db.prepare("SELECT * FROM chunks WHERE contents LIKE ? ESCAPE '\\' LIMIT ?").all(like, limit * 3) as ChunkRow[];
+    // Use the FTS index instead of a full-table `contents LIKE '%x%'` scan. The
+    // identifier is tokenized the same way the content was (unicode61), so an
+    // exact-phrase match finds the same whole-word occurrences the regex below
+    // already required; the regex is kept to enforce exact case + word bounds.
+    const words = identifier.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
+    if (!words.length) return [];
+    const match = `"${words.join(" ")}"`;
+    const sql = pathFilter
+      ? `SELECT c.* FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid WHERE chunks_fts MATCH ? AND c.path = ? LIMIT ?`
+      : `SELECT c.* FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid WHERE chunks_fts MATCH ? LIMIT ?`;
+    let rows: ChunkRow[];
+    try {
+      rows = (pathFilter
+        ? this.db.prepare(sql).all(match, pathFilter, limit * 4)
+        : this.db.prepare(sql).all(match, limit * 4)) as ChunkRow[];
+    } catch {
+      return [];
+    }
     const re = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(identifier)}([^A-Za-z0-9_]|$)`);
     return rows.map(rowToChunk).filter(c => re.test(c.contents)).slice(0, limit);
   }

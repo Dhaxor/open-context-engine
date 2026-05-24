@@ -42,6 +42,8 @@ export interface RetrievalDebugReport {
   ranked: RetrievalDebugItem[];
   expanded: RetrievalDebugItem[];
   final: RetrievalDebugItem[];
+  /** Full final results (after expansion), so callers needn't re-run the pipeline. */
+  finalResults: SearchResult[];
   packing?: { includedFiles: number; includedChunks: number; droppedChunks: number; totalChars: number; decisions: PackingDecision[]; preview: string };
 }
 
@@ -102,6 +104,7 @@ export class HybridRetriever {
       ranked: toDebugItems(ranked.results.slice(0, 12)),
       expanded: toDebugItems(expanded.results.slice(trimmed.length), expanded.reasons),
       final: toDebugItems(expanded.results, expanded.reasons),
+      finalResults: expanded.results,
       packing: { ...packed, preview: packed.output.slice(0, 4000) },
     };
   }
@@ -138,10 +141,20 @@ export class HybridRetriever {
 
     let results = fused;
     if (this.reranker && (this.search.rerank ?? true) && results.length > 1) {
-      const reranked = await this.reranker.rerank(query, results.map(r => r.chunk), Math.max(finalK, 15));
-      results = applyEditorContextBoost(applySymbolAwareBoost(reranked.map((r, i) => ({ ...r, score: 1 / (i + 1), rerankScore: r.rerankScore })), query), opts);
-      if (this.recency) {
-        results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+      try {
+        const reranked = await this.reranker.rerank(query, results.map(r => r.chunk), Math.max(finalK, 15));
+        if (reranked.length) {
+          results = applyEditorContextBoost(applySymbolAwareBoost(reranked.map((r, i) => ({ ...r, score: 1 / (i + 1), rerankScore: r.rerankScore })), query), opts);
+          if (this.recency) {
+            results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+          }
+        }
+      } catch (err) {
+        // A reranker outage must not take down search — fall back to the fused
+        // (vector + BM25 + boost) ordering, which is already good.
+        if (process.env.OPEN_CONTEXT_DEBUG) {
+          console.error(`Reranker failed; using fused results. ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
     return { vectorHits, bm25Hits, fused, results, finalK };
