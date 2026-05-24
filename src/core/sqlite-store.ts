@@ -267,6 +267,13 @@ export class SqliteStore {
     return row.n;
   }
 
+  getChunkCountsByPath(): Map<string, number> {
+    const rows = this.db.prepare("SELECT path, COUNT(*) AS n FROM chunks GROUP BY path").all() as { path: string; n: number }[];
+    const out = new Map<string, number>();
+    for (const r of rows) out.set(r.path, r.n);
+    return out;
+  }
+
   getLastIndexedAt(): number | undefined {
     const row = this.db.prepare("SELECT MAX(last_indexed) AS ts FROM files").get() as { ts: number | null };
     return row.ts ?? undefined;
