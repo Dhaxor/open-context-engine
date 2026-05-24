@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
 import type { Database as BetterSqlite3Database, Statement } from "better-sqlite3";
-import { Chunk, SearchResult, OpenContextState, SymbolKind } from "./types";
+import { Chunk, SearchResult, OpenContextState, SymbolKind, GitState } from "./types";
 import type { GraphEdge, EdgeKind } from "./code-graph";
 
 const requireFromHere = createRequire(__filename);
@@ -182,6 +182,20 @@ export class SqliteStore {
   }
 
   getExpectedDimension(): number { return this.expectedDim; }
+
+  /** Record the git branch/commit the index was last built against. */
+  setIndexedGit(state: GitState | undefined): void {
+    this.setMeta("git_branch", state?.branch ?? "");
+    this.setMeta("git_commit", state?.commit ?? "");
+  }
+
+  /** The git state stored at the last index, or undefined if none was recorded. */
+  getIndexedGit(): GitState | undefined {
+    const branch = this.getMeta("git_branch");
+    const commit = this.getMeta("git_commit");
+    if (!branch && !commit) return undefined;
+    return { available: true, branch: branch || undefined, commit: commit || undefined };
+  }
 
   add(chunk: Chunk): void {
     if (!chunk.vector) throw new Error("Cannot add chunk without an embedding vector");

@@ -17,14 +17,18 @@ export interface FilterStats {
 }
 
 export class FileFilter {
-  private gitignore: Ignore | null = null;
   private contextignore: Ignore | null = null;
   private maxFileSize: number;
+  private root = "";
+  // Per-directory .gitignore matchers, keyed by directory path relative to root
+  // ("" = root, which also folds in .git/info/exclude). Loaded lazily, cached.
+  private gitMatchers = new Map<string, Ignore | null>();
 
   constructor(maxFileSize: number = MAX_FILE_SIZE) { this.maxFileSize = maxFileSize; }
 
   async loadIgnorePatterns(rootDir: string): Promise<void> {
-    this.gitignore = await this.loadFile(path.join(rootDir, ".gitignore"));
+    this.root = rootDir;
+    this.gitMatchers.clear();
     this.contextignore = await this.loadFile(path.join(rootDir, ".contextignore"));
   }
 
@@ -32,12 +36,60 @@ export class FileFilter {
     try { return ignore().add(await fs.promises.readFile(p, "utf8")); } catch { return null; }
   }
 
+  private getGitMatcher(dirRel: string): Ignore | null {
+    const cached = this.gitMatchers.get(dirRel);
+    if (cached !== undefined) return cached;
+    const sources: string[] = [];
+    try { sources.push(fs.readFileSync(path.join(this.root, dirRel, ".gitignore"), "utf8")); } catch {}
+    if (dirRel === "") {
+      try { sources.push(fs.readFileSync(path.join(this.root, ".git", "info", "exclude"), "utf8")); } catch {}
+    }
+    const matcher = sources.length ? ignore().add(sources.join("\n")) : null;
+    this.gitMatchers.set(dirRel, matcher);
+    return matcher;
+  }
+
+  private ancestorDirs(relPath: string): string[] {
+    const dirs = [""];
+    const segments = relPath.split("/");
+    let acc = "";
+    for (let i = 0; i < segments.length - 1; i++) {
+      acc = acc ? `${acc}/${segments[i]}` : segments[i];
+      dirs.push(acc);
+    }
+    return dirs;
+  }
+
+  // Apply every applicable .gitignore from root down to the path's directory,
+  // with deeper files overriding shallower ones (matching git's precedence,
+  // including negation re-includes).
+  private gitIgnored(relPath: string): boolean {
+    let ignored = false;
+    for (const dir of this.ancestorDirs(relPath)) {
+      const matcher = this.getGitMatcher(dir);
+      if (!matcher) continue;
+      const sub = dir === "" ? relPath : relPath.slice(dir.length + 1);
+      if (!sub) continue;
+      const t = matcher.test(sub);
+      if (t.ignored) ignored = true;
+      else if (t.unignored) ignored = false;
+    }
+    return ignored;
+  }
+
   shouldIncludePath(filePath: string): FilterDecision {
     if (filePath.includes("..")) return { include: false, reason: "path_traversal" };
     if (this.contextignore?.test(filePath).ignored) return { include: false, reason: "contextignore" };
     if (isKeyishPath(filePath)) return { include: false, reason: "keyish" };
-    if (this.gitignore?.test(filePath).ignored) return { include: false, reason: "gitignore" };
+    if (this.gitIgnored(filePath)) return { include: false, reason: "gitignore" };
     return { include: true };
+  }
+
+  /** Whether to descend into a directory (so ignored subtrees are pruned, not walked). */
+  shouldIncludeDir(dirRel: string): boolean {
+    if (!dirRel || dirRel.includes("..")) return !dirRel ? true : false;
+    if (this.contextignore?.test(dirRel).ignored) return false;
+    return !this.gitIgnored(dirRel);
   }
 
   shouldIncludeBuffer(filePath: string, buf: Buffer): FilterDecision {
@@ -64,6 +116,8 @@ export class FileFilter {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) {
           if (SKIP_DIRS.has(e.name) || (e.name.startsWith(".") && e.name !== ".github")) continue;
+          const dirRel = path.relative(rootDir, full).replace(/\\/g, "/");
+          if (!this.shouldIncludeDir(dirRel)) continue;
           await walk(full);
           continue;
         }
@@ -98,6 +152,8 @@ export class FileFilter {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) {
           if (SKIP_DIRS.has(e.name) || (e.name.startsWith(".") && e.name !== ".github")) continue;
+          const dirRel = path.relative(rootDir, full).replace(/\\/g, "/");
+          if (!this.shouldIncludeDir(dirRel)) continue;
           await walk(full);
           continue;
         }

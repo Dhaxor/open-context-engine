@@ -67,6 +67,10 @@ export class OpenContext {
     this.retriever.setRecencyScores(scores);
   }
 
+  private async recordGitState(): Promise<void> {
+    try { this.store.setIndexedGit(await getGitState(this.workspaceRoot)); } catch {}
+  }
+
   getGuidelines(): Guidelines | null {
     return this.guidelines;
   }
@@ -103,6 +107,7 @@ export class OpenContext {
       await this.embedAndStoreFiles(files, onProgress);
       this.queryCache.invalidate();
       this.refreshRecencyScores();
+      await this.recordGitState();
       return { newlyIndexed: files.map(f => f.path), alreadyIndexed: [], removed: [], duration: Date.now() - start };
     });
   }
@@ -132,6 +137,7 @@ export class OpenContext {
         this.queryCache.invalidate();
         this.refreshRecencyScores();
       }
+      await this.recordGitState();
       return { newlyIndexed: toIndex.map(f => f.path), alreadyIndexed, removed, duration: Date.now() - start };
     });
   }
@@ -267,7 +273,7 @@ export class OpenContext {
     return compareFreshness(
       files,
       this.store.getFileHashes(),
-      { lastIndexedAt: this.store.getLastIndexedAt() },
+      { lastIndexedAt: this.store.getLastIndexedAt(), git: this.store.getIndexedGit() },
       await getGitState(this.workspaceRoot),
     );
   }
