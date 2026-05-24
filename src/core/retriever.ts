@@ -138,10 +138,20 @@ export class HybridRetriever {
 
     let results = fused;
     if (this.reranker && (this.search.rerank ?? true) && results.length > 1) {
-      const reranked = await this.reranker.rerank(query, results.map(r => r.chunk), Math.max(finalK, 15));
-      results = applyEditorContextBoost(applySymbolAwareBoost(reranked.map((r, i) => ({ ...r, score: 1 / (i + 1), rerankScore: r.rerankScore })), query), opts);
-      if (this.recency) {
-        results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+      try {
+        const reranked = await this.reranker.rerank(query, results.map(r => r.chunk), Math.max(finalK, 15));
+        if (reranked.length) {
+          results = applyEditorContextBoost(applySymbolAwareBoost(reranked.map((r, i) => ({ ...r, score: 1 / (i + 1), rerankScore: r.rerankScore })), query), opts);
+          if (this.recency) {
+            results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
+          }
+        }
+      } catch (err) {
+        // A reranker outage must not take down search — fall back to the fused
+        // (vector + BM25 + boost) ordering, which is already good.
+        if (process.env.OPEN_CONTEXT_DEBUG) {
+          console.error(`Reranker failed; using fused results. ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
     }
     return { vectorHits, bm25Hits, fused, results, finalK };

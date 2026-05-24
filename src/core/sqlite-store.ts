@@ -44,7 +44,7 @@ interface ChunkRow {
   contents: string;
 }
 
-const SCHEMA_VERSION = "1";
+const SCHEMA_VERSION = "2";
 
 export class SqliteStore {
   private db!: BetterSqlite3Database;
@@ -114,13 +114,18 @@ export class SqliteStore {
     `);
     const storedDim = this.getMeta("embedding_dimension");
     const storedSchema = this.getMeta("schema_version");
-    if (storedSchema !== SCHEMA_VERSION || (storedDim && Number(storedDim) !== this.expectedDim)) {
+    const dimChanged = storedDim != null && Number(storedDim) !== this.expectedDim;
+    const schemaChanged = storedSchema != null && storedSchema !== SCHEMA_VERSION;
+    const needsReindex = dimChanged || schemaChanged;
+    if (needsReindex) {
+      // The vector/FTS layout or embedding space changed — drop the derived
+      // indexes so they can be recreated with the new definition.
       this.db.exec(`
         DROP TABLE IF EXISTS chunks_vec;
         DROP TABLE IF EXISTS chunks_fts;
       `);
     }
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}])`);
+    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}] distance_metric=cosine)`);
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='unicode61 remove_diacritics 0')`);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS graph_edges (
@@ -136,15 +141,18 @@ export class SqliteStore {
       CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_path, target_symbol);
       CREATE INDEX IF NOT EXISTS idx_edges_kind ON graph_edges(kind);
     `);
+    if (needsReindex) {
+      // Source rows would otherwise survive with no matching vectors (and file
+      // hashes would make an incremental index skip them), leaving a store that
+      // returns nothing. Clear them so the next index run repopulates cleanly.
+      const reason = dimChanged
+        ? `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}`
+        : `Store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
+      console.warn(`${reason}. Clearing existing index — a re-index is required.`);
+      this.db.exec("DELETE FROM chunks; DELETE FROM files; DELETE FROM graph_edges;");
+    }
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("embedding_dimension", String(this.expectedDim));
-    if (storedDim && Number(storedDim) !== this.expectedDim) {
-      console.warn(
-        `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}. ` +
-        `Re-indexing is required. Clearing existing chunks and file records...`
-      );
-      this.db.exec("DELETE FROM chunks; DELETE FROM files;");
-    }
   }
 
   private prepareStatements(): void {
@@ -254,13 +262,21 @@ export class SqliteStore {
     if (queryVec.length !== this.expectedDim) {
       throw new Error(`Query dim ${queryVec.length} != store dim ${this.expectedDim}`);
     }
-    const sql = pathPrefix
-      ? `SELECT v.rowid, v.distance FROM chunks_vec v JOIN chunks c ON c.rowid = v.rowid
-         WHERE v.embedding MATCH ? AND k = ? AND c.path LIKE ? ORDER BY v.distance`
-      : "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance";
-    const rows = pathPrefix
-      ? (this.db.prepare(sql).all(vectorToBlob(queryVec), topK, pathPrefix + "%") as { rowid: number; distance: number }[])
-      : (this.db.prepare(sql).all(vectorToBlob(queryVec), topK) as { rowid: number; distance: number }[]);
+    let rows: { rowid: number; distance: number }[];
+    if (pathPrefix) {
+      // sqlite-vec applies the KNN cut before the path filter, so asking for
+      // exactly topK neighbors would yield far fewer after filtering. Over-fetch
+      // neighbors (bounded by total chunk count) and keep the top matches in-path.
+      const knnK = Math.min(this.getChunkCount() || topK, Math.max(topK * 10, 200));
+      rows = this.db.prepare(
+        `SELECT v.rowid, v.distance FROM chunks_vec v JOIN chunks c ON c.rowid = v.rowid
+         WHERE v.embedding MATCH ? AND k = ? AND c.path LIKE ? ORDER BY v.distance LIMIT ?`,
+      ).all(vectorToBlob(queryVec), knnK, pathPrefix + "%", topK) as { rowid: number; distance: number }[];
+    } else {
+      rows = this.db.prepare(
+        "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+      ).all(vectorToBlob(queryVec), topK) as { rowid: number; distance: number }[];
+    }
     return rows.map(r => {
       const chunk = this.getChunkByRowId(r.rowid)!;
       return { chunk, score: 1 / (1 + r.distance), vectorScore: r.distance };
