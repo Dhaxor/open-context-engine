@@ -291,10 +291,9 @@ export class SqliteStore {
         "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
       ).all(vectorToBlob(queryVec), topK) as { rowid: number; distance: number }[];
     }
-    return rows.map(r => {
-      const chunk = this.getChunkByRowId(r.rowid)!;
-      return { chunk, score: 1 / (1 + r.distance), vectorScore: r.distance };
-    });
+    const chunks = this.getChunksByRowIds(rows.map(r => r.rowid));
+    return rows.map(r => ({ chunk: chunks.get(r.rowid)!, score: 1 / (1 + r.distance), vectorScore: r.distance }))
+      .filter(r => r.chunk);
   }
 
   bm25Search(query: string, topK: number, pathPrefix?: string): SearchResult[] {
@@ -312,16 +311,22 @@ export class SqliteStore {
     } catch {
       return [];
     }
-    return rows.map(r => {
-      const chunk = this.getChunkByRowId(r.rowid)!;
-      return { chunk, score: -r.score, bm25Score: r.score };
-    });
+    const chunks = this.getChunksByRowIds(rows.map(r => r.rowid));
+    return rows.map(r => ({ chunk: chunks.get(r.rowid)!, score: -r.score, bm25Score: r.score }))
+      .filter(r => r.chunk);
   }
 
-  private getChunkByRowId(rowid: number): Chunk | null {
-    const r = this.db.prepare("SELECT * FROM chunks WHERE rowid = ?").get(rowid) as ChunkRow | undefined;
-    if (!r) return null;
-    return rowToChunk(r);
+  // Hydrate many chunks in one round-trip instead of one query per rowid.
+  private getChunksByRowIds(rowids: number[]): Map<number, Chunk> {
+    const out = new Map<number, Chunk>();
+    if (!rowids.length) return out;
+    const CHUNK = 900; // stay under SQLite's bound-parameter limit
+    for (let i = 0; i < rowids.length; i += CHUNK) {
+      const slice = rowids.slice(i, i + CHUNK);
+      const rows = this.db.prepare(`SELECT * FROM chunks WHERE rowid IN (${slice.map(() => "?").join(",")})`).all(...slice) as ChunkRow[];
+      for (const r of rows) out.set(r.rowid, rowToChunk(r));
+    }
+    return out;
   }
 
   getChunkById(id: string): Chunk | null {
@@ -340,10 +345,24 @@ export class SqliteStore {
   }
 
   getChunksReferencingIdentifier(identifier: string, pathFilter?: string, limit = 8): Chunk[] {
-    const like = `%${identifier.replace(/[\\%_]/g, "\\$&")}%`;
-    const rows = pathFilter
-      ? this.db.prepare("SELECT * FROM chunks WHERE path = ? AND contents LIKE ? ESCAPE '\\' LIMIT ?").all(pathFilter, like, limit * 3) as ChunkRow[]
-      : this.db.prepare("SELECT * FROM chunks WHERE contents LIKE ? ESCAPE '\\' LIMIT ?").all(like, limit * 3) as ChunkRow[];
+    // Use the FTS index instead of a full-table `contents LIKE '%x%'` scan. The
+    // identifier is tokenized the same way the content was (unicode61), so an
+    // exact-phrase match finds the same whole-word occurrences the regex below
+    // already required; the regex is kept to enforce exact case + word bounds.
+    const words = identifier.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
+    if (!words.length) return [];
+    const match = `"${words.join(" ")}"`;
+    const sql = pathFilter
+      ? `SELECT c.* FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid WHERE chunks_fts MATCH ? AND c.path = ? LIMIT ?`
+      : `SELECT c.* FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid WHERE chunks_fts MATCH ? LIMIT ?`;
+    let rows: ChunkRow[];
+    try {
+      rows = (pathFilter
+        ? this.db.prepare(sql).all(match, pathFilter, limit * 4)
+        : this.db.prepare(sql).all(match, limit * 4)) as ChunkRow[];
+    } catch {
+      return [];
+    }
     const re = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(identifier)}([^A-Za-z0-9_]|$)`);
     return rows.map(rowToChunk).filter(c => re.test(c.contents)).slice(0, limit);
   }

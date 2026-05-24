@@ -147,6 +147,33 @@ describe("SqliteStore", () => {
     expect(store.bm25Search("!!!", 5)).toEqual([]);
   });
 
+  it("getChunksReferencingIdentifier finds whole-word references via FTS", () => {
+    store.add(makeChunk("a", { contents: "function authenticate() { return token; }" }));
+    store.add(makeChunk("b", { contents: "function renderButton() { return ui; }" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits.map(c => c.id)).toEqual(["a"]);
+  });
+
+  it("getChunksReferencingIdentifier does not match substrings of larger tokens", () => {
+    store.add(makeChunk("a", { contents: "function superAuthenticateUser() {}" }));
+    store.add(makeChunk("b", { contents: "function authenticate() {}" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits.map(c => c.id)).toEqual(["b"]);
+  });
+
+  it("getChunksReferencingIdentifier is case-sensitive (exact identifier)", () => {
+    store.add(makeChunk("a", { contents: "function Authenticate() {}" }));
+    const hits = store.getChunksReferencingIdentifier("authenticate");
+    expect(hits).toEqual([]);
+  });
+
+  it("getChunksReferencingIdentifier respects a path filter", () => {
+    store.add(makeChunk("a", { path: "src/a.ts", contents: "call doThing();" }));
+    store.add(makeChunk("b", { path: "tests/b.ts", contents: "call doThing();" }));
+    const hits = store.getChunksReferencingIdentifier("doThing", "tests/b.ts");
+    expect(hits.map(c => c.path)).toEqual(["tests/b.ts"]);
+  });
+
   it("getChunksBySymbol indexes by symbol_name", () => {
     store.add(makeChunk("a", { symbolName: "renderHeader", symbolKind: "function" }));
     store.add(makeChunk("b", { symbolName: "renderFooter", symbolKind: "function" }));

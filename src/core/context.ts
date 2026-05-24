@@ -158,38 +158,46 @@ export class OpenContext {
   }
 
   private async embedAndStoreFiles(files: File[], onProgress?: ProgressCb): Promise<void> {
-    onProgress?.("chunking", 0, files.length);
-    const fileChunks: { file: File; chunks: Chunk[] }[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      fileChunks.push({ file, chunks: await this.chunker.chunkFile(file) });
-      const language = AstChunker.languageFor(file.path);
-      if (language) {
-        try {
-          const { edges } = extractEdgesFromSource(file.path, file.contents, language);
-          if (edges.length) {
-            this.store.removeGraphEdgesByPath(file.path);
-            this.store.addGraphEdges(edges);
-          }
-        } catch {}
+    // Process files in bounded batches so we never hold the whole repo's chunks
+    // and embedding vectors in memory at once — only one FILE_BATCH window.
+    const FILE_BATCH = 48;
+    let filesDone = 0;
+    onProgress?.("indexing", 0, files.length);
+    for (let fb = 0; fb < files.length; fb += FILE_BATCH) {
+      const fileBatch = files.slice(fb, fb + FILE_BATCH);
+      const chunks: Chunk[] = [];
+      for (const file of fileBatch) {
+        const fileChunks = await this.chunker.chunkFile(file);
+        for (const c of fileChunks) chunks.push(c);
+        const language = AstChunker.languageFor(file.path);
+        if (language) {
+          try {
+            const { edges } = extractEdgesFromSource(file.path, file.contents, language);
+            if (edges.length) {
+              this.store.removeGraphEdgesByPath(file.path);
+              this.store.addGraphEdges(edges);
+            }
+          } catch {}
+        }
       }
-      onProgress?.("chunking", i + 1, files.length);
+      await this.embedAndStoreChunks(chunks);
+      // Record hashes for every file in the batch (including files with no chunks).
+      for (const file of fileBatch) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
+      filesDone += fileBatch.length;
+      onProgress?.("indexing", filesDone, files.length);
     }
-    const allChunks = fileChunks.flatMap(fc => fc.chunks);
-    if (!allChunks.length) {
-      for (const { file } of fileChunks) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
-      return;
-    }
-    onProgress?.("embedding", 0, allChunks.length);
+  }
+
+  private async embedAndStoreChunks(chunks: Chunk[]): Promise<void> {
+    if (!chunks.length) return;
     const batchSize = Math.max(8, this.embeddingConfig.batchSize ?? 32);
     const expectedDim = this.embedder.getDimension();
-    let done = 0;
-    for (let offset = 0; offset < allChunks.length; offset += batchSize * CONCURRENT_EMBED_BATCHES) {
+    for (let offset = 0; offset < chunks.length; offset += batchSize * CONCURRENT_EMBED_BATCHES) {
       const groups: Chunk[][] = [];
       for (let k = 0; k < CONCURRENT_EMBED_BATCHES; k++) {
         const s = offset + k * batchSize;
-        if (s >= allChunks.length) break;
-        groups.push(allChunks.slice(s, Math.min(s + batchSize, allChunks.length)));
+        if (s >= chunks.length) break;
+        groups.push(chunks.slice(s, Math.min(s + batchSize, chunks.length)));
       }
       const results = await Promise.all(groups.map(g => this.embedder.embed(g.map(c => c.contents), "document")));
       for (let gi = 0; gi < groups.length; gi++) {
@@ -200,11 +208,8 @@ export class OpenContext {
           g[i].vector = vs[i];
         }
         this.store.addBatch(g);
-        done += g.length;
-        onProgress?.("embedding", done, allChunks.length);
       }
     }
-    for (const { file } of fileChunks) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
   }
 
   async search(query: string, maxOutputLength?: number, retrieveOptions?: RetrieveOptions): Promise<string> {
