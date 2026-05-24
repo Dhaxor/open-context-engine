@@ -77,6 +77,8 @@ oce agent --workspace ./my-project --allow-edits
 > refactor the user service to use dependency injection
 ```
 
+The agent is **read-only by default** (codebase retrieval + file reads). Grant write/exec access explicitly: `--allow-edits` enables the file-editing tools and `--allow-shell` enables the `run-command` tool. The same applies to the programmatic API — `defaultAgentTools({ context })` returns read-only tools unless you pass `includeEdits: true` and/or `shell: true`.
+
 ### 6. Connect to Claude / Cursor via MCP
 
 ```bash

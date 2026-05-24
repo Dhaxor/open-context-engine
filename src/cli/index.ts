@@ -63,7 +63,7 @@ program.command("watch").description("Index the workspace and keep it live as fi
   process.on("SIGTERM", stop);
 });
 
-program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model", "gpt-4o").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").action(async (opts) => {
+program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model", "gpt-4o").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--allow-shell", "Enable the run-command shell tool (off by default)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").action(async (opts) => {
   const config = resolveConfig(opts);
   const ctx = await OpenContext.create(config);
   let watcher: import("../core/file-watcher").FileWatcher | null = null;
@@ -81,8 +81,9 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     provider: (opts.provider || "openai") as LLMProvider,
     model: opts.llmModel || "gpt-4o",
     apiKey: opts.apiKey,
-    tools: defaultAgentTools({ context: ctx, includeEdits: !!opts.allowEdits }),
+    tools: defaultAgentTools({ context: ctx, includeEdits: !!opts.allowEdits, shell: !!opts.allowShell }),
   });
+  process.stderr.write(`Tools: codebase-retrieval, list-files, read-file${opts.allowEdits ? ", edits" : ""}${opts.allowShell ? ", run-command" : ""}.\n`);
   const stream = (ev: any) => {
     if (ev.type === "text") process.stdout.write(ev.text);
     else if (ev.type === "tool_call") process.stdout.write(`\n[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);

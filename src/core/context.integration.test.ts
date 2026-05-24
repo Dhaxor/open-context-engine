@@ -70,6 +70,9 @@ describe("OpenContext end-to-end (fake embeddings)", () => {
       const result = await ctx.indexWorkspace();
       expect(result.newlyIndexed.length).toBe(2);
       expect(ctx.getChunkCount()).toBeGreaterThan(0);
+      const indexed = ctx.getIndexedFiles();
+      expect(indexed.length).toBe(2);
+      expect(indexed.every(f => f.chunkCount > 0)).toBe(true);
       const out = await ctx.search("authenticate user token");
       expect(out).toContain("src/auth.ts");
     } finally {

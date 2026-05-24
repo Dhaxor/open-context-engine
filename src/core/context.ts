@@ -260,7 +260,8 @@ export class OpenContext {
 
   getIndexedFiles(): { path: string; chunkCount: number; lastModified: number }[] {
     const state = this.store.getState(this.workspaceRoot, this.embeddingConfig.provider, this.embedder.getModel());
-    return state.files.map(f => ({ path: f.path, chunkCount: 0, lastModified: f.lastModified }));
+    const counts = this.store.getChunkCountsByPath();
+    return state.files.map(f => ({ path: f.path, chunkCount: counts.get(f.path) ?? 0, lastModified: f.lastModified }));
   }
 
   getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string } {

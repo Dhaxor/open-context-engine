@@ -67,23 +67,29 @@ export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () 
 export interface DefaultToolsOptions {
   context: OpenContext;
   applier?: EditApplier;
+  /** Include file-editing tools (str-replace/create-file/remove-file). Default: false. */
   includeEdits?: boolean;
   onEdit?: (edit: import("./types").EditProposal) => void;
-  shell?: Omit<ShellToolOptions, "workspaceRoot"> | false;
+  /** Enable the shell `run-command` tool. Pass `true` or options to enable. Default: off. */
+  shell?: Omit<ShellToolOptions, "workspaceRoot"> | boolean;
   webSearch?: WebSearchOptions | false;
   retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>;
 }
 
+// Read-only by default: codebase retrieval + read tools only. File edits and
+// shell execution are powerful and must be opted into explicitly, so embedding
+// `defaultAgentTools({ context })` never silently grants write/exec access.
 export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
   let tools: ToolDefinition[] = defaultCodebaseTools(opts.context, opts.retrieveOptions);
-  if (opts.includeEdits !== false) {
+  if (opts.includeEdits) {
     const applier = opts.applier ?? new FsEditApplier(opts.context.getWorkspaceRoot());
     tools = tools.concat(editTools({ context: opts.context, applier, onEdit: opts.onEdit }));
   }
-  if (opts.shell !== false) {
-    tools.push(shellTool({ ...(opts.shell ?? {}), workspaceRoot: opts.context.getWorkspaceRoot() }));
+  if (opts.shell) {
+    const shellOpts = opts.shell === true ? {} : opts.shell;
+    tools.push(shellTool({ ...shellOpts, workspaceRoot: opts.context.getWorkspaceRoot() }));
   }
-  if (opts.webSearch !== false && opts.webSearch) {
+  if (opts.webSearch) {
     tools.push(webSearchTool(opts.webSearch));
   }
   return tools;

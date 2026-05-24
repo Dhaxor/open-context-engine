@@ -42,6 +42,8 @@ export interface RetrievalDebugReport {
   ranked: RetrievalDebugItem[];
   expanded: RetrievalDebugItem[];
   final: RetrievalDebugItem[];
+  /** Full final results (after expansion), so callers needn't re-run the pipeline. */
+  finalResults: SearchResult[];
   packing?: { includedFiles: number; includedChunks: number; droppedChunks: number; totalChars: number; decisions: PackingDecision[]; preview: string };
 }
 
@@ -102,6 +104,7 @@ export class HybridRetriever {
       ranked: toDebugItems(ranked.results.slice(0, 12)),
       expanded: toDebugItems(expanded.results.slice(trimmed.length), expanded.reasons),
       final: toDebugItems(expanded.results, expanded.reasons),
+      finalResults: expanded.results,
       packing: { ...packed, preview: packed.output.slice(0, 4000) },
     };
   }

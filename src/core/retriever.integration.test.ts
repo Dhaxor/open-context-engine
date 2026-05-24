@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { SqliteStore } from "./sqlite-store";
 import { HybridRetriever } from "./retriever";
+import { StreamingRetriever } from "./streaming-retriever";
 import { EmbeddingProvider } from "./embedder";
 import { Reranker } from "./reranker";
 import { Chunk, SearchConfig, SearchResult } from "./types";
@@ -83,5 +84,25 @@ describe("HybridRetriever reranker resilience", () => {
     const retriever = new HybridRetriever(store, embedder, config, reorder);
     const results = await retriever.retrieve("anything");
     expect(results[0].chunk.id).toBe("gamma");
+  });
+});
+
+describe("StreamingRetriever", () => {
+  it("runs the pipeline once (reranker invoked a single time) and yields a final stage", async () => {
+    let calls = 0;
+    const counting: Reranker = {
+      rerank: async (_q, chunks) => { calls++; return chunks.map((c, i) => ({ chunk: c, score: 1 / (i + 1), rerankScore: 1 / (i + 1) })); },
+      getProvider: () => "counting", getModel: () => "counting",
+    };
+    const streaming = new StreamingRetriever(new HybridRetriever(store, embedder, config, counting));
+    const stages: string[] = [];
+    let final: SearchResult[] = [];
+    for await (const s of streaming.retrieveWithStages("authenticate token")) {
+      stages.push(s.stage);
+      if (s.isFinal) final = s.results;
+    }
+    expect(calls).toBe(1);
+    expect(stages).toEqual(["vector", "bm25", "fused", "final"]);
+    expect(final.length).toBeGreaterThan(0);
   });
 });
