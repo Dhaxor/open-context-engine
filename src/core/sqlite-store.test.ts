@@ -167,6 +167,14 @@ describe("SqliteStore", () => {
     await fs.promises.rm(legacyDir, { recursive: true, force: true });
   });
 
+  it("round-trips indexed git state", () => {
+    expect(store.getIndexedGit()).toBeUndefined();
+    store.setIndexedGit({ available: true, branch: "main", commit: "abc123" });
+    expect(store.getIndexedGit()).toEqual({ available: true, branch: "main", commit: "abc123" });
+    store.setIndexedGit(undefined);
+    expect(store.getIndexedGit()).toBeUndefined();
+  });
+
   it("persists across reopen", async () => {
     store.add(makeChunk("a"));
     store.close();
