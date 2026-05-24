@@ -107,6 +107,33 @@ describe("SqliteStore", () => {
     expect(results.map(r => r.chunk.path)).toEqual(["tests/b.ts"]);
   });
 
+  it("vectorSearch over-fetches so a path-scoped hit isn't lost behind closer out-of-scope chunks", () => {
+    const anchor = makeVec(1);
+    // Many near, out-of-prefix chunks would fill a small KNN cut and starve the
+    // single in-prefix match if filtering happened only after the cut.
+    for (let i = 0; i < 40; i++) store.add(makeChunk(`src${i}`, { path: `src/f${i}.ts`, vector: makeVec(1 + i * 0.001) }));
+    store.add(makeChunk("target", { path: "tests/target.ts", vector: makeVec(1.05) }));
+    const results = store.vectorSearch(anchor, 3, "tests/");
+    expect(results.map(r => r.chunk.path)).toContain("tests/target.ts");
+  });
+
+  it("clears chunks, files, and graph edges when a re-index is forced", async () => {
+    store.add(makeChunk("a"));
+    store.upsertFile("src/a.ts", "hash-1");
+    store.addGraphEdges([{ sourcePath: "src/a.ts", targetPath: "src/b.ts", kind: "imports", confidence: 1 }]);
+    expect(store.getChunkCount()).toBe(1);
+    expect(store.getFileCount()).toBe(1);
+    expect(store.getGraphEdgeCount()).toBe(1);
+    store.close();
+    // Reopening with a different embedding dimension forces a clean re-index.
+    const s2 = new SqliteStore(dir, DIM + 4);
+    await s2.initialize();
+    expect(s2.getChunkCount()).toBe(0);
+    expect(s2.getFileCount()).toBe(0);
+    expect(s2.getGraphEdgeCount()).toBe(0);
+    s2.close();
+  });
+
   it("bm25Search finds keyword matches", () => {
     store.add(makeChunk("login", { contents: "function authenticateUser(password: string) {}" }));
     store.add(makeChunk("misc", { contents: "function renderButton() {}" }));
