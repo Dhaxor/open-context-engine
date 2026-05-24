@@ -83,6 +83,8 @@ oce agent --workspace ./my-project --allow-edits
 oce mcp --workspace ./my-project
 ```
 
+The MCP server indexes the workspace on startup and then **watches for changes**, so the index stays live without a manual re-index. Pass `--no-watch` to disable the watcher. (The MCP handshake is established before indexing begins, so the first index of a large repo won't block your client from connecting.)
+
 Then add to your MCP config:
 
 ```json
@@ -106,8 +108,9 @@ oce <command> [options]
 Commands:
   index <workspace>      Index a codebase
   search <query>         Search the indexed codebase
-  mcp                    Start MCP server (stdio)
-  agent                  Start interactive agent
+  watch                  Index, then keep the index live as files change
+  mcp                    Start MCP server (indexes + watches by default)
+  agent                  Start interactive agent (auto-indexes on startup)
 
 Options:
   -w, --workspace <path>   Project root (default: cwd)
