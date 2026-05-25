@@ -77,6 +77,17 @@ body{background:var(--vscode-sideBar-background);color:var(--vscode-editor-foreg
 .edit .diff .rem{background:rgba(244,135,113,.14);color:var(--vscode-errorForeground,#f48771)}
 .edit .diff .hunk{background:rgba(128,128,128,.18);color:var(--vscode-descriptionForeground);font-weight:500}
 .edit .diff .ctx{color:var(--vscode-descriptionForeground)}
+.edit .acts .undo:hover{background:rgba(244,135,113,.18);border-color:var(--vscode-errorForeground,#f48771);color:var(--vscode-errorForeground,#f48771)}
+.edit .acts .redo:hover{background:rgba(16,185,129,.16);border-color:var(--vscode-charts-green,#34d399);color:var(--vscode-charts-green,#34d399)}
+.edit.undone{opacity:.7}
+.edit.undone .path{text-decoration:line-through}
+.edit.undone .state{color:var(--vscode-errorForeground,#f48771)}
+.edit-summary{align-self:stretch;display:flex;align-items:center;gap:8px;border:1px solid var(--vscode-panel-border);border-radius:6px;background:rgba(59,130,246,.1);padding:6px 10px;font-size:12px}
+.edit-summary .es-txt{color:var(--vscode-editor-foreground)}
+.edit-summary .es-sp{flex:1}
+.edit-summary .es-undo{background:transparent;border:1px solid var(--vscode-panel-border);color:var(--vscode-editor-foreground);padding:3px 12px;border-radius:4px;font-size:11.5px;cursor:pointer}
+.edit-summary .es-undo:hover:not(:disabled){background:rgba(244,135,113,.18);border-color:var(--vscode-errorForeground,#f48771);color:var(--vscode-errorForeground,#f48771)}
+.edit-summary .es-undo:disabled{opacity:.55;cursor:default}
 .welcome{margin:auto 0;text-align:center;padding:24px 14px;color:var(--vscode-descriptionForeground);display:flex;flex-direction:column;align-items:center;gap:10px}
 .welcome .wel-title{color:var(--vscode-editor-foreground);font-size:15px;font-weight:600}
 .welcome .wel-sub{font-size:12px;max-width:340px;line-height:1.5}

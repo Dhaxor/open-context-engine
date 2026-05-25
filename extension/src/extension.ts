@@ -6,6 +6,7 @@ import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
 import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
+import { EditReviewService } from "./services/EditReviewService";
 import { SearchResult } from "../../src/core/types";
 
 let statusBarItem: vscode.StatusBarItem;
@@ -13,11 +14,17 @@ let statusBarItem: vscode.StatusBarItem;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const svc = ContextService.getInstance();
     svc.bindExtensionContext(context);
-    const chatView = new ChatView(context.extensionUri, context);
+    const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());
+    context.subscriptions.push(reviewService);
+    const chatView = new ChatView(context.extensionUri, context, reviewService);
     const treeProvider = new IndexedFilesProvider(context);
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(ChatView.viewType, chatView),
+        vscode.window.registerWebviewViewProvider(ChatView.viewType, chatView, {
+            // Keep the chat DOM (and any in-progress stream) alive when the panel is
+            // hidden or moved, instead of tearing it down and losing the conversation.
+            webviewOptions: { retainContextWhenHidden: true },
+        }),
     );
 
     const treeView = vscode.window.createTreeView("indexedFiles", {
@@ -167,6 +174,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         vscode.commands.registerCommand("openContext.openSettings", () => {
             vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
+        }),
+
+        vscode.commands.registerCommand("openContext.undoLastEdit", async () => {
+            try {
+                const reverted = await reviewService.undoLast();
+                if (reverted) {
+                    treeProvider.refresh();
+                    vscode.window.showInformationMessage(`Reverted agent edit to ${reverted}`);
+                } else {
+                    vscode.window.showInformationMessage("No agent edits to undo.");
+                }
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Undo failed: ${err?.message ?? String(err)}`);
+            }
         }),
 
         vscode.commands.registerCommand("openContext.setEmbeddingApiKey", async () => {

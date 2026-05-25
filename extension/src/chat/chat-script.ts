@@ -103,13 +103,33 @@ function fmtDiff(d){
 function addEdit(e){
   if(edits[e.id])return;
   sealCurrentBubble();
-  var el=document.createElement('div');el.className='edit open';el.dataset.path=e.path;
+  var el=document.createElement('div');el.className='edit open';el.dataset.path=e.path;el.dataset.editId=e.id;
   var title=e.kind==='create'?'Created':e.kind==='remove'?'Deleted':'Edited';
   var count=e.replacedOccurrences?' ('+e.replacedOccurrences+')':'';
-  el.innerHTML='<div class="hdr"><span class="kind '+e.kind+'">'+e.kind+'</span><span class="path">'+esc(e.path)+'</span><span>'+title+count+'</span><span class="chev">▾</span></div><div class="body"><div class="diff">'+fmtDiff(e.diff)+'</div><div class="acts"><button data-open="'+esc(e.path)+'">Open file</button><button data-copy-diff="'+e.id+'">Copy diff</button></div></div>';
+  var openFileBtn=e.kind==='remove'?'':'<button data-open="'+esc(e.path)+'">Open file</button>';
+  el.innerHTML='<div class="hdr"><span class="kind '+e.kind+'">'+e.kind+'</span><span class="path">'+esc(e.path)+'</span><span class="state">'+title+count+'</span><span class="chev">▾</span></div><div class="body"><div class="diff">'+fmtDiff(e.diff)+'</div><div class="acts"><button data-diff="'+e.id+'">Open diff</button>'+openFileBtn+'<button class="undo" data-undo="'+e.id+'">Undo</button></div></div>';
   el.querySelector('.hdr').onclick=function(){el.classList.toggle('open')};
   el._diff=e.diff;
   edits[e.id]=el;msgs.appendChild(el);scroll();
+}
+function setEditStatus(id,status){
+  var el=edits[id];if(!el)return;
+  var undone=status==='undone';
+  el.classList.toggle('undone',undone);
+  var st=el.querySelector('.state');if(st)st.textContent=undone?'Reverted':(el.querySelector('.kind.create')?'Created':el.querySelector('.kind.remove')?'Deleted':'Edited');
+  var btn=el.querySelector('.acts .undo,.acts .redo');
+  if(btn){
+    if(undone){btn.className='redo';btn.textContent='Redo';btn.setAttribute('data-redo',id);btn.removeAttribute('data-undo');}
+    else{btn.className='undo';btn.textContent='Undo';btn.setAttribute('data-undo',id);btn.removeAttribute('data-redo');}
+  }
+}
+function showEditSummary(ids){
+  if(!ids||!ids.length)return;
+  var n=ids.length;
+  var bar=document.createElement('div');bar.className='edit-summary';
+  bar.innerHTML='<span class="es-txt">✎ '+n+' file'+(n===1?'':'s')+' changed this turn</span><span class="es-sp"></span><button class="es-undo">Undo all</button>';
+  bar.querySelector('.es-undo').onclick=function(){V.postMessage({type:'undoEdits',ids:ids});bar.querySelector('.es-undo').textContent='Reverted';bar.querySelector('.es-undo').disabled=true;};
+  msgs.appendChild(bar);scroll();
 }
 function send(text){
   var t=(text!=null?text:q.value).trim();if(!t||busy)return;
@@ -210,6 +230,9 @@ msgs.addEventListener('click',function(e){
   var t=e.target;
   if(t.dataset&&t.dataset.cp){var c=document.getElementById(t.dataset.cp);if(c)V.postMessage({type:'copyText',text:c.textContent});}
   else if(t.dataset&&t.dataset.ins){var c=document.getElementById(t.dataset.ins);if(c)V.postMessage({type:'insertCode',code:c.textContent});}
+  else if(t.dataset&&t.dataset.diff){V.postMessage({type:'openDiff',id:t.dataset.diff});}
+  else if(t.dataset&&t.dataset.undo){V.postMessage({type:'undoEdit',id:t.dataset.undo});}
+  else if(t.dataset&&t.dataset.redo){V.postMessage({type:'redoEdit',id:t.dataset.redo});}
   else if(t.dataset&&t.dataset.open){V.postMessage({type:'openFile',path:t.dataset.open,line:Number(t.dataset.line||0)});}
   else if(t.dataset&&t.dataset['copyDiff']){var ed=edits[t.dataset['copyDiff']];if(ed&&ed._diff)V.postMessage({type:'copyText',text:ed._diff});}
   else if(t.classList&&t.classList.contains('chip')&&t.dataset.prompt){send(t.dataset.prompt);}
@@ -258,6 +281,8 @@ window.addEventListener('message',function(e){
 	  else if(m.type==='task_plan')renderTaskPlan(m.plan||[]);
 	  else if(m.type==='agent_step')agentStep(m.step||0,m.status||'running');
   else if(m.type==='edit')addEdit(m.edit);
+  else if(m.type==='edit_status')setEditStatus(m.id,m.status);
+  else if(m.type==='edit_summary')showEditSummary(m.ids);
   else if(m.type==='retry')notice('Retrying (attempt '+m.attempt+', '+Math.round(m.delayMs)+'ms): '+m.reason,null);
   else if(m.type==='compaction')notice('Compacted '+m.dropped+' older messages to fit context budget',null);
   else if(m.type==='addUserMessage')addUser(m.text);

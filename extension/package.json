@@ -113,6 +113,12 @@
         "command": "openContext.setLLMApiKey",
         "title": "Set LLM API Key",
         "category": "Open Context"
+      },
+      {
+        "command": "openContext.undoLastEdit",
+        "title": "Undo Last Agent Edit",
+        "category": "Open Context",
+        "icon": "$(discard)"
       }
     ],
     "keybindings": [
@@ -184,6 +190,11 @@
           "command": "openContext.clearChat",
           "when": "view == openContext.chat",
           "group": "navigation@1"
+        },
+        {
+          "command": "openContext.undoLastEdit",
+          "when": "view == openContext.chat",
+          "group": "1_edits@1"
         },
         {
           "command": "openContext.indexWorkspace",

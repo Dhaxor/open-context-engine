@@ -3,10 +3,13 @@ import * as vscode from "vscode";
 import { AgentService } from "../services/AgentService";
 import { ContextService } from "../services/ContextService";
 import { ChatHistoryStore } from "../services/ChatHistoryStore";
+import { EditReviewService } from "../services/EditReviewService";
 import { chatCss, chatScript } from "./chat-assets";
 import { SearchResult } from "../../../src/core/types";
 
 type ChatMode = "agent" | "search";
+
+const ACTIVE_SESSION_KEY = "openContext.activeChatSession";
 
 function getNonce(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -37,10 +40,26 @@ export class ChatView implements vscode.WebviewViewProvider {
     private _history?: ChatHistoryStore;
     private _sessionId: string | null = null;
     private _pendingAssistant: string[] = [];
+    private _review: EditReviewService;
+    private _extCtx?: vscode.ExtensionContext;
 
-    constructor(extensionUri: vscode.Uri, extCtx?: vscode.ExtensionContext) {
+    constructor(extensionUri: vscode.Uri, extCtx?: vscode.ExtensionContext, review?: EditReviewService) {
         this._extensionUri = extensionUri;
+        this._extCtx = extCtx;
         if (extCtx) this._history = new ChatHistoryStore(extCtx);
+        this._review = review ?? new EditReviewService(async () => (await ContextService.getInstance().getContext()).getWorkspaceRoot());
+        // Restore the last active conversation across window reloads, if it still exists.
+        const last = extCtx?.workspaceState.get<string>(ACTIVE_SESSION_KEY);
+        if (last && this._history?.get(last)) this._sessionId = last;
+    }
+
+    private _setSessionId(id: string | null): void {
+        this._sessionId = id;
+        void this._extCtx?.workspaceState.update(ACTIVE_SESSION_KEY, id ?? undefined);
+    }
+
+    public getReview(): EditReviewService {
+        return this._review;
     }
 
     public resolveWebviewView(
@@ -60,6 +79,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                     this._sendModelInfo();
                     await this._sendConfig();
                     this._sendHistoryList();
+                    this._restoreActiveSession();
                     break;
                 case "query":
                     if (msg.text?.trim()) {
@@ -81,6 +101,18 @@ export class ChatView implements vscode.WebviewViewProvider {
                     break;
                 case "openFile":
                     if (msg.path) await this._openFile(String(msg.path), Number(msg.line ?? 0));
+                    break;
+                case "openDiff":
+                    if (msg.id) await this._review.openDiff(String(msg.id));
+                    break;
+                case "undoEdit":
+                    if (msg.id) await this._handleUndo([String(msg.id)]);
+                    break;
+                case "redoEdit":
+                    if (msg.id) await this._handleRedo(String(msg.id));
+                    break;
+                case "undoEdits":
+                    if (Array.isArray(msg.ids)) await this._handleUndo(msg.ids.map(String));
                     break;
                 case "clear":
                     this.clearChat();
@@ -162,7 +194,8 @@ export class ChatView implements vscode.WebviewViewProvider {
     private _startNewSession(): void {
         this._abort?.abort();
         this._agent.reset();
-        this._sessionId = null;
+        this._review.clear();
+        this._setSessionId(null);
         this._pendingAssistant = [];
         this._view?.webview.postMessage({ type: "clear" });
         this._sendHistoryList();
@@ -175,7 +208,7 @@ export class ChatView implements vscode.WebviewViewProvider {
         const provider = cfg.get<string>("llm.provider", "openai");
         const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
         const s = this._history.create(provider, model);
-        this._sessionId = s.id;
+        this._setSessionId(s.id);
         return s.id;
     }
 
@@ -190,7 +223,8 @@ export class ChatView implements vscode.WebviewViewProvider {
         if (!s) return;
         this._abort?.abort();
         this._agent.reset();
-        this._sessionId = s.id;
+        this._review.clear();
+        this._setSessionId(s.id);
         this._pendingAssistant = [];
         this._view?.webview.postMessage({
             type: "history_load",
@@ -248,6 +282,37 @@ export class ChatView implements vscode.WebviewViewProvider {
         }
     }
 
+    private async _handleUndo(ids: string[]): Promise<void> {
+        const post = (m: any) => this._view?.webview.postMessage(m);
+        for (const id of ids) {
+            try {
+                await this._review.undo(id);
+                post({ type: "edit_status", id, status: "undone" });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Undo failed: ${err?.message ?? String(err)}`);
+            }
+        }
+    }
+
+    private async _handleRedo(id: string): Promise<void> {
+        try {
+            await this._review.redo(id);
+            this._view?.webview.postMessage({ type: "edit_status", id, status: "applied" });
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Redo failed: ${err?.message ?? String(err)}`);
+        }
+    }
+
+    private _restoreActiveSession(): void {
+        if (!this._history || !this._sessionId) return;
+        const s = this._history.get(this._sessionId);
+        if (!s || !s.messages.length) return;
+        this._view?.webview.postMessage({
+            type: "history_load",
+            session: { id: s.id, title: s.title, provider: s.provider, model: s.model, messages: s.messages },
+        });
+    }
+
     private async _openFile(relPath: string, line: number): Promise<void> {
         const ctx = await ContextService.getInstance().getContext();
         const uri = vscode.Uri.file(path.resolve(ctx.getWorkspaceRoot(), relPath));
@@ -271,11 +336,13 @@ export class ChatView implements vscode.WebviewViewProvider {
         const sessionId = this._ensureSession();
         if (sessionId) this._history?.appendMessage(sessionId, "user", query);
         this._pendingAssistant = [];
+        const turnEdits: string[] = [];
         const post = (msg: any) => this._view?.webview.postMessage(msg);
         const flush = () => {
             const text = this._pendingAssistant.join("");
             this._pendingAssistant = [];
             if (sessionId && text.trim()) this._history?.appendMessage(sessionId, "assistant", text);
+            if (turnEdits.length) post({ type: "edit_summary", ids: [...turnEdits] });
             this._sendHistoryList();
         };
         try {
@@ -288,7 +355,11 @@ export class ChatView implements vscode.WebviewViewProvider {
                     const label = info.status === "error" ? `${base} failed` : base;
                     post({ type: "tool_update", id: info.id, name: info.name, status: info.status, label, summary: info.summary, args: info.args });
                 },
-                onEdit: (edit) => post({ type: "edit", edit }),
+                onEdit: (edit) => {
+                    this._review.record(edit);
+                    turnEdits.push(edit.id);
+                    post({ type: "edit", edit: { id: edit.id, path: edit.path, kind: edit.kind, diff: edit.diff, replacedOccurrences: edit.replacedOccurrences } });
+                },
                 onRetry: (info) => post({ type: "retry", attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
                 onCompaction: (info) => post({ type: "compaction", dropped: info.dropped }),
                 onStep: (info) => post({ type: "agent_step", step: info.step, status: info.status }),
