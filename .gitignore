@@ -14,6 +14,16 @@ dist/
 .env.*
 !.env.example
 
+# Internal commercialization docs + license SIGNING KEYS (never commit; keep private)
+business/
+
+# Commercial edition (proprietary). Keep OUT of the public repo — track it in a private
+# repo instead (see ee/README.md). Comment this out if THIS repo is your private one.
+ee/
+
+# Billing webhook infra (private money plumbing; deploy + version separately).
+billing/
+
 # Debug & scratch files
 debug-*.js
 debug-*.ts

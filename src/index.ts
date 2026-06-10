@@ -36,3 +36,9 @@ export { ModelRouter } from "./agent/model-router";
 export type { ModelTier, RoutingConfig } from "./agent/model-router";
 export { SessionMemory } from "./agent/session-memory";
 export type { MemoryEntry, MemoryKind } from "./agent/session-memory";
+export {
+  getLicense, verifyLicenseToken, isEntitled, requireFeature, loadEnterpriseEdition,
+  saveLicenseToken, loadLicenseToken, clearLicense, licenseConfigPath, licenseConfigDir,
+  serializeLicensePayload, DEFAULT_GRACE_DAYS,
+} from "./core/license";
+export type { Plan, Feature, LicensePayload, LicenseStatus, LicenseReason, VerifyOptions } from "./core/license";

@@ -1,11 +1,15 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { AgentService } from "../services/AgentService";
 import { ContextService } from "../services/ContextService";
 import { ChatHistoryStore } from "../services/ChatHistoryStore";
 import { EditReviewService } from "../services/EditReviewService";
-import { chatCss, chatScript } from "./chat-assets";
+import { chatBody } from "./chat-html";
+import { VSCodeEditApplier } from "../services/VSCodeEditApplier";
 import { SearchResult } from "../../../src/core/types";
+import { EditProposal } from "../../../src/agent/types";
+import { unifiedDiff } from "../../../src/core/diff";
 
 type ChatMode = "agent" | "search";
 
@@ -48,7 +52,6 @@ export class ChatView implements vscode.WebviewViewProvider {
         this._extCtx = extCtx;
         if (extCtx) this._history = new ChatHistoryStore(extCtx);
         this._review = review ?? new EditReviewService(async () => (await ContextService.getInstance().getContext()).getWorkspaceRoot());
-        // Restore the last active conversation across window reloads, if it still exists.
         const last = extCtx?.workspaceState.get<string>(ACTIVE_SESSION_KEY);
         if (last && this._history?.get(last)) this._sessionId = last;
     }
@@ -79,13 +82,17 @@ export class ChatView implements vscode.WebviewViewProvider {
                     this._sendModelInfo();
                     await this._sendConfig();
                     this._sendHistoryList();
+                    this._sendLicense();
+                    this._sendContext();
                     this._restoreActiveSession();
                     break;
                 case "query":
                     if (msg.text?.trim()) {
                         const mode: ChatMode = msg.mode === "search" ? "search" : "agent";
-                        if (mode === "search") await this._processSearch(msg.text.trim());
-                        else this._processQuery(msg.text.trim());
+                        if (mode === "search") {
+                            if (msg.multi) await this._processMultiSearch(msg.text.trim());
+                            else await this._processSearch(msg.text.trim());
+                        } else this._processQuery(msg.text.trim());
                     }
                     break;
                 case "cancel":
@@ -166,12 +173,47 @@ export class ChatView implements vscode.WebviewViewProvider {
                         await this._sendConfig();
                     }
                     break;
+                case "getLicense":
+                    this._sendLicense();
+                    break;
+                case "activateLicense":
+                    if (typeof msg.key === "string") {
+                        const r = ContextService.getInstance().activateLicense(msg.key.trim());
+                        if (r.ok) vscode.window.showInformationMessage(`Activated ${r.status.plan} license.`);
+                        else vscode.window.showErrorMessage(`Activation failed: ${r.error}`);
+                        this._sendLicense();
+                    }
+                    break;
+                case "deactivateLicense":
+                    ContextService.getInstance().deactivateLicense();
+                    vscode.window.showInformationMessage("License removed — running as Community edition.");
+                    this._sendLicense();
+                    break;
+                case "openExternal":
+                    if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(String(msg.url)));
+                    break;
+                case "pickContextFile": {
+                    try {
+                        const ctx = await ContextService.getInstance().getContext();
+                        const files = await ctx.listFiles();
+                        const picked = await vscode.window.showQuickPick(files, { title: "Add file to context", placeHolder: "Reference a file in your message" });
+                        if (picked) this._view?.webview.postMessage({ type: "insertMention", path: picked });
+                    } catch (err: any) {
+                        vscode.window.showErrorMessage(`Could not list files: ${err?.message ?? String(err)}`);
+                    }
+                    break;
+                }
+                case "applyCode":
+                    if (typeof msg.code === "string") await this._applyCode(msg.code, typeof msg.file === "string" ? msg.file : "");
+                    break;
             }
         });
-        webviewView.onDidChangeVisibility(() => { if (webviewView.visible) { this._sendModelInfo(); this._sendConfig(); } });
+        webviewView.onDidChangeVisibility(() => { if (webviewView.visible) { this._sendModelInfo(); this._sendConfig(); this._sendLicense(); this._sendContext(); } });
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration("openContext.llm")) { this._sendModelInfo(); this._sendConfig(); }
         });
+        vscode.window.onDidChangeActiveTextEditor(() => this._sendContext());
+        vscode.window.onDidChangeTextEditorSelection(() => this._sendContext());
     }
 
     public focus(): void {
@@ -189,6 +231,57 @@ export class ChatView implements vscode.WebviewViewProvider {
 
     public refreshConfig(): void {
         void this._sendConfig();
+    }
+
+    public refreshLicense(): void {
+        this._sendLicense();
+    }
+
+    private _sendLicense(): void {
+        this._view?.webview.postMessage({ type: "license", status: ContextService.getInstance().getLicenseStatus() });
+    }
+
+    private _sendContext(): void {
+        const ed = vscode.window.activeTextEditor;
+        let activeFile = "";
+        if (ed) {
+            const root = ContextService.getInstance().getIndexWorkspaceRoot();
+            const rel = root ? path.relative(root, ed.document.uri.fsPath).replace(/\\/g, "/") : "";
+            activeFile = rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : path.basename(ed.document.uri.fsPath);
+        }
+        const hasSelection = !!ed && !ed.selection.isEmpty;
+        this._view?.webview.postMessage({ type: "context", activeFile, hasSelection });
+    }
+
+    private async _applyCode(code: string, file: string): Promise<void> {
+        if (!file) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor) await editor.edit(e => e.insert(editor.selection.active, code));
+            else vscode.window.showWarningMessage("Open a file to insert into, or tag the code block with a path, e.g. ```ts src/foo.ts");
+            return;
+        }
+        try {
+            const ctx = await ContextService.getInstance().getContext();
+            const root = ctx.getWorkspaceRoot();
+            const abs = path.resolve(root, file);
+            let oldContents = "", exists = true;
+            try { oldContents = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(abs))); } catch { exists = false; }
+            await new VSCodeEditApplier(root).writeFile(file, code);
+            try { await ctx.addFiles([{ path: file, contents: code }]); } catch {}
+            const edit: EditProposal = {
+                id: "apply-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                kind: exists ? "str-replace" : "create",
+                path: file,
+                oldContents: exists ? oldContents : undefined,
+                newContents: code,
+                diff: unifiedDiff(oldContents, code),
+            };
+            this._review.record(edit);
+            this._view?.webview.postMessage({ type: "edit", edit: { id: edit.id, path: edit.path, kind: edit.kind, diff: edit.diff } });
+            vscode.window.showInformationMessage(`Applied to ${file}.`);
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Apply failed: ${err?.message ?? String(err)}`);
+        }
     }
 
     private _startNewSession(): void {
@@ -282,6 +375,37 @@ export class ChatView implements vscode.WebviewViewProvider {
         }
     }
 
+    private async _processMultiSearch(query: string): Promise<void> {
+        const post = (m: any) => this._view?.webview.postMessage(m);
+        this._busy = true;
+        const sessionId = this._ensureSession();
+        if (sessionId) this._history?.appendMessage(sessionId, "user", `[multi-repo search] ${query}`);
+        post({ type: "search_start" });
+        try {
+            const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+            if (!folders.length) throw new Error("Open a folder (or a multi-root workspace) to search across repos.");
+            const results = await ContextService.getInstance().multiRepoSearch(query, folders);
+            post({ type: "search_result", results: results.map((r) => ({
+                path: r.chunk.path,
+                startLine: r.chunk.startLine,
+                endLine: r.chunk.endLine,
+                score: r.score,
+                contents: r.chunk.contents,
+                repo: r.repo,
+            })) });
+            if (sessionId) {
+                const summary = results.slice(0, 5).map(r => `- [${r.repo}] ${r.chunk.path}:${r.chunk.startLine}-${r.chunk.endLine}`).join("\n");
+                this._history?.appendMessage(sessionId, "assistant", `Found ${results.length} result${results.length === 1 ? "" : "s"} across repos${summary ? "\n" + summary : ""}`);
+            }
+        } catch (err: any) {
+            post({ type: "error", text: err?.message ?? String(err) });
+        } finally {
+            this._busy = false;
+            post({ type: "done" });
+            this._sendHistoryList();
+        }
+    }
+
     private async _handleUndo(ids: string[]): Promise<void> {
         const post = (m: any) => this._view?.webview.postMessage(m);
         for (const id of ids) {
@@ -363,6 +487,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                 onRetry: (info) => post({ type: "retry", attempt: info.attempt, delayMs: info.delayMs, reason: info.reason }),
                 onCompaction: (info) => post({ type: "compaction", dropped: info.dropped }),
                 onStep: (info) => post({ type: "agent_step", step: info.step, status: info.status }),
+                onSources: (files) => post({ type: "sources", files }),
                 onDone: () => { post({ type: "done" }); this._busy = false; flush(); },
                 onError: (err) => { post({ type: "error", text: err.message }); this._busy = false; flush(); },
             }, this._abort.signal);
@@ -375,85 +500,25 @@ export class ChatView implements vscode.WebviewViewProvider {
 
     private _getHtml(): string {
         const nonce = getNonce();
+        const distDir = vscode.Uri.joinPath(this._extensionUri, "dist");
+        let js = "", css = "";
+        try { js = fs.readFileSync(vscode.Uri.joinPath(distDir, "webview.js").fsPath, "utf8"); } catch {}
+        try { css = fs.readFileSync(vscode.Uri.joinPath(distDir, "webview.css").fsPath, "utf8"); } catch {}
+        if (!js) {
+            return `<!DOCTYPE html><html><body style="font-family:var(--vscode-font-family);padding:16px;color:var(--vscode-foreground)">Open Context: webview assets are missing. Run <code>npm run build</code> in <code>extension/</code>.</body></html>`;
+        }
+        const cspSource = this._view?.webview.cspSource ?? "";
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-<style>${chatCss}</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource};">
+<style>${css}</style>
 </head>
 <body>
-<header id="hdr">
-  <div class="title">Open Context</div>
-	  <div id="idx" class="badge" title="Current index workspace">—</div>
-  <div id="mdl" class="badge" title="Click to change model">—</div>
-  <div class="spacer"></div>
-  <button id="stop" class="iconbtn" title="Stop generation" style="display:none">◼</button>
-	  <button id="workspaceBtn" class="iconbtn" title="Select index workspace">📁</button>
-  <button id="historyBtn" class="iconbtn" title="Chat history">📜</button>
-  <button id="settingsBtn" class="iconbtn" title="Model &amp; keys">⚙</button>
-  <button id="cbtn" class="iconbtn" title="New chat">⟲</button>
-</header>
-<section id="history" class="history" hidden>
-  <div class="hist-hdr">
-    <span class="hist-title">Recent chats</span>
-    <div class="spacer"></div>
-    <button id="closeHist" class="iconbtn" title="Close">✕</button>
-  </div>
-  <div id="histList" class="hist-list"></div>
-  <div id="histEmpty" class="hist-empty" hidden>No chats yet. Start a new conversation below.</div>
-</section>
-<section id="settings" class="settings" hidden>
-  <div class="set-row set-tabs">
-    <button class="pill" data-provider="openai">OpenAI</button>
-    <button class="pill" data-provider="anthropic">Anthropic</button>
-    <button class="pill" data-provider="google">Google</button>
-  </div>
-  <div class="set-row">
-    <label for="modelSel">Model</label>
-    <select id="modelSel"></select>
-  </div>
-  <div class="set-row">
-    <label for="modelCustom">Custom</label>
-    <input id="modelCustom" type="text" placeholder="e.g. gpt-5-codex or claude-sonnet-4-6" />
-  </div>
-  <div class="set-row">
-    <label for="apiKey">API Key</label>
-    <input id="apiKey" type="password" placeholder="sk-… (stored in VS Code SecretStorage)" />
-    <span id="keyStatus" class="key-status"></span>
-  </div>
-  <div class="set-sep"></div>
-  <div class="set-row">
-    <label for="tavilyKey" title="Tavily API key for web-search tool">Tavily</label>
-    <input id="tavilyKey" type="password" placeholder="tvly-… (for web-search tool)" />
-    <span id="tavilyStatus" class="key-status"></span>
-  </div>
-  <div class="set-row set-actions">
-    <button id="saveCfg" class="primary">Save</button>
-    <button id="closeCfg">Close</button>
-  </div>
-</section>
-<div id="messages">
-  <div class="welcome" id="wel">
-    <div class="wel-title">Open Context Chat</div>
-    <div class="wel-sub">Ask questions, request edits, run commands, or search the web. Switch to <b>Search</b> for raw snippet lookup.</div>
-    <div class="wel-chips">
-      <button class="chip" data-prompt="Give me a high-level overview of this codebase.">Codebase overview</button>
-      <button class="chip" data-prompt="Where is authentication handled and what are the key entry points?">Find auth flow</button>
-      <button class="chip" data-prompt="Run the test suite and summarize failures.">Run tests</button>
-      <button class="chip" data-prompt="Search the web for the latest Tree-sitter WASM release notes.">Web search</button>
-    </div>
-    <div class="wel-tip">Tip: 📜 history · ⚙ model &amp; keys · <code>/model</code> · <code>/clear</code></div>
-  </div>
-</div>
-<div id="bar">
-  <div class="mode" id="mode" data-mode="agent" title="Toggle Agent / Search mode">
-    <span class="mode-opt active" data-mode="agent">Agent</span>
-    <span class="mode-opt" data-mode="search">Search</span>
-  </div>
-  <textarea id="q" placeholder="Ask anything, or describe an edit…  (Enter to send, Shift+Enter newline)" rows="1"></textarea>
-  <button id="go" title="Send (Enter)">➤</button>
-</div>
-<script nonce="${nonce}">${chatScript}</script>
+${chatBody}
+<script nonce="${nonce}">${js}</script>
 </body>
 </html>`;
     }
@@ -475,5 +540,3 @@ function defaultModelFor(provider: string): string {
     if (provider === "google") return "gemini-3.1-pro-preview";
     return provider;
 }
-
-

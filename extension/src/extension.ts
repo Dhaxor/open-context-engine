@@ -176,6 +176,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
         }),
 
+        vscode.commands.registerCommand("openContext.activateLicense", async () => {
+            const key = await vscode.window.showInputBox({ prompt: "Paste your Open Context license key", ignoreFocusOut: true });
+            if (!key) return;
+            const r = svc.activateLicense(key.trim());
+            if (r.ok) vscode.window.showInformationMessage(`Activated ${r.status.plan} license.`);
+            else vscode.window.showErrorMessage(`Activation failed: ${r.error}`);
+            chatView.refreshLicense();
+        }),
+
         vscode.commands.registerCommand("openContext.undoLastEdit", async () => {
             try {
                 const reverted = await reviewService.undoLast();

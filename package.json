@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Context engine for codebase indexing and retrieval",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "oce": "dist/cli/index.js"
   },

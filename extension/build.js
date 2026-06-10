@@ -48,14 +48,29 @@ const options = {
   logLevel: "info",
 };
 
+// The chat webview is a separate browser bundle (its CSS import is emitted as dist/webview.css).
+// ChatView reads dist/webview.{js,css} and inlines them, so no asWebviewUri/CSP gymnastics.
+const webviewOptions = {
+  entryPoints: ["src/chat/webview/main.ts"],
+  bundle: true,
+  outfile: "dist/webview.js",
+  platform: "browser",
+  format: "iife",
+  target: "es2020",
+  sourcemap: false,
+  minify,
+  logLevel: "info",
+};
+
 async function run() {
   if (watch) {
     const ctx = await esbuild.context(options);
-    await ctx.watch();
-    console.log("[watch] esbuild watching for changes…");
+    const wctx = await esbuild.context(webviewOptions);
+    await Promise.all([ctx.watch(), wctx.watch()]);
+    console.log("[watch] esbuild watching extension + webview…");
   } else {
-    await esbuild.build(options);
-    console.log(`[build] wrote ${options.outfile} (${minify ? "minified" : "sourcemap"})`);
+    await Promise.all([esbuild.build(options), esbuild.build(webviewOptions)]);
+    console.log(`[build] wrote dist/extension.js + dist/webview.js (${minify ? "minified" : "sourcemap"})`);
   }
 }
 
