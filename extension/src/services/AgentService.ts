@@ -22,6 +22,7 @@ export interface AgentEvents {
     onRetry?: (info: RetryInfo) => void;
     onCompaction?: (info: CompactionInfo) => void;
     onStep?: (info: { step: number; status: "running" | "complete" }) => void;
+    onSources?: (files: { path: string; lines?: string }[]) => void;
     onDone: () => void;
     onError: (err: Error) => void;
 }
@@ -62,6 +63,10 @@ export class AgentService {
                             status: ev.toolResult.error ? "error" : "complete",
                             summary: summarize(ev.toolResult.result),
                         });
+                        if (!ev.toolResult.error && /retrieval|codebase|search/i.test(ev.toolResult.name)) {
+                            const files = extractSources(ev.toolResult.result);
+                            if (files.length) events.onSources?.(files);
+                        }
                     } else if (ev.type === "retry") {
                         events.onRetry?.({ attempt: ev.retryAttempt ?? 0, delayMs: ev.retryDelayMs ?? 0, reason: ev.retryReason ?? "" });
                     } else if (ev.type === "history_compacted") {
@@ -141,6 +146,21 @@ function summarize(text: string): string {
     const trimmed = text.trim();
     if (trimmed.length <= 200) return trimmed;
     return trimmed.slice(0, 200) + "…";
+}
+
+/** Best-effort: pull `path:line(-line)` file references out of a retrieval tool result. */
+function extractSources(text: string): { path: string; lines?: string }[] {
+    const out: { path: string; lines?: string }[] = [];
+    const seen = new Set<string>();
+    const re = /(?:^|\n)\s*([A-Za-z0-9_.@\/+\-]+\.[A-Za-z0-9]+):(\d+)(?:-(\d+))?/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null && out.length < 12) {
+        const p = m[1];
+        if (seen.has(p)) continue;
+        seen.add(p);
+        out.push({ path: p, lines: m[3] ? `${m[2]}-${m[3]}` : m[2] });
+    }
+    return out;
 }
 
 function envKey(provider: LLMProvider): string {

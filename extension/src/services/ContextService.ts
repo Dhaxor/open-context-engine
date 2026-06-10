@@ -6,6 +6,9 @@ import { FileFilter, FilterStats } from "../../../src/core/file-filter";
 import { FileWatcher } from "../../../src/core/file-watcher";
 import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult, FreshnessReport } from "../../../src/core/types";
 import { RetrievalDebugReport, RetrieveOptions } from "../../../src/core/retriever";
+import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, isEntitled } from "../../../src/core/license";
+
+export interface LicenseStatusView { valid: boolean; plan: string; reason: string; inGrace: boolean; daysLeft?: number; org?: string; seats?: number; exp?: number; }
 
 const INDEX_WORKSPACE_ROOT_KEY = "openContext.indexWorkspaceRoot";
 
@@ -43,6 +46,7 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
 export class ContextService implements vscode.Disposable {
     private static _instance: ContextService;
     private _context: OpenContext | null = null;
+    private _multiContexts = new Map<string, OpenContext>();
     private _watcher: FileWatcher | null = null;
     private _extContext: vscode.ExtensionContext | null = null;
     private _onReindex = new vscode.EventEmitter<IndexingResult>();
@@ -163,6 +167,33 @@ export class ContextService implements vscode.Disposable {
         return this.getIdeRetrieveOptions(ctx.getWorkspaceRoot());
     }
 
+    /** Team feature: search across multiple repo roots, merging results tagged by repo. */
+    public async multiRepoSearch(query: string, repoPaths: string[], topK = 20): Promise<(SearchResult & { repo: string })[]> {
+        if (!isEntitled(getLicense(), "multi-repo")) {
+            throw new Error("Multi-repo search requires a Team license. Activate one from the Account panel.");
+        }
+        const mainRoot = this.resolveWorkspaceRoot();
+        const seen = new Set<string>();
+        const out: (SearchResult & { repo: string })[] = [];
+        for (const raw of repoPaths) {
+            const root = this.resolveFsPath(raw) || raw;
+            if (!root || seen.has(root) || !this.pathExists(root)) continue;
+            seen.add(root);
+            let ctx: OpenContext;
+            if (root === mainRoot) {
+                ctx = await this.getContext();
+            } else {
+                ctx = this._multiContexts.get(root) ?? await OpenContext.create(await this.getConfigForPath(root));
+                if (!this._multiContexts.has(root)) { this._multiContexts.set(root, ctx); await ctx.incrementalIndex(); }
+            }
+            const name = path.basename(root);
+            const res = await ctx.searchRaw(query, topK, this.getIdeRetrieveOptions(ctx.getWorkspaceRoot()));
+            for (const r of res) out.push({ ...r, repo: name });
+        }
+        out.sort((a, b) => b.score - a.score);
+        return out.slice(0, topK);
+    }
+
     public async setLLMSelection(provider: string, model: string): Promise<void> {
         const cfg = vscode.workspace.getConfiguration("openContext");
         await cfg.update("llm.provider", provider, vscode.ConfigurationTarget.Global);
@@ -223,6 +254,28 @@ export class ContextService implements vscode.Disposable {
         return (await this.getWebSearchApiKey()) != null;
     }
 
+    // --- Licensing (offline; backed by core/license) ---
+    public getLicenseStatus(): LicenseStatusView {
+        const s = getLicense();
+        return { valid: s.valid, plan: s.plan, reason: s.reason, inGrace: s.inGrace, daysLeft: s.daysLeft, org: s.payload?.org, seats: s.payload?.seats, exp: s.payload?.exp };
+    }
+
+    public activateLicense(key: string): { ok: boolean; status: LicenseStatusView; error?: string } {
+        const v = verifyLicenseToken(key);
+        if (!v.valid) {
+            const error = v.reason === "expired" ? "This license has expired."
+                : v.reason === "bad-signature" ? "Invalid signature — check the key is complete."
+                : "Malformed license key.";
+            return { ok: false, status: this.getLicenseStatus(), error };
+        }
+        saveLicenseToken(key);
+        return { ok: true, status: this.getLicenseStatus() };
+    }
+
+    public deactivateLicense(): void {
+        clearLicense();
+    }
+
     public async getIndexHealthReport(): Promise<IndexHealthReport> {
         const workspaceRoot = this.resolveWorkspaceRoot();
         const config = workspaceRoot ? await this.getConfigForPath(workspaceRoot) : null;
@@ -267,6 +320,8 @@ export class ContextService implements vscode.Disposable {
         await this.stopWatching();
         this._context?.close();
         this._context = null;
+        for (const c of this._multiContexts.values()) { try { c.close(); } catch {} }
+        this._multiContexts.clear();
     }
 
     public async getWorkspaceConfig(): Promise<OpenContextConfig> {

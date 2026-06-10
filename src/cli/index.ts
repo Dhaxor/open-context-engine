@@ -4,6 +4,7 @@ import { OpenContext } from "../core/context";
 import { OpenContextConfig, EMBEDDING_MODELS } from "../core/types";
 import { runMCPServer } from "../mcp/server";
 import { ContextAgent, defaultAgentTools, LLMProvider } from "../agent/agent";
+import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, loadEnterpriseEdition } from "../core/license";
 import * as readline from "readline";
 
 const program = new Command();
@@ -104,6 +105,66 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     p();
   });
   p();
+});
+
+program.command("multi-search <query>").description("Search across multiple repositories at once (Team license required)")
+  .option("--repos <paths>", "Comma-separated repo paths to search")
+  .option("-p, --provider <provider>", "Embedding provider")
+  .option("-m, --model <model>", "Embedding model")
+  .option("--api-key <key>", "API key")
+  .option("-k, --top-k <n>", "Max results", "15")
+  .option("--no-index", "Skip indexing; query the existing per-repo indexes")
+  .action(async (query: string, opts: any) => {
+    const ee = await loadEnterpriseEdition(getLicense());
+    if (!ee) {
+      console.error("Multi-repo search is a Team feature. Activate a license with 'oce activate <key>' (check 'oce license').");
+      process.exit(1);
+    }
+    const repoPaths = String(opts.repos || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (!repoPaths.length) { console.error("Specify repos with --repos <path1,path2,...>."); process.exit(1); }
+    const base = resolveConfig(opts);
+    const mr = await ee.createMultiRepoContext({ repos: repoPaths.map((p: string) => ({ path: p })), base });
+    if (opts.index !== false) {
+      process.stderr.write(`Indexing ${mr.repoNames().length} repo(s): ${mr.repoNames().join(", ")} ...\n`);
+      const counts = await mr.indexAll((repo: string, s: string, c: number, t: number) => t > 0 && process.stderr.write(`\r[${repo}] ${s} ${c}/${t}     `));
+      process.stderr.write("\n" + counts.map((c: any) => `${c.repo}: ${c.chunks} chunks`).join(" | ") + "\n\n");
+    }
+    console.log(await mr.searchFormatted(query, Number(opts.topK)));
+    mr.close();
+  });
+
+program.command("activate <key>").description("Activate a Team/Enterprise license key").action((key: string) => {
+  const status = verifyLicenseToken(key);
+  if (!status.valid) {
+    const why = status.reason === "expired" ? "this license has expired"
+      : status.reason === "bad-signature" ? "invalid signature (is the key correct and complete?)"
+      : "malformed license key";
+    console.error(`Activation failed: ${why}.`);
+    process.exit(1);
+  }
+  const p = saveLicenseToken(key);
+  const exp = status.payload?.exp ? new Date(status.payload.exp * 1000).toISOString().slice(0, 10) : "perpetual";
+  console.log(`Activated ${status.plan} license for ${status.payload?.org} — ${status.payload?.seats} seat(s), expires ${exp}.`);
+  console.log(`Saved to ${p}`);
+});
+
+program.command("license").description("Show the current license status").action(() => {
+  const s = getLicense();
+  if (!s.valid) {
+    if (s.reason === "expired") console.log(`License expired (was ${s.payload?.plan} for ${s.payload?.org}). Running as Community (free) edition.`);
+    else console.log("No active license — running as Community (free) edition. Activate with 'oce activate <key>'.");
+    return;
+  }
+  const exp = s.payload?.exp ? new Date(s.payload.exp * 1000).toISOString().slice(0, 10) : "perpetual";
+  console.log(`Plan:    ${s.plan}`);
+  console.log(`Org:     ${s.payload?.org}`);
+  console.log(`Seats:   ${s.payload?.seats}`);
+  console.log(`Expires: ${exp}`);
+  if (s.inGrace) console.log(`\n⚠ In grace period — ${s.daysLeft} day(s) left. Please renew to avoid interruption.`);
+});
+
+program.command("deactivate").description("Remove the saved license key").action(() => {
+  console.log(clearLicense() ? "License removed — now running as Community edition." : "No license was active.");
 });
 
 program.parse();

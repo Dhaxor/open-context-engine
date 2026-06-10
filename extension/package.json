@@ -119,6 +119,12 @@
         "title": "Undo Last Agent Edit",
         "category": "Open Context",
         "icon": "$(discard)"
+      },
+      {
+        "command": "openContext.activateLicense",
+        "title": "Activate License",
+        "category": "Open Context",
+        "icon": "$(key)"
       }
     ],
     "keybindings": [
@@ -353,7 +359,9 @@
         },
         "openContext.agent.shell.allowlist": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "markdownDescription": "Allowlist of command names the agent may run (e.g. `[\"npm\",\"git\",\"ls\"]`). Empty means any command is allowed. Matching is done against the first whitespace-delimited token in the command string."
         },
@@ -413,9 +421,12 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
+    "@types/markdown-it": "^14.1.2",
     "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",
+    "highlight.js": "^11.11.1",
     "ignore": "^6.0.0",
+    "markdown-it": "^14.2.0",
     "minimatch": "^10.0.0",
     "openai": "^4.70.0",
     "sqlite-vec": "^0.1.9",
