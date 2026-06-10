@@ -1,16 +1,14 @@
-import * as fs from "fs";
-import * as path from "path";
-import { createRequire } from "module";
-import type { Parser as TsParser, Language as TsLanguage, Node as TsNode } from "web-tree-sitter";
+import type { Node as TsNode } from "web-tree-sitter";
 import { Chunk, File, SymbolKind } from "./types";
 import { computeBlobName } from "./utils";
 import { CodeChunker } from "./chunker";
-
-const requireFromHere = createRequire(__filename);
+import { ParserPool, ParsedFile, languageForPath } from "./ast-graph-shared";
 
 export interface AstChunkerOptions {
   maxChunkChars: number;
   fallback: CodeChunker;
+  /** Optional shared pool so chunker + graph-extractor parse each file once. */
+  pool?: ParserPool;
 }
 
 interface LanguageSpec {
@@ -30,46 +28,58 @@ const SPECS: Record<string, LanguageSpec> = {
   c_sharp: csharpSpec(),
 };
 
-const EXTENSION_MAP: Record<string, string> = {
-  ".ts": "typescript", ".mts": "typescript", ".cts": "typescript",
-  ".tsx": "tsx",
-  ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
-  ".py": "python", ".pyi": "python",
-  ".go": "go",
-  ".rs": "rust",
-  ".java": "java",
-  ".cs": "c_sharp",
-};
-
 export class AstChunker {
-  private static parserInit: Promise<void> | null = null;
-  private static parserModule: typeof import("web-tree-sitter") | null = null;
-  private static langCache: Map<string, Promise<TsLanguage | null>> = new Map();
+  // Pool is shared across calls so we don't construct a Parser per file.
+  // Constructor accepts an external pool; the graph extractor instantiated in
+  // OpenContext shares the same one, which is how parse-once-per-file works.
+  private pool: ParserPool;
+  private ownsPool: boolean;
 
-  private parser: TsParser | null = null;
-
-  constructor(private opts: AstChunkerOptions) {}
-
-  static languageFor(filePath: string): string | null {
-    const ext = path.extname(filePath).toLowerCase();
-    return EXTENSION_MAP[ext] ?? null;
+  constructor(private opts: AstChunkerOptions) {
+    this.pool = opts.pool ?? new ParserPool();
+    this.ownsPool = !opts.pool;
   }
 
-  async chunkFile(file: File): Promise<Chunk[]> {
+  static languageFor(filePath: string): string | null {
+    return languageForPath(filePath);
+  }
+
+  /** Public access to the pool so OpenContext can share it with AstGraphExtractor. */
+  getPool(): ParserPool { return this.pool; }
+
+  /**
+   * Parse the file once and return the tree + dispose handle. Returns null on
+   * unsupported extensions, WASM load failures, or parse aborts — caller
+   * should treat that the same as the chunker's regex fallback path. Callers
+   * must `dispose()` exactly once, ideally in a finally.
+   */
+  async parseFile(file: File): Promise<ParsedFile | null> {
+    return this.pool.parseFile(file.path, file.contents);
+  }
+
+  /**
+   * Chunk a file into semantic units. If `opts.parsed` is provided, the
+   * existing parse tree is reused (so the graph extractor and the chunker
+   * share one parse). If parse/coverage fails, falls back to the line-based
+   * chunker on the raw source.
+   *
+   * Note: when called with `parsed`, this method DOES NOT dispose the tree —
+   * the caller passed it in and owns its lifecycle. When called without
+   * `parsed`, the method parses + disposes internally.
+   */
+  async chunkFile(file: File, opts: { parsed?: ParsedFile | null } = {}): Promise<Chunk[]> {
     const lang = AstChunker.languageFor(file.path);
     if (!lang) return this.opts.fallback.chunkFile(file);
-    const language = await this.loadLanguage(lang);
-    if (!language) return this.opts.fallback.chunkFile(file);
     const spec = SPECS[lang];
+
+    // Either reuse the passed-in parse, or do one ourselves and dispose at the end.
+    const provided = opts.parsed ?? null;
+    const parsed = provided ?? (await this.parseFile(file));
+    if (!parsed) return this.opts.fallback.chunkFile(file);
     try {
-      const parser = await this.getParser();
-      parser.setLanguage(language);
-      const tree = parser.parse(file.contents);
-      if (!tree) return this.opts.fallback.chunkFile(file);
-      const root = tree.rootNode;
       const collected: { node: TsNode; kind: SymbolKind; parent: string | null }[] = [];
-      this.collect(root, spec, null, collected);
-      if (!collected.length) { tree.delete(); return this.opts.fallback.chunkFile(file); }
+      this.collect(parsed.tree.rootNode, spec, null, collected);
+      if (!collected.length) return this.opts.fallback.chunkFile(file);
       const materialized = collected.map(c => ({
         kind: c.kind,
         parent: c.parent,
@@ -79,7 +89,6 @@ export class AstChunker {
         startLine: c.node.startPosition.row + 1,
         endLine: c.node.endPosition.row + 1,
       }));
-      tree.delete();
       const covered = materialized.reduce((s, c) => s + (c.endIndex - c.startIndex), 0);
       if (covered < file.contents.length * 0.35) return this.opts.fallback.chunkFile(file);
       const lines = file.contents.split("\n");
@@ -94,6 +103,9 @@ export class AstChunker {
     } catch (err) {
       if (process.env.OPEN_CONTEXT_DEBUG) console.error(`AstChunker: chunkFile error on ${file.path}:`, err);
       return this.opts.fallback.chunkFile(file);
+    } finally {
+      // Only dispose if we did the parse ourselves; otherwise the caller owns it.
+      if (!provided) parsed.dispose();
     }
   }
 
@@ -154,57 +166,8 @@ export class AstChunker {
     };
   }
 
-  private async getParser(): Promise<TsParser> {
-    if (!this.parser) {
-      const mod = await AstChunker.ensureParserInit();
-      this.parser = new mod.Parser();
-    }
-    return this.parser;
-  }
-
-  private async loadLanguage(name: string): Promise<TsLanguage | null> {
-    let cached = AstChunker.langCache.get(name);
-    if (!cached) {
-      cached = (async () => {
-        try {
-          const mod = await AstChunker.ensureParserInit();
-          const wasmPath = resolveGrammarWasm(name);
-          const bytes = await fs.promises.readFile(wasmPath);
-          return await mod.Language.load(bytes);
-        } catch (err) {
-          if (process.env.OPEN_CONTEXT_DEBUG) console.error(`AstChunker: failed to load ${name}:`, err);
-          return null;
-        }
-      })();
-      AstChunker.langCache.set(name, cached);
-    }
-    return cached;
-  }
-
-  private static async ensureParserInit(): Promise<typeof import("web-tree-sitter")> {
-    if (AstChunker.parserModule) return AstChunker.parserModule;
-    if (!AstChunker.parserInit) {
-      AstChunker.parserInit = (async () => {
-        const mod = await import("web-tree-sitter");
-        await mod.Parser.init();
-        AstChunker.parserModule = mod;
-      })();
-    }
-    await AstChunker.parserInit;
-    return AstChunker.parserModule!;
-  }
-
   dispose(): void {
-    try { this.parser?.delete(); } catch {}
-    this.parser = null;
-  }
-}
-
-function resolveGrammarWasm(name: string): string {
-  try {
-    return requireFromHere.resolve(`tree-sitter-wasms/out/tree-sitter-${name}.wasm`);
-  } catch (err) {
-    throw new Error(`Grammar wasm not found for language '${name}': ${(err as Error).message}`);
+    if (this.ownsPool) this.pool.disposeAll();
   }
 }
 

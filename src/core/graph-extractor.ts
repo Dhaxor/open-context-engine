@@ -1,9 +1,41 @@
 import * as path from "path";
+import type { Tree as TsTree } from "web-tree-sitter";
 import { GraphEdge, EdgeKind } from "./code-graph";
+import { File } from "./types";
+import { extractEdgesFromTree } from "./ast-graph-extractor";
 
 export interface ExtractionResult {
   edges: GraphEdge[];
   exports: string[];
+}
+
+/**
+ * Top-level dispatcher: prefer AST extraction when a parse tree is available,
+ * otherwise fall back to the regex extractor. The regex path is the same
+ * `extractEdgesFromSource` exported below — kept intentionally byte-compatible
+ * with prior behavior so any caller that bypasses the AST path still works.
+ *
+ * The AST path NEVER runs without a `tree` — callers that don't have one
+ * should either call `parseFile` first (cheaper if they also chunk) or accept
+ * the regex result.
+ */
+export function extractEdges(
+  file: File,
+  language: string | null,
+  tree: TsTree | null,
+): ExtractionResult {
+  if (tree && language) {
+    try {
+      const ast = extractEdgesFromTree(file, language, tree);
+      // An AST result with empty edges is legitimate (a file with no imports).
+      // The only fallback trigger is an explicit exception above.
+      return ast;
+    } catch (err) {
+      if (process.env.OPEN_CONTEXT_DEBUG) console.error(`AstGraphExtractor: error on ${file.path}:`, err);
+    }
+  }
+  if (!language) return { edges: [], exports: [] };
+  return extractEdgesFromSource(file.path, file.contents, language);
 }
 
 export function extractEdgesFromSource(filePath: string, contents: string, language: string): ExtractionResult {

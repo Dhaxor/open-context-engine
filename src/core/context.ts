@@ -15,7 +15,7 @@ import { getFileRecencyScores } from "./git-recency";
 import { QueryCache } from "./query-cache";
 import { loadGuidelines, Guidelines, getRelevantGuidelines } from "./guidelines";
 import { CodeGraph } from "./code-graph";
-import { extractEdgesFromSource } from "./graph-extractor";
+import { extractEdges } from "./graph-extractor";
 import { GraphExpander } from "./graph-expander";
 
 const CONCURRENT_EMBED_BATCHES = 2;
@@ -167,17 +167,25 @@ export class OpenContext {
       const fileBatch = files.slice(fb, fb + FILE_BATCH);
       const chunks: Chunk[] = [];
       for (const file of fileBatch) {
-        const fileChunks = await this.chunker.chunkFile(file);
-        for (const c of fileChunks) chunks.push(c);
-        const language = AstChunker.languageFor(file.path);
-        if (language) {
-          try {
-            const { edges } = extractEdgesFromSource(file.path, file.contents, language);
-            if (edges.length) {
-              this.store.removeGraphEdgesByPath(file.path);
-              this.store.addGraphEdges(edges);
-            }
-          } catch {}
+        // Parse once per file; chunker + graph extractor share the tree, then
+        // we dispose IN THIS ITERATION so we never hold FILE_BATCH live trees.
+        // Trees live in WASM linear memory at 2-10x source size.
+        const parsed = await this.chunker.parseFile(file);
+        try {
+          const fileChunks = await this.chunker.chunkFile(file, { parsed });
+          for (const c of fileChunks) chunks.push(c);
+          const language = parsed?.language ?? AstChunker.languageFor(file.path);
+          if (language) {
+            try {
+              const { edges } = extractEdges(file, language, parsed?.tree ?? null);
+              if (edges.length) {
+                this.store.removeGraphEdgesByPath(file.path);
+                this.store.addGraphEdges(edges);
+              }
+            } catch {}
+          }
+        } finally {
+          parsed?.dispose();
         }
       }
       await this.embedAndStoreChunks(chunks);
