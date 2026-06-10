@@ -2,11 +2,11 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "AI-powered codebase indexing, semantic search, and context-aware chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "open-context",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.124.0"
   },
   "categories": [
     "Programming Languages",
@@ -412,11 +412,17 @@
     "vscode:prepublish": "node build.js --minify",
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "rebuild": "electron-rebuild -f -w better-sqlite3 -v 42.3.0",
+    "package": "npm run rebuild && vsce package",
+    "verify-vsix": "node ./scripts/verify-vsix.mjs"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.124.0",
+    "@vscode/vsce": "^3.6.0",
+    "electron": "42.3.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
   },

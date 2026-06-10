@@ -1,0 +1,91 @@
+# Watch for VS Code Electron version drift.
+#
+# The .vsix is built against a specific Electron version (currently 42.3.0)
+# and that version is pinned in extension/package.json. When upstream VS Code
+# bumps Electron, our binaries silently become incompatible the day end users
+# auto-update. This job catches the drift early by reading microsoft/vscode's
+# .npmrc on every relevant branch (main + the last few release-X.Y branches),
+# comparing against our pin, and opening an issue if they differ.
+
+name: Check Electron drift
+
+on:
+  schedule:
+    # Daily at 08:00 UTC — well after VS Code's typical promotion window.
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read our pinned Electron version
+        id: ours
+        run: |
+          OURS=$(node -p "require('./extension/package.json').devDependencies.electron")
+          echo "version=$OURS" >> "$GITHUB_OUTPUT"
+          echo "Pinned: $OURS"
+
+      - name: Fetch upstream VS Code Electron from main + recent release branches
+        id: upstream
+        run: |
+          set -euo pipefail
+          fetch_target() {
+            local branch="$1"
+            curl -fsSL "https://raw.githubusercontent.com/microsoft/vscode/$branch/.npmrc" \
+              | grep -E "^target=" | sed 's/^target=//' | tr -d '"' | tr -d "'" | tr -d ' '
+          }
+          MAIN=$(fetch_target main || echo "?")
+          echo "main=$MAIN" >> "$GITHUB_OUTPUT"
+          echo "main: $MAIN"
+          # Also print the last 4 release branches for visibility (best-effort).
+          for v in 1.124 1.123 1.122 1.121; do
+            if VAL=$(fetch_target "release/$v" 2>/dev/null); then
+              echo "release/$v: $VAL"
+            fi
+          done
+
+      - name: Compare and report
+        if: steps.ours.outputs.version != '' && steps.upstream.outputs.main != '' && steps.ours.outputs.version != steps.upstream.outputs.main
+        uses: actions/github-script@v7
+        env:
+          OURS: ${{ steps.ours.outputs.version }}
+          UPSTREAM: ${{ steps.upstream.outputs.main }}
+        with:
+          script: |
+            const title = `Electron drift: VS Code main is on ${process.env.UPSTREAM}, our VSIX is built for ${process.env.OURS}`;
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: "open", labels: "electron-drift", per_page: 5,
+            });
+            if (existing.data.some(i => i.title === title)) {
+              core.info("Drift issue already open; not duplicating.");
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title,
+              labels: ["electron-drift", "release-blocker"],
+              body: [
+                "VS Code's `main` branch now pins a different Electron version than the one our shipped VSIX is built against.",
+                "",
+                `- **Our pin** (\`extension/package.json\` → \`devDependencies.electron\`): \`${process.env.OURS}\``,
+                `- **Upstream** (\`microsoft/vscode@main/.npmrc\` → \`target\`): \`${process.env.UPSTREAM}\``,
+                "",
+                "Once this Electron version reaches a stable VS Code release, our shipped `.vsix` will fail to load `better-sqlite3` with `NODE_MODULE_VERSION` mismatch on first index.",
+                "",
+                "**Action items:**",
+                "1. Verify the upstream version actually reached stable (release notes shell version).",
+                "2. Bump `devDependencies.electron`, `engines.vscode`, the `rebuild` npm script's `-v` flag, and `release-vsix.yml`'s comment block.",
+                "3. Cut a `v0.1.x` tag and let the release workflow rebuild + republish all 4 platforms.",
+                "",
+                "_Auto-opened by `.github/workflows/check-electron-drift.yml`._",
+              ].join("\n"),
+            });
+            core.notice(`Opened drift issue: ${title}`);

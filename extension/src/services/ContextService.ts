@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { OpenContext } from "../../../src/core/context";
 import { FileFilter, FilterStats } from "../../../src/core/file-filter";
 import { FileWatcher } from "../../../src/core/file-watcher";
+import { classifyNativeBindingError, diagnosisOneLiner } from "../../../src/core/native-binding-error";
 import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult, FreshnessReport } from "../../../src/core/types";
 import { RetrievalDebugReport, RetrieveOptions } from "../../../src/core/retriever";
 import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, isEntitled } from "../../../src/core/license";
@@ -303,7 +304,10 @@ export class ContextService implements vscode.Disposable {
         if (!workspaceRoot) notes.push("No index workspace is selected and no VS Code workspace folder is open.");
         if (provider !== "ollama" && !embeddingKeyPresent) notes.push(`Missing ${provider} embedding API key.`);
         if (selectedWorkspaceRoot && vscodeWorkspaceRoot && selectedWorkspaceRoot !== vscodeWorkspaceRoot) notes.push("Index workspace differs from the first VS Code workspace folder.");
-        if (initializationError && /better-sqlite3|NODE_MODULE_VERSION|DLOPEN|self-register/i.test(initializationError)) notes.push("SQLite native dependency appears incompatible with the current Node runtime; rebuild/reinstall better-sqlite3.");
+        if (initializationError) {
+            const diag = classifyNativeBindingError(initializationError);
+            if (diag.recognized) notes.push(diagnosisOneLiner(diag));
+        }
         if (this._lastIndexError) notes.push("The last indexing attempt failed; see Last index error.");
         const potentiallyStale = freshness?.stale ?? (fileScan && indexedFiles !== undefined ? fileScan.includedFiles !== indexedFiles : undefined);
         if (potentiallyStale) notes.push("Indexed file count differs from current includable file count; index may be stale.");
