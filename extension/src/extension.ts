@@ -8,10 +8,36 @@ import { IndexHealthPanel } from "./health/IndexHealthPanel";
 import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
 import { EditReviewService } from "./services/EditReviewService";
 import { SearchResult } from "../../src/core/types";
+import { classifyNativeBindingError } from "../../src/core/native-binding-error";
 
 let statusBarItem: vscode.StatusBarItem;
+let outputChannel: vscode.OutputChannel | undefined;
+
+/** Show the user a real, actionable error for any failure that initializes the
+ *  native SQLite binding (NMV mismatch, glibc skew, wrong arch, etc.). Until
+ *  v0.1.1 the startup-index catch site swallowed these with a console.error
+ *  the user could never see, which is why "indexing silently failed" was the
+ *  first-run experience for paying customers on mismatched VS Code builds. */
+function reportIndexingError(err: unknown): void {
+  const diag = classifyNativeBindingError(err);
+  outputChannel?.appendLine("");
+  outputChannel?.appendLine(`[${new Date().toISOString()}] ${diag.title}`);
+  outputChannel?.appendLine(diag.raw);
+  if (!diag.recognized) {
+    vscode.window.showErrorMessage(`Open Context Engine: indexing failed — ${diag.title}`, "Open Output").then((pick) => {
+      if (pick === "Open Output") outputChannel?.show(true);
+    });
+    return;
+  }
+  vscode.window.showErrorMessage(diag.title + " — " + diag.message, "Open Output", "Open Releases").then((pick) => {
+    if (pick === "Open Output") outputChannel?.show(true);
+    else if (pick === "Open Releases") vscode.env.openExternal(vscode.Uri.parse("https://github.com/Dhaxor/open-context-engine/releases"));
+  });
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    outputChannel = vscode.window.createOutputChannel("Open Context Engine");
+    context.subscriptions.push(outputChannel);
     const svc = ContextService.getInstance();
     svc.bindExtensionContext(context);
     const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());
@@ -261,13 +287,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await svc.indexWorkspace();
                 await refreshStatus();
             } catch (err: any) {
-                console.error("[openContext] startup index failed:", err);
+                reportIndexingError(err);
             }
         });
     }
 
     if (cfg.get<boolean>("autoIndex", true)) {
-        svc.startWatching().catch((err) => console.error("[openContext] watcher failed:", err));
+        svc.startWatching().catch((err) => {
+            outputChannel?.appendLine(`[${new Date().toISOString()}] watcher failed: ${err?.message ?? String(err)}`);
+        });
     }
 
     context.subscriptions.push(

@@ -1,0 +1,175 @@
+# Release workflow for the VS Code extension.
+#
+# Why this exists: better-sqlite3 ships a native .node compiled for a specific
+# Node ABI. VS Code's Electron has its own Node version (Electron 42.3.0 =
+# Node 24 = NMV ~137 today, June 2026). A .vsix built with the dev's local
+# better-sqlite3 will hard-fail on first index for anyone whose Electron's
+# Node ABI doesn't match. We rebuild against Electron's headers per platform
+# and ship a target-specific .vsix that the Marketplace serves to the matching
+# user.
+#
+# Floor: engines.vscode = ^1.124.0 (Electron 42.3.0). Older VS Code stays on
+# the prior 0.1.0 release. See PUBLISHING.md for the rationale and the v0.2
+# plan to bundle multiple ABIs in one VSIX.
+#
+# Triggers:
+#  - push to a tag like v0.1.1 → build all platforms + publish to Marketplace.
+#  - workflow_dispatch → build only (no publish). Useful for local sanity.
+#  - pull_request touching extension/ → build linux-x64 only as a smoke test.
+
+name: Release VSIX
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the VS Code Marketplace after build"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "extension/**"
+      - ".github/workflows/release-vsix.yml"
+
+# Cancel superseded runs for the same branch/tag so a fast-follow push doesn't
+# leave a half-finished build holding artifacts.
+concurrency:
+  group: release-vsix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64 — build on ubuntu-22.04 to keep glibc symbol floor at 2.35
+          # rather than ubuntu-24.04's 2.39, which would break RHEL 8 / Debian 11.
+          - target: linux-x64
+            os: ubuntu-22.04
+            target_os: linux
+            target_arch: x64
+          # macOS x64 — macos-13 is the last Intel runner. When GitHub retires it
+          # (announced for ~2026Q3), switch to macos-latest with --arch=x64 + lipo
+          # verification. See PUBLISHING.md.
+          - target: darwin-x64
+            os: macos-13
+            target_os: darwin
+            target_arch: x64
+          # macOS arm64 — Apple Silicon majority.
+          - target: darwin-arm64
+            os: macos-latest
+            target_os: darwin
+            target_arch: arm64
+          # Windows x64. win32-arm64 is intentionally skipped for v0.1.1 —
+          # see PUBLISHING.md ("Unsupported platforms").
+          - target: win32-x64
+            os: windows-latest
+            target_os: win32
+            target_arch: x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.16.0
+        uses: actions/setup-node@v4
+        with:
+          # Pinned exact: setup-node's "22.x" floats with new releases, which
+          # broke deterministic builds before. Bump in lockstep with @electron/
+          # rebuild's minimum Node requirement.
+          node-version: "22.16.0"
+
+      - name: Print runtime versions (debug)
+        shell: bash
+        run: |
+          node -v
+          npm -v
+          echo "platform=${{ runner.os }} target=${{ matrix.target }}"
+
+      - name: Install core deps (repo root)
+        run: npm ci
+
+      - name: Install extension deps
+        working-directory: extension
+        run: npm ci
+
+      - name: Rebuild better-sqlite3 against Electron 42.3.0
+        working-directory: extension
+        run: npm run rebuild
+
+      - name: Verify rebuilt .node arch matches target
+        working-directory: extension
+        shell: bash
+        run: |
+          BIN="node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          if [ ! -f "$BIN" ]; then echo "::error::rebuilt .node not found at $BIN"; exit 1; fi
+          file "$BIN" || true
+          head -c 4 "$BIN" | od -An -tx1 | tr -d ' \n'; echo
+
+      - name: Package VSIX (${{ matrix.target }})
+        working-directory: extension
+        run: npx vsce package --target ${{ matrix.target }} --out ../artifacts/
+
+      - name: Verify VSIX contents
+        working-directory: extension
+        shell: bash
+        run: |
+          VSIX=$(ls ../artifacts/*-${{ matrix.target }}-*.vsix)
+          echo "Verifying $VSIX"
+          node ./scripts/verify-vsix.mjs "$VSIX" "${{ matrix.target }}"
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.target }}
+          path: artifacts/*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to Marketplace
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
+    # Pinned to ubuntu so the publish loop is a single bash glob. Windows
+    # runners can't glob on PowerShell/cmd reliably.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce@^3.6.0
+
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vsix-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish each VSIX explicitly
+        # vsce publish --packagePath doesn't glob, and silently picks one file
+        # on shells that don't expand globs. Iterate explicitly.
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          set -euo pipefail
+          ls -la artifacts/
+          shopt -s nullglob
+          for vsix in artifacts/*.vsix; do
+            echo "::group::Publishing $vsix"
+            vsce publish --packagePath "$vsix" --pat "$VSCE_PAT"
+            echo "::endgroup::"
+          done

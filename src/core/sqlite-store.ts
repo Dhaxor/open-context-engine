@@ -4,6 +4,46 @@ import { createRequire } from "module";
 import type { Database as BetterSqlite3Database, Statement } from "better-sqlite3";
 import { Chunk, SearchResult, OpenContextState, SymbolKind, GitState } from "./types";
 import type { GraphEdge, EdgeKind } from "./code-graph";
+import { classifyNativeBindingError, type NativeBindingDiagnosis } from "./native-binding-error";
+
+/**
+ * Error thrown when the native SQLite binding fails to load or initialize.
+ * Carries the structured diagnosis so callers (extension host, CLI) can show
+ * the right user-facing message without re-parsing the raw error.
+ */
+export class NativeBindingError extends Error {
+  readonly diagnosis: NativeBindingDiagnosis;
+  constructor(diagnosis: NativeBindingDiagnosis) {
+    super(diagnosis.title + " — " + diagnosis.message);
+    this.name = "NativeBindingError";
+    this.diagnosis = diagnosis;
+  }
+}
+
+function nativeBindingError(err: unknown): NativeBindingError {
+  if (err instanceof NativeBindingError) return err;
+  return new NativeBindingError(classifyNativeBindingError(err));
+}
+
+/**
+ * Dynamically import better-sqlite3 and surface any load failure (NMV
+ * mismatch, missing module, glibc skew, etc.) as a structured NativeBindingError
+ * instead of the raw require message that's been silently swallowed at startup.
+ *
+ * The return type is loose because better-sqlite3 uses CJS `export =` interop —
+ * at runtime esModuleInterop hands us `mod.default`, but the declared types
+ * treat the whole module as the constructor function. Callers immediately
+ * `new Database(...)` so the looseness is contained.
+ */
+async function loadBetterSqlite3(): Promise<typeof import("better-sqlite3")> {
+  try {
+    const mod = await import("better-sqlite3");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((mod as any).default ?? mod) as typeof import("better-sqlite3");
+  } catch (err) {
+    throw nativeBindingError(err);
+  }
+}
 
 const requireFromHere = createRequire(__filename);
 
@@ -68,13 +108,17 @@ export class SqliteStore {
 
   async initialize(): Promise<void> {
     await fs.promises.mkdir(this.storeDir, { recursive: true });
-    const Database = (await import("better-sqlite3")).default;
+    const Database = await loadBetterSqlite3();
     this.maybeMigrateLegacy();
-    this.db = new Database(this.dbPath);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("synchronous = NORMAL");
-    this.db.pragma("foreign_keys = ON");
-    this.db.loadExtension(sqliteVecExtensionPath());
+    try {
+      this.db = new Database(this.dbPath);
+      this.db.pragma("journal_mode = WAL");
+      this.db.pragma("synchronous = NORMAL");
+      this.db.pragma("foreign_keys = ON");
+      this.db.loadExtension(sqliteVecExtensionPath());
+    } catch (err) {
+      throw nativeBindingError(err);
+    }
     this.ensureSchema();
     this.prepareStatements();
   }
