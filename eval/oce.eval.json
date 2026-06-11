@@ -1,113 +1,360 @@
 {
-  "description": "Starter eval set for the Open Context Engine repo itself. Run from the repo root: oce eval --cases eval/oce.eval.json. Each case is a natural-language query a developer (or agent) would actually issue, with the file(s) that must surface for the answer to be possible.",
+  "description": "Eval set (v2) for the Open Context Engine repo itself. Run from the repo root: oce eval --cases eval/oce.eval.json. Each case is a natural-language query a developer (or agent) would actually issue, with the file(s) that must surface for the answer to be possible.",
   "cases": [
     {
       "id": "rrf-fusion",
       "query": "where is reciprocal rank fusion implemented and how are vector and bm25 results combined",
-      "expectedPaths": ["src/core/retriever.ts"],
+      "expectedPaths": [
+        "src/core/retriever.ts"
+      ],
       "notes": "Core ranking algorithm; exact term appears in code."
     },
     {
       "id": "gitignore-filtering",
       "query": "how are files excluded from indexing based on gitignore rules",
-      "expectedPaths": ["src/core/file-filter.ts"],
+      "expectedPaths": [
+        "src/core/file-filter.ts"
+      ],
       "notes": "Semantic match — 'excluded' vs 'ignored'."
     },
     {
       "id": "voyage-embeddings",
       "query": "voyage api embedding requests with batching and retry",
-      "expectedPaths": ["src/core/embedder.ts"],
+      "expectedPaths": [
+        "src/core/embedder.ts"
+      ],
       "notes": "Provider-specific lookup."
     },
     {
       "id": "sqlite-schema",
       "query": "sqlite table schema for chunks and the vector index",
-      "expectedPaths": ["src/core/sqlite-store.ts"],
+      "expectedPaths": [
+        "src/core/sqlite-store.ts"
+      ],
       "notes": "Storage layer."
     },
     {
       "id": "tree-sitter-chunking",
       "query": "splitting code into chunks along function and class boundaries with tree-sitter",
-      "expectedPaths": ["src/core/ast-chunker.ts"],
+      "expectedPaths": [
+        "src/core/ast-chunker.ts"
+      ],
       "notes": "AST chunking."
     },
     {
       "id": "graph-expansion",
       "query": "how are related chunks pulled in by following import and call edges at retrieval time",
-      "expectedPaths": ["src/core/graph-expander.ts"],
+      "expectedPaths": [
+        "src/core/graph-expander.ts"
+      ],
       "notes": "Graph consumer at query time."
     },
     {
       "id": "ast-edge-extraction",
       "query": "extracting import and inheritance edges from the syntax tree per language",
-      "expectedPaths": ["src/core/ast-graph-extractor.ts"],
+      "expectedPaths": [
+        "src/core/ast-graph-extractor.ts"
+      ],
       "notes": "New AST extractor — added after the regex replacement."
     },
     {
       "id": "edit-tools",
       "query": "agent tool that replaces an exact substring in a file with uniqueness check",
-      "expectedPaths": ["src/agent/edit-tools.ts"],
+      "expectedPaths": [
+        "src/agent/edit-tools.ts"
+      ],
       "notes": "str-replace tool."
     },
     {
       "id": "license-verify",
       "query": "offline license key signature verification with ed25519",
-      "expectedPaths": ["src/core/license.ts"],
+      "expectedPaths": [
+        "src/core/license.ts"
+      ],
       "notes": "Commercial gating."
     },
     {
       "id": "mcp-tools",
       "query": "registering the codebase retrieval tool on the MCP server",
-      "expectedPaths": ["src/mcp/server.ts"],
+      "expectedPaths": [
+        "src/mcp/server.ts"
+      ],
       "notes": "MCP surface."
     },
     {
       "id": "watch-debounce",
       "query": "debouncing rapid file change events before reindexing",
-      "expectedPaths": ["src/core/file-watcher.ts"],
+      "expectedPaths": [
+        "src/core/file-watcher.ts"
+      ],
       "notes": "Watcher behavior."
     },
     {
       "id": "query-synonyms",
       "query": "expanding a search query with synonyms like delete remove destroy",
-      "expectedPaths": ["src/core/query-expander.ts"],
+      "expectedPaths": [
+        "src/core/query-expander.ts"
+      ],
       "notes": "Lexical expansion."
     },
     {
       "id": "context-packing",
       "query": "merging nearby line ranges and dropping chunks over the character budget when formatting results",
-      "expectedPaths": ["src/core/context-packer.ts"],
+      "expectedPaths": [
+        "src/core/context-packer.ts"
+      ],
       "notes": "Output packing."
     },
     {
       "id": "recency-boost",
       "query": "boosting recently committed files in search ranking using git log",
-      "expectedPaths": ["src/core/git-recency.ts"],
+      "expectedPaths": [
+        "src/core/git-recency.ts"
+      ],
       "notes": "Recency signal."
     },
     {
       "id": "step-budget",
       "query": "limiting agent tool steps and detecting repeated identical tool calls",
-      "expectedPaths": ["src/agent/step-budget.ts"],
+      "expectedPaths": [
+        "src/agent/step-budget.ts"
+      ],
       "notes": "Loop detection."
     },
     {
       "id": "native-binding-errors",
       "query": "classifying NODE_MODULE_VERSION mismatch and glibc errors when the sqlite binding fails to load",
-      "expectedPaths": ["src/core/native-binding-error.ts"],
+      "expectedPaths": [
+        "src/core/native-binding-error.ts"
+      ],
       "notes": "Diagnostics added with the VSIX fix."
     },
     {
       "id": "freshness-check",
       "query": "detecting whether the index is stale compared to the working tree and git state",
-      "expectedPaths": ["src/core/freshness.ts"],
+      "expectedPaths": [
+        "src/core/freshness.ts"
+      ],
       "notes": "Staleness reporting."
     },
     {
       "id": "history-compaction",
       "query": "compacting old conversation messages when the token budget is exceeded",
-      "expectedPaths": ["src/agent/utils.ts"],
+      "expectedPaths": [
+        "src/agent/utils.ts"
+      ],
       "notes": "compactHistory lives in agent utils."
+    },
+    {
+      "id": "edit-review-undo",
+      "query": "undo and redo agent file edits with a native diff view",
+      "expectedPaths": [
+        "extension/src/services/EditReviewService.ts"
+      ],
+      "notes": "Edit review service."
+    },
+    {
+      "id": "native-binding-selector",
+      "query": "selecting the right native sqlite binding for the running electron abi at activation",
+      "expectedPaths": [
+        "extension/src/services/NativeBindingSelector.ts"
+      ],
+      "notes": "Multi-ABI runtime selector."
+    },
+    {
+      "id": "vscode-agent-build",
+      "query": "constructing the vscode chat agent with routing memory and edit tools from settings",
+      "expectedPaths": [
+        "extension/src/services/AgentService.ts"
+      ],
+      "notes": "Extension agent wiring."
+    },
+    {
+      "id": "vscode-edit-applier",
+      "query": "applying agent file edits through vscode workspace edit api",
+      "expectedPaths": [
+        "extension/src/services/VSCodeEditApplier.ts"
+      ],
+      "notes": "Workspace-edit applier."
+    },
+    {
+      "id": "chat-history-store",
+      "query": "persisting chat sessions with titles and message limits in workspace state",
+      "expectedPaths": [
+        "extension/src/services/ChatHistoryStore.ts"
+      ],
+      "notes": "Chat history persistence."
+    },
+    {
+      "id": "chat-webview-render",
+      "query": "rendering streaming markdown chat with a committed prefix and live text tail",
+      "expectedPaths": [
+        "extension/src/chat/webview/main.ts"
+      ],
+      "notes": "Streaming-render webview."
+    },
+    {
+      "id": "chatview-host",
+      "query": "webview message handling for chat queries history loading and edit review actions",
+      "expectedPaths": [
+        "extension/src/chat/ChatView.ts"
+      ],
+      "notes": "Webview host side."
+    },
+    {
+      "id": "model-routing",
+      "query": "choosing a cheap fast model or a powerful reasoning model based on query complexity",
+      "expectedPaths": [
+        "src/agent/model-router.ts"
+      ],
+      "notes": "Tier classification."
+    },
+    {
+      "id": "session-memory",
+      "query": "remembering codebase insights across sessions and extracting facts from answers",
+      "expectedPaths": [
+        "src/agent/session-memory.ts"
+      ],
+      "notes": "Cross-session memory."
+    },
+    {
+      "id": "llm-providers",
+      "query": "calling the openai and anthropic chat apis with streaming and tool use",
+      "expectedPaths": [
+        "src/agent/providers.ts"
+      ],
+      "notes": "Provider callers."
+    },
+    {
+      "id": "tool-result-truncation",
+      "query": "truncating long tool results and retrying llm calls with exponential backoff",
+      "expectedPaths": [
+        "src/agent/utils.ts"
+      ],
+      "notes": "Agent utils."
+    },
+    {
+      "id": "shell-tool",
+      "query": "shell command tool with an allowlist and execution timeout",
+      "expectedPaths": [
+        "src/agent/extra-tools.ts"
+      ],
+      "notes": "run-command tool."
+    },
+    {
+      "id": "live-index-helper",
+      "query": "bring the index up to date then keep watching for file changes",
+      "expectedPaths": [
+        "src/core/live-index.ts"
+      ],
+      "notes": "liveIndex/createLiveContext."
+    },
+    {
+      "id": "query-embedding-cache",
+      "query": "caching query embeddings between searches",
+      "expectedPaths": [
+        "src/core/query-cache.ts"
+      ],
+      "notes": "Query cache."
+    },
+    {
+      "id": "graph-edge-queries",
+      "query": "querying outgoing and incoming code graph edges for a file and symbol",
+      "expectedPaths": [
+        "src/core/code-graph.ts"
+      ],
+      "notes": "Graph wrapper."
+    },
+    {
+      "id": "dependency-packing",
+      "query": "packing imported dependency chunks into the context within a budget ratio",
+      "expectedPaths": [
+        "src/core/dependency-packer.ts"
+      ],
+      "notes": "Dependency packer."
+    },
+    {
+      "id": "streaming-stages",
+      "query": "streaming retrieval results stage by stage vector bm25 fused final",
+      "expectedPaths": [
+        "src/core/streaming-retriever.ts"
+      ],
+      "notes": "Streaming retriever."
+    },
+    {
+      "id": "line-chunking-fallback",
+      "query": "line based chunking with boundary patterns overlap and oversize splitting",
+      "expectedPaths": [
+        "src/core/chunker.ts"
+      ],
+      "notes": "Fallback chunker."
+    },
+    {
+      "id": "guidelines-loading",
+      "query": "loading project guideline markdown files into the agent prompt",
+      "expectedPaths": [
+        "src/core/guidelines.ts"
+      ],
+      "notes": "Guidelines."
+    },
+    {
+      "id": "regex-extraction-fallback",
+      "query": "regex based import and export extraction when the syntax tree is unavailable",
+      "expectedPaths": [
+        "src/core/graph-extractor.ts"
+      ],
+      "notes": "Regex fallback + dispatcher."
+    },
+    {
+      "id": "multi-repo-context",
+      "query": "searching across multiple repository contexts at once",
+      "expectedPaths": [
+        "src/core/multi-context.ts"
+      ],
+      "notes": "Multi-repo."
+    },
+    {
+      "id": "eval-metrics",
+      "query": "computing recall mrr and ndcg for retrieval evaluation",
+      "expectedPaths": [
+        "src/eval/metrics.ts"
+      ],
+      "notes": "IR metrics. Missed pre-fix: /eval anchor bug."
+    },
+    {
+      "id": "eval-runner-compare",
+      "query": "running labeled eval cases and comparing a report against a saved baseline",
+      "expectedPaths": [
+        "src/eval/runner.ts"
+      ],
+      "notes": "Eval runner. Missed pre-fix: /eval anchor bug."
+    },
+    {
+      "id": "agent-loop-flow",
+      "query": "how does the agent loop execute tool calls retry on transient errors and compact old history",
+      "expectedPaths": [
+        "src/agent/agent.ts",
+        "src/agent/utils.ts"
+      ],
+      "notes": "Multi-gold: loop + utils."
+    },
+    {
+      "id": "edit-apply-review-flow",
+      "query": "how do agent edits get applied to files and then reviewed or undone in vs code",
+      "expectedPaths": [
+        "extension/src/services/VSCodeEditApplier.ts",
+        "extension/src/services/EditReviewService.ts"
+      ],
+      "notes": "Multi-gold: apply + review."
+    },
+    {
+      "id": "indexing-flow",
+      "query": "from collecting files through chunking embedding and storing during a workspace index",
+      "expectedPaths": [
+        "src/core/context.ts",
+        "src/core/file-filter.ts"
+      ],
+      "notes": "Multi-gold: orchestration + collection."
     }
   ]
 }
