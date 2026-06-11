@@ -25,11 +25,17 @@ version" — *that is the intended fail mode* until we ship binaries for them.
 
 ## Why these constraints
 
-- **`engines.vscode` is pinned to `^1.124.0`**. VS Code 1.124 ships
-  Electron 42.3.0 (Node 24, `NODE_MODULE_VERSION` ≈ 137). The rebuilt
-  `better-sqlite3` `.node` is locked to that ABI. Older VS Code uses
-  Electron 37–41 (Node 22, NMV 127) — a single binary can't span both.
-  Existing users on older VS Code stay on the previous `0.1.0` release.
+- **`engines.vscode` is `^1.103.0`, served by multi-ABI bundling (v0.2).**
+  Each platform VSIX ships one `better_sqlite3.node` per supported Electron
+  ABI under `dist-native/abi-<N>/`, built by the workflow's
+  `ELECTRON_TARGETS` loop (currently Electron 37.x / 39.x / 42.x — covering
+  stable VS Code 1.103 → current). At activation,
+  `NativeBindingSelector` copies the binding matching the running VS Code's
+  `process.versions.modules` into better-sqlite3's load path; the copy is
+  marker-guarded (`.abi` file) and atomic (temp + rename) so concurrent
+  windows can't observe a half-written binary. Empirical Electron map (from
+  `microsoft/vscode` release branches' `.npmrc` target): 1.103–1.106 → 37.x,
+  1.107–1.121 → 39.x, 1.122+ → 42.x.
 - **Linux glibc floor is 2.35** (Ubuntu 22.04 / Debian 12 / RHEL 9). Building
   on `ubuntu-latest` would silently raise the floor to 2.39 and break RHEL 8
   + corporate-locked Ubuntu 22.04 with a cryptic `GLIBC_2.39 not found`
@@ -50,7 +56,7 @@ guard, so affected users get a specific error message instead of a silent
 | `win32-arm64` | No `sqlite-vec-windows-arm64` build; `better-sqlite3` prebuild gaps | Install the `win32-x64` VSIX manually — Windows-on-ARM runs it under emulation with a perf hit. Or use VS Code's WSL backend with `linux-x64`. |
 | `linux-arm64` | Cross-compile fragility on x64 GitHub runners; awaiting `ubuntu-24.04-arm` capacity | Use `oce` CLI / MCP server on a glibc-based arm64 host directly. |
 | Alpine / musl | `better-sqlite3` is glibc-linked | Use a glibc-based devcontainer image (debian, ubuntu, fedora). |
-| VS Code < 1.124 | Electron ABI mismatch | Stay on `open-context-engine@0.1.0`, or update VS Code to 1.124+. |
+| VS Code < 1.103 | Electron ABI not in the shipped set | Update VS Code to 1.103+, or build locally with `npm run rebuild -v <your electron>`. The activation error names the running ABI and the shipped ABIs. |
 
 ## Local: build one VSIX for your own platform
 
@@ -87,21 +93,29 @@ upstream's Electron diverges from our pin. When that issue lands:
 
 1. Verify the upstream Electron version actually reached a *stable* VS Code
    release (check the release notes' "shell version").
-2. Bump in lockstep:
-   - `extension/package.json` → `devDependencies.electron`
-   - `extension/package.json` → `engines.vscode`
-   - `extension/package.json` → `scripts.rebuild` (the `-v` flag)
-   - `.github/workflows/release-vsix.yml` (the header comment)
-3. Tag and let CI rebuild + republish all 4 platforms.
+2. **Append** the new Electron version to `ELECTRON_TARGETS` in
+   `.github/workflows/release-vsix.yml` (don't replace — old ABIs keep
+   covering old VS Code), and bump `devDependencies.electron` +
+   `scripts.rebuild`'s `-v` flag for local dev builds.
+3. Tag and let CI rebuild + republish all 4 platforms. No `engines.vscode`
+   change needed — the floor only moves when you *drop* an old ABI.
 
-## What's coming in v0.2: multi-ABI bundling
+## Multi-ABI bundling (how it works)
 
-To stop stranding users every Electron bump, v0.2 will ship multiple `.node`
-binaries inside a single `.vsix` (one per supported Electron ABI), with a
-runtime selector reading `process.versions.modules`. That removes the
-`engines.vscode` floor as the gate and lets one VSIX cover a much wider VS
-Code range. Out of scope for v0.1.1 because the runtime selector requires
-patching `better-sqlite3`'s `bindings()` call site cleanly.
+- CI loops `ELECTRON_TARGETS`, running `@electron/rebuild` once per version
+  and stashing each binding at `dist-native/abi-<N>/better_sqlite3.node`
+  (ABI numbers from `node-abi`, never hardcoded).
+- `verify-vsix.mjs` fails the build if a packaged VSIX lacks `dist-native`
+  or any binding's architecture mismatches the target.
+- At activation, `extension/src/services/NativeBindingSelector.ts` copies
+  the matching binding over `node_modules/better-sqlite3/build/Release/`.
+  Dev builds (F5 — no `dist-native/`) skip selection entirely and use
+  whatever the local `npm run rebuild` produced.
+- If the running ABI isn't shipped (VS Code too old/new), activation stops
+  with a named-ABI error and an "Open Output" action instead of a broken
+  half-activated extension.
+
+VSIX size cost: ~3-5 MB per extra ABI per platform — well under limits.
 
 ## Marketplace secrets
 

@@ -1,16 +1,18 @@
 # Release workflow for the VS Code extension.
 #
 # Why this exists: better-sqlite3 ships a native .node compiled for a specific
-# Node ABI. VS Code's Electron has its own Node version (Electron 42.3.0 =
-# Node 24 = NMV ~137 today, June 2026). A .vsix built with the dev's local
-# better-sqlite3 will hard-fail on first index for anyone whose Electron's
-# Node ABI doesn't match. We rebuild against Electron's headers per platform
-# and ship a target-specific .vsix that the Marketplace serves to the matching
-# user.
+# Node ABI, and each Electron major has its own ABI — one binary can't span
+# them. Each platform VSIX therefore bundles ONE binding per supported
+# Electron ABI under dist-native/abi-<N>/ (built by the ELECTRON_TARGETS loop
+# below); at activation the extension copies the binding matching the running
+# VS Code's ABI into place (extension/src/services/NativeBindingSelector.ts).
 #
-# Floor: engines.vscode = ^1.124.0 (Electron 42.3.0). Older VS Code stays on
-# the prior 0.1.0 release. See PUBLISHING.md for the rationale and the v0.2
-# plan to bundle multiple ABIs in one VSIX.
+# ELECTRON_TARGETS — one version per Electron major that shipped in a stable
+# VS Code we support. Empirical map (microsoft/vscode release branches'
+# .npmrc "target"): 1.103-1.106 -> Electron 37.x; 1.107-1.121 -> 39.x;
+# 1.122+ -> 42.x. Update this list (and engines.vscode ^1.103.0) when the
+# drift workflow flags a new Electron. ABI numbers come from node-abi at
+# build time — never hardcoded.
 #
 # Triggers:
 #  - push to a tag like v0.1.1 → build all platforms + publish to Marketplace.
@@ -41,6 +43,10 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # One Electron version per major shipped by a supported stable VS Code.
+  ELECTRON_TARGETS: "37.2.3 39.8.8 42.3.0"
 
 jobs:
   build:
@@ -100,18 +106,33 @@ jobs:
         working-directory: extension
         run: npm ci
 
-      - name: Rebuild better-sqlite3 against Electron 42.3.0
-        working-directory: extension
-        run: npm run rebuild
-
-      - name: Verify rebuilt .node arch matches target
+      - name: Build better-sqlite3 for every supported Electron ABI
         working-directory: extension
         shell: bash
         run: |
-          BIN="node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-          if [ ! -f "$BIN" ]; then echo "::error::rebuilt .node not found at $BIN"; exit 1; fi
-          file "$BIN" || true
-          head -c 4 "$BIN" | od -An -tx1 | tr -d ' \n'; echo
+          set -euo pipefail
+          rm -rf dist-native
+          for EV in $ELECTRON_TARGETS; do
+            echo "::group::electron-rebuild for Electron $EV"
+            npx electron-rebuild -f -w better-sqlite3 -v "$EV"
+            ABI=$(node -p "require('node-abi').getAbi('$EV','electron')")
+            echo "Electron $EV -> ABI $ABI"
+            mkdir -p "dist-native/abi-$ABI"
+            cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "dist-native/abi-$ABI/"
+            echo "::endgroup::"
+          done
+          ls -la dist-native/*/
+
+      - name: Verify rebuilt bindings match target arch
+        working-directory: extension
+        shell: bash
+        run: |
+          for BIN in dist-native/abi-*/better_sqlite3.node; do
+            if [ ! -f "$BIN" ]; then echo "::error::no bindings built"; exit 1; fi
+            echo "--- $BIN"
+            file "$BIN" || true
+            head -c 4 "$BIN" | od -An -tx1 | tr -d ' \n'; echo
+          done
 
       - name: Package VSIX (${{ matrix.target }})
         working-directory: extension

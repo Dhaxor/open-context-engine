@@ -7,6 +7,7 @@ import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
 import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
 import { EditReviewService } from "./services/EditReviewService";
+import { ensureNativeBinding } from "./services/NativeBindingSelector";
 import { SearchResult } from "../../src/core/types";
 import { classifyNativeBindingError } from "../../src/core/native-binding-error";
 
@@ -38,6 +39,19 @@ function reportIndexingError(err: unknown): void {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     outputChannel = vscode.window.createOutputChannel("Open Context Engine");
     context.subscriptions.push(outputChannel);
+
+    // Select the better-sqlite3 binding matching THIS VS Code's Electron ABI
+    // before anything can touch the store. Packaged builds ship one binding
+    // per supported ABI; dev builds (no dist-native/) skip this entirely.
+    const binding = ensureNativeBinding(context.extensionUri.fsPath);
+    outputChannel.appendLine(`[${new Date().toISOString()}] native binding: ${binding.detail} (ABI ${binding.abi})`);
+    if (!binding.ok) {
+        vscode.window.showErrorMessage(`Open Context Engine cannot start — ${binding.detail}`, "Open Output").then((pick) => {
+            if (pick === "Open Output") outputChannel?.show(true);
+        });
+        return; // Inert rather than broken: no commands that would all fail anyway.
+    }
+
     const svc = ContextService.getInstance();
     svc.bindExtensionContext(context);
     const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());

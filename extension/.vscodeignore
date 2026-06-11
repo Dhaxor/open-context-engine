@@ -26,6 +26,9 @@ PUBLISHING.md
 # IMPORTANT: keep the native bindings in. Without these explicit negations a
 # future broad ignore (e.g. node_modules/*) would silently strip the .node and
 # we'd be back to "first index throws on a paying customer".
+# dist-native/ holds one better_sqlite3.node per supported Electron ABI; the
+# runtime selector copies the matching one into better-sqlite3 at activation.
+!dist-native/**
 !node_modules/better-sqlite3/**
 !node_modules/sqlite-vec/**
 !node_modules/sqlite-vec-*/**
