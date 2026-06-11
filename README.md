@@ -113,6 +113,7 @@ Commands:
   watch                  Index, then keep the index live as files change
   mcp                    Start MCP server (indexes + watches by default)
   agent                  Start interactive agent (auto-indexes on startup)
+  eval                   Score retrieval quality against a labeled query set
 
 Options:
   -w, --workspace <path>   Project root (default: cwd)
@@ -295,6 +296,33 @@ src/
 5. **Fusion**: Results are fused with Reciprocal Rank Fusion, balancing semantic and lexical signals.
 6. **Re-ranking** (optional): Top candidates are re-scored by a dedicated re-ranker for higher precision.
 7. **Symbol Expansion**: Identifiers in top results are resolved, pulling in definitions so the LLM sees the full picture.
+
+## 📏 Measuring Retrieval Quality
+
+`oce eval` scores the engine against a labeled query set — so ranking changes are measured, not guessed:
+
+```bash
+# Score the engine against the bundled gold set for this repo
+oce eval --cases eval/oce.eval.json
+
+# Save a baseline, change a ranking knob, then compare
+oce eval --cases eval/oce.eval.json --out baseline.json
+# ...tweak weights / expansion / reranker...
+oce eval --cases eval/oce.eval.json --baseline baseline.json
+
+# Measure what symbol/graph expansion contributes
+oce eval --cases eval/oce.eval.json --no-expand --baseline baseline.json
+```
+
+Reports **recall@k**, **MRR**, **nDCG@k**, **hit-rate**, and per-query latency, plus per-case deltas (improved / regressed) against a saved baseline. Metrics are file-granular: a case passes when the gold file ranks in the top-k unique files returned.
+
+A case file is a JSON array (or `{ cases: [...] }`):
+
+```json
+{ "id": "rrf-fusion", "query": "where is reciprocal rank fusion implemented", "expectedPaths": ["src/core/retriever.ts"] }
+```
+
+Keep your eval sets out of the index by listing their directory in `.contextignore` — a gold set maps queries to answers, so indexing it contaminates the rankings it measures.
 
 ## 📦 Requirements
 

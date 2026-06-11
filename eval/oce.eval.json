@@ -1,0 +1,113 @@
+{
+  "description": "Starter eval set for the Open Context Engine repo itself. Run from the repo root: oce eval --cases eval/oce.eval.json. Each case is a natural-language query a developer (or agent) would actually issue, with the file(s) that must surface for the answer to be possible.",
+  "cases": [
+    {
+      "id": "rrf-fusion",
+      "query": "where is reciprocal rank fusion implemented and how are vector and bm25 results combined",
+      "expectedPaths": ["src/core/retriever.ts"],
+      "notes": "Core ranking algorithm; exact term appears in code."
+    },
+    {
+      "id": "gitignore-filtering",
+      "query": "how are files excluded from indexing based on gitignore rules",
+      "expectedPaths": ["src/core/file-filter.ts"],
+      "notes": "Semantic match — 'excluded' vs 'ignored'."
+    },
+    {
+      "id": "voyage-embeddings",
+      "query": "voyage api embedding requests with batching and retry",
+      "expectedPaths": ["src/core/embedder.ts"],
+      "notes": "Provider-specific lookup."
+    },
+    {
+      "id": "sqlite-schema",
+      "query": "sqlite table schema for chunks and the vector index",
+      "expectedPaths": ["src/core/sqlite-store.ts"],
+      "notes": "Storage layer."
+    },
+    {
+      "id": "tree-sitter-chunking",
+      "query": "splitting code into chunks along function and class boundaries with tree-sitter",
+      "expectedPaths": ["src/core/ast-chunker.ts"],
+      "notes": "AST chunking."
+    },
+    {
+      "id": "graph-expansion",
+      "query": "how are related chunks pulled in by following import and call edges at retrieval time",
+      "expectedPaths": ["src/core/graph-expander.ts"],
+      "notes": "Graph consumer at query time."
+    },
+    {
+      "id": "ast-edge-extraction",
+      "query": "extracting import and inheritance edges from the syntax tree per language",
+      "expectedPaths": ["src/core/ast-graph-extractor.ts"],
+      "notes": "New AST extractor — added after the regex replacement."
+    },
+    {
+      "id": "edit-tools",
+      "query": "agent tool that replaces an exact substring in a file with uniqueness check",
+      "expectedPaths": ["src/agent/edit-tools.ts"],
+      "notes": "str-replace tool."
+    },
+    {
+      "id": "license-verify",
+      "query": "offline license key signature verification with ed25519",
+      "expectedPaths": ["src/core/license.ts"],
+      "notes": "Commercial gating."
+    },
+    {
+      "id": "mcp-tools",
+      "query": "registering the codebase retrieval tool on the MCP server",
+      "expectedPaths": ["src/mcp/server.ts"],
+      "notes": "MCP surface."
+    },
+    {
+      "id": "watch-debounce",
+      "query": "debouncing rapid file change events before reindexing",
+      "expectedPaths": ["src/core/file-watcher.ts"],
+      "notes": "Watcher behavior."
+    },
+    {
+      "id": "query-synonyms",
+      "query": "expanding a search query with synonyms like delete remove destroy",
+      "expectedPaths": ["src/core/query-expander.ts"],
+      "notes": "Lexical expansion."
+    },
+    {
+      "id": "context-packing",
+      "query": "merging nearby line ranges and dropping chunks over the character budget when formatting results",
+      "expectedPaths": ["src/core/context-packer.ts"],
+      "notes": "Output packing."
+    },
+    {
+      "id": "recency-boost",
+      "query": "boosting recently committed files in search ranking using git log",
+      "expectedPaths": ["src/core/git-recency.ts"],
+      "notes": "Recency signal."
+    },
+    {
+      "id": "step-budget",
+      "query": "limiting agent tool steps and detecting repeated identical tool calls",
+      "expectedPaths": ["src/agent/step-budget.ts"],
+      "notes": "Loop detection."
+    },
+    {
+      "id": "native-binding-errors",
+      "query": "classifying NODE_MODULE_VERSION mismatch and glibc errors when the sqlite binding fails to load",
+      "expectedPaths": ["src/core/native-binding-error.ts"],
+      "notes": "Diagnostics added with the VSIX fix."
+    },
+    {
+      "id": "freshness-check",
+      "query": "detecting whether the index is stale compared to the working tree and git state",
+      "expectedPaths": ["src/core/freshness.ts"],
+      "notes": "Staleness reporting."
+    },
+    {
+      "id": "history-compaction",
+      "query": "compacting old conversation messages when the token budget is exceeded",
+      "expectedPaths": ["src/agent/utils.ts"],
+      "notes": "compactHistory lives in agent utils."
+    }
+  ]
+}
