@@ -460,7 +460,7 @@
   },
   "dependencies": {
     "@types/markdown-it": "^14.1.2",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.3",
     "highlight.js": "^11.11.1",
     "ignore": "^6.0.0",
