@@ -106,6 +106,24 @@ class HTTPError extends Error {
   constructor(public status: number, public body: string, msg: string) { super(msg); }
 }
 
+/**
+ * True when an embedding failure is an authentication/authorization problem
+ * (bad or missing API key). These are config errors: every subsequent batch
+ * would fail identically, so indexing should abort immediately with a clear
+ * message instead of "resiliently" burning through hundreds of doomed batches.
+ */
+export function isAuthError(err: unknown): boolean {
+  const status = (err as any)?.status ?? (err as any)?.response?.status;
+  // A present numeric status is authoritative: a 500 whose body happens to
+  // echo "HTTP 401" (gateway error pages do this) must NOT classify as auth.
+  if (typeof status === "number") return status === 401 || status === 403;
+  const msg = err instanceof Error ? err.message : String(err);
+  // Matches the providers' real missing-key messages: "VOYAGE_API_KEY is
+  // required...", "OPENAI_API_KEY is required..." (underscore), and any
+  // future "API key is required" phrasing (space).
+  return /HTTP 40[13]\b/.test(msg) || /API[_ ]?KEY is required/i.test(msg);
+}
+
 async function postJSON(url: string, headers: Record<string, string>, body: unknown): Promise<any> {
   const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
   if (!resp.ok) {

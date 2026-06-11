@@ -73,7 +73,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             treeProvider.refresh();
         } catch {}
     };
-    context.subscriptions.push(svc.onReindex(refreshStatus));
+    context.subscriptions.push(svc.onReindex((result) => {
+        // Watch-mode reindexes are background work — failures shouldn't toast
+        // on every save, but they must not be invisible either.
+        if (result.failed?.length) {
+            outputChannel?.appendLine(`[${new Date().toISOString()}] watch reindex: ${result.failed.length} file(s) failed to embed (will retry on next index). ${result.failedReason ?? ""}`);
+        }
+        void refreshStatus();
+    }));
 
     const restartWatching = async () => {
         if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
@@ -81,15 +88,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     };
 
-    const runIndex = async (label: string, op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>) => {
+    const runIndex = async (label: string, op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<import("../../src/core/types").IndexingResult | void>) => {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: label, cancellable: true },
             async (progress, token) => {
                 try {
-                    await op(progress, token);
+                    const result = await op(progress, token);
                     await refreshStatus();
                     const s = await svc.getStatus();
-                    vscode.window.showInformationMessage(`Indexed ${path.basename(s.workspaceRoot)}: ${s.indexedFiles} files (${s.totalChunks} chunks)`);
+                    if (result?.failed?.length) {
+                        // Partial success: be honest about what didn't make it in,
+                        // and that the next index run will retry those files.
+                        vscode.window.showWarningMessage(
+                            `Indexed ${s.indexedFiles} files, but ${result.failed.length} failed to embed and will be retried on the next index. ${result.failedReason ?? ""}`.trim(),
+                        );
+                    } else {
+                        vscode.window.showInformationMessage(`Indexed ${path.basename(s.workspaceRoot)}: ${s.indexedFiles} files (${s.totalChunks} chunks)`);
+                    }
                 } catch (err: any) {
                     if (err instanceof vscode.CancellationError) return;
                     vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
@@ -100,11 +115,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.commands.registerCommand("openContext.indexWorkspace", async () => {
-            await runIndex("Indexing workspace...", async (progress, token) => {
-                await svc.indexWorkspace((status, current, total) => {
+            await runIndex("Indexing workspace...", (progress, token) =>
+                svc.indexWorkspace((status, current, total) => {
                     progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
-                }, token);
-            });
+                }, token),
+            );
         }),
 
         vscode.commands.registerCommand("openContext.selectIndexWorkspace", async () => {
@@ -119,11 +134,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             const dir = picked?.[0]?.fsPath;
             if (!dir) return;
-            await runIndex(`Indexing ${path.basename(dir)}...`, async (progress, token) => {
-                await svc.indexDirectory(dir, (status, current, total) => {
+            await runIndex(`Indexing ${path.basename(dir)}...`, (progress, token) =>
+                svc.indexDirectory(dir, (status, current, total) => {
                     progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
-                }, token);
-            });
+                }, token),
+            );
             await restartWatching();
             chatView.refreshConfig();
         }),
@@ -139,8 +154,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     throw new Error(`Current file is not under the indexed workspace: ${root}`);
                 }
                 const content = await vscode.workspace.fs.readFile(fileUri);
-                await ctx.addFiles([{ path: filePath, contents: new TextDecoder().decode(content) }]);
-                vscode.window.showInformationMessage(`Re-indexed: ${filePath}`);
+                const r = await ctx.addFiles([{ path: filePath, contents: new TextDecoder().decode(content) }]);
+                if (r.failed?.length) {
+                    vscode.window.showWarningMessage(`Failed to embed ${filePath}: ${r.failedReason ?? "embedding error"} — it will be retried on the next index.`);
+                } else {
+                    vscode.window.showInformationMessage(`Re-indexed: ${filePath}`);
+                }
                 treeProvider.refresh();
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Re-index failed: ${err.message}`);
@@ -284,8 +303,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (cfg.get<boolean>("indexOnStartup", true)) {
         vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: "Indexing workspace..." }, async () => {
             try {
-                await svc.indexWorkspace();
+                const r = await svc.indexWorkspace();
                 await refreshStatus();
+                if (r.failed?.length) {
+                    outputChannel?.appendLine(`[${new Date().toISOString()}] startup index: ${r.failed.length} file(s) failed to embed (will retry on next index). ${r.failedReason ?? ""}`);
+                    vscode.window.showWarningMessage(
+                        `Open Context: ${r.failed.length} file(s) failed to embed during startup indexing — they'll be retried on the next index.`,
+                        "Open Output",
+                    ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
+                }
             } catch (err: any) {
                 reportIndexingError(err);
             }
