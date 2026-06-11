@@ -28,7 +28,7 @@ version" — *that is the intended fail mode* until we ship binaries for them.
 - **`engines.vscode` is `^1.103.0`, served by multi-ABI bundling (v0.2).**
   Each platform VSIX ships one `better_sqlite3.node` per supported Electron
   ABI under `dist-native/abi-<N>/`, built by the workflow's
-  `ELECTRON_TARGETS` loop (currently Electron 37.x / 39.x / 42.x — covering
+  `BINDING_TARGETS` loop (currently Electron 37.x / 39.x / 42.x — covering
   stable VS Code 1.103 → current). At activation,
   `NativeBindingSelector` copies the binding matching the running VS Code's
   `process.versions.modules` into better-sqlite3's load path; the copy is
@@ -92,7 +92,7 @@ upstream's Electron diverges from our pin. When that issue lands:
 
 1. Verify the upstream Electron version actually reached a *stable* VS Code
    release (check the release notes' "shell version").
-2. **Append** the new Electron version to `ELECTRON_TARGETS` in
+2. **Append** the new Electron version to `BINDING_TARGETS` in
    `.github/workflows/release-vsix.yml` (don't replace — old ABIs keep
    covering old VS Code), and bump `devDependencies.electron` +
    `scripts.rebuild`'s `-v` flag for local dev builds.
@@ -101,7 +101,7 @@ upstream's Electron diverges from our pin. When that issue lands:
 
 ## Multi-ABI bundling (how it works)
 
-- CI loops `ELECTRON_TARGETS`, running `@electron/rebuild` once per version
+- CI loops `BINDING_TARGETS`, running `@electron/rebuild` once per version
   and stashing each binding at `dist-native/abi-<N>/better_sqlite3.node`
   (ABI numbers from `node-abi`, never hardcoded).
 - `verify-vsix.mjs` fails the build if a packaged VSIX lacks `dist-native`

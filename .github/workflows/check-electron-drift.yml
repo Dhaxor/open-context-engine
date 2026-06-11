@@ -82,7 +82,7 @@ jobs:
                 "",
                 "**Action items:**",
                 "1. Verify the upstream version actually reached stable (release notes shell version).",
-                "2. APPEND the new Electron version to `ELECTRON_TARGETS` in `release-vsix.yml` (keep the old ones - they cover older VS Code), and bump `devDependencies.electron` + the `rebuild` script's `-v` flag for local dev.",
+                "2. APPEND the new runtime target to BINDING_TARGETS in `release-vsix.yml` (keep the old ones - they cover older VS Code), and bump `devDependencies.electron` + the `rebuild` script's `-v` flag for local dev.",
                 "3. Cut a tag and let the release workflow rebuild + republish all 4 platforms. No `engines.vscode` change needed.",
                 "",
                 "_Auto-opened by `.github/workflows/check-electron-drift.yml`._",
