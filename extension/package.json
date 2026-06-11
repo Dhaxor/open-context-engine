@@ -5,6 +5,10 @@
   "version": "0.2.0",
   "publisher": "open-context",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dhaxor/open-context-engine.git"
+  },
   "engines": {
     "vscode": "^1.103.0"
   },
@@ -444,7 +448,7 @@
     "build": "node build.js",
     "watch": "node build.js --watch",
     "lint": "tsc --noEmit",
-    "rebuild": "electron-rebuild -f -w better-sqlite3 -v 42.3.0",
+    "rebuild": "node ./scripts/build-native-local.mjs",
     "package": "npm run rebuild && vsce package",
     "verify-vsix": "node ./scripts/verify-vsix.mjs"
   },

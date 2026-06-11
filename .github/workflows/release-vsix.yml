@@ -135,12 +135,27 @@ jobs:
             KIND="${T%%:*}"; VER="${T##*:}"
             ABI=$(node -p "require('node-abi').getAbi('$VER','$KIND')")
             echo "::group::better-sqlite3 for $KIND $VER (ABI $ABI)"
+            # Clean slate per target: a stale config.gypi from the previous
+            # iteration would defeat the ABI assertion below.
+            rm -rf node_modules/better-sqlite3/build
             if [ "$KIND" = "electron" ]; then
               npx electron-rebuild -f -w better-sqlite3 -v "$VER"
             else
-              # Official upstream prebuild for this Node ABI; falls back to a
-              # source build only if the prebuild is unavailable for this leg.
-              (cd node_modules/better-sqlite3 && npx prebuild-install -r node -t "$VER" -f --verbose || npm run build-release)
+              # Official upstream prebuild for this Node ABI; fall back to
+              # compiling against that version's downloaded headers when no
+              # prebuild exists (12.10 ships none for Node 24). --target is
+              # load-bearing: a bare build-release compiles against the
+              # RUNNER's Node and silently mislabels the ABI.
+              (cd node_modules/better-sqlite3 && (npx prebuild-install -r node -t "$VER" -f --verbose || npm run build-release -- --target="$VER"))
+            fi
+            # If this target went through a source build, config.gypi records
+            # which headers were used — assert they match the ABI we are
+            # about to label this binary with. Prebuilds skip this (no
+            # config.gypi; the download is keyed on the exact ABI already).
+            GYPI=node_modules/better-sqlite3/build/config.gypi
+            if [ -f "$GYPI" ] && ! grep -Eq "\"node_module_version\": $ABI\b" "$GYPI"; then
+              echo "::error::ABI mismatch for $T: built $(grep -Eo '"node_module_version": [0-9]+' "$GYPI"), wanted $ABI"
+              exit 1
             fi
             mkdir -p "dist-native/abi-$ABI"
             cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "dist-native/abi-$ABI/"
@@ -161,7 +176,13 @@ jobs:
 
       - name: Package VSIX (${{ matrix.target }})
         working-directory: extension
-        run: npx vsce package --target ${{ matrix.target }} --out ../artifacts/
+        # vsce does not create the --out directory; without the mkdir it
+        # falls back to treating "../artifacts/" as a literal file path and
+        # dies with ENOTDIR. bash shell so mkdir -p works on the win32 leg.
+        shell: bash
+        run: |
+          mkdir -p ../artifacts
+          npx vsce package --target ${{ matrix.target }} --out ../artifacts/
 
       - name: Verify VSIX contents
         working-directory: extension
