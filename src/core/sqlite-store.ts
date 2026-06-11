@@ -84,7 +84,17 @@ interface ChunkRow {
   contents: string;
 }
 
-const SCHEMA_VERSION = "2";
+// v3: FTS5 switched to porter stemming + camel-split symbol text, and BM25
+// gained column weights. Bumping forces the index rebuild both need.
+const SCHEMA_VERSION = "3";
+
+/** BM25 column weights for (path, symbol, content).
+ *
+ * Content is the noisiest channel: "chunks" appears hundreds of times in
+ * sqlite-store.ts (table names) and drowned out ast-chunker.ts for queries
+ * about chunking — a real eval miss. A file whose PATH or SYMBOLS match the
+ * query is a far stronger signal than one whose body repeats the word. */
+const BM25_WEIGHTS = "5.0, 6.0, 1.0";
 
 export class SqliteStore {
   private db!: BetterSqlite3Database;
@@ -170,7 +180,9 @@ export class SqliteStore {
       `);
     }
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}] distance_metric=cosine)`);
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='unicode61 remove_diacritics 0')`);
+    // Porter stemming folds "chunk/chunks/chunker/chunking" into one stem so
+    // natural-language queries match code identifiers and paths lexically.
+    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='porter unicode61 remove_diacritics 0')`);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS graph_edges (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -260,7 +272,14 @@ export class SqliteStore {
     });
     const rowid = BigInt(info.lastInsertRowid as number);
     this.insertVecStmt.run(rowid, vectorToBlob(chunk.vector));
-    const symbolText = [chunk.symbolName, chunk.parentSymbol].filter(Boolean).join(" ");
+    // Index symbols both verbatim and camel/snake-split: unicode61 keeps
+    // "chunkFile" as one token, so without the split a query for "chunking"
+    // could never lexically reach the chunkFile symbol.
+    const symbolText = [chunk.symbolName, chunk.parentSymbol]
+      .filter(Boolean)
+      .flatMap(s => [s!, splitIdentifierWords(s!)])
+      .filter(Boolean)
+      .join(" ");
     this.insertFtsStmt.run(rowid, chunk.path, symbolText, chunk.contents);
   }
 
@@ -351,9 +370,9 @@ export class SqliteStore {
     const ftsQuery = sanitizeFtsQuery(query);
     if (!ftsQuery) return [];
     const sql = pathPrefix
-      ? `SELECT f.rowid, bm25(chunks_fts) AS score FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid
+      ? `SELECT f.rowid, bm25(chunks_fts, ${BM25_WEIGHTS}) AS score FROM chunks_fts f JOIN chunks c ON c.rowid = f.rowid
          WHERE chunks_fts MATCH ? AND c.path LIKE ? ORDER BY score LIMIT ?`
-      : "SELECT rowid, bm25(chunks_fts) AS score FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?";
+      : `SELECT rowid, bm25(chunks_fts, ${BM25_WEIGHTS}) AS score FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?`;
     let rows: { rowid: number; score: number }[];
     try {
       rows = pathPrefix
@@ -512,6 +531,16 @@ function rowToChunk(r: ChunkRow): Chunk {
     parentSymbol: r.parent_symbol ?? undefined,
     language: r.language ?? undefined,
   };
+}
+
+/** "chunkFile" → "chunk File"; "step_budget" → "step budget". Returns "" when
+ *  the identifier has no internal word boundaries. */
+function splitIdentifierWords(id: string): string {
+  const parts = id
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-]+/g, " ")
+    .trim();
+  return parts.includes(" ") ? parts : "";
 }
 
 function sanitizeFtsQuery(q: string): string {

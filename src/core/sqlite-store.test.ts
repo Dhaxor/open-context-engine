@@ -210,4 +210,48 @@ describe("SqliteStore", () => {
     expect(s2.getChunkCount()).toBe(1);
     s2.close();
   });
+
+  describe("bm25 ranking (porter stemming + column weights)", () => {
+    it("stems query words to match identifier/path morphology", () => {
+      // "chunks" (query) must reach "chunker"/"chunking" (code) — without
+      // stemming these are disjoint tokens and the real ast-chunker.ts
+      // never surfaced for chunking queries.
+      store.add(makeChunk("c1", {
+        path: "src/core/ast-chunker.ts",
+        symbolName: "AstChunker",
+        contents: "class AstChunker { /* chunking code along boundaries */ }",
+      }));
+      const hits = store.bm25Search("split code into chunks", 5);
+      expect(hits.some(h => h.chunk.path === "src/core/ast-chunker.ts")).toBe(true);
+    });
+
+    it("ranks a path/symbol match above heavy content repetition", () => {
+      // store.ts spams "chunk" in its body (table names); chunker.ts matches
+      // on path + symbol. The weighted bm25 must put chunker.ts first.
+      store.add(makeChunk("spam", {
+        path: "src/core/store.ts",
+        symbolName: "Store",
+        contents: Array.from({ length: 60 }, () => "insert into chunks (chunk) values (chunk);").join("\n"),
+      }));
+      store.add(makeChunk("real", {
+        path: "src/core/chunker.ts",
+        symbolName: "CodeChunker",
+        contents: "export class CodeChunker { split(file) { return pieces; } }",
+      }));
+      const hits = store.bm25Search("chunker", 5);
+      expect(hits[0]?.chunk.path).toBe("src/core/chunker.ts");
+    });
+
+    it("camel-split symbols are lexically reachable", () => {
+      // "StepBudget" is one unicode61 token; the split copy ("Step Budget")
+      // lets the stemmed query word "steps" land on the symbol column.
+      store.add(makeChunk("sb", {
+        path: "src/agent/step-budget.ts",
+        symbolName: "StepBudget",
+        contents: "export class StepBudget { remaining() { return 1; } }",
+      }));
+      const hits = store.bm25Search("limiting agent tool steps", 5);
+      expect(hits.some(h => h.chunk.symbolName === "StepBudget")).toBe(true);
+    });
+  });
 });
