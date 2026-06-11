@@ -73,12 +73,21 @@ jobs:
             os: macos-latest
             target_os: darwin
             target_arch: arm64
-          # Windows x64. win32-arm64 is intentionally skipped for v0.1.1 —
-          # see PUBLISHING.md ("Unsupported platforms").
+          # Windows x64. win32-arm64 is intentionally skipped — there is no
+          # sqlite-vec-windows-arm64 npm package, so the VSIX would ship
+          # without vector search. See PUBLISHING.md ("Unsupported platforms").
           - target: win32-x64
             os: windows-latest
             target_os: win32
             target_arch: x64
+          # Linux arm64 — GitHub's native arm64 runner. ubuntu-22.04-arm keeps
+          # the glibc floor at 2.35, matching the x64 leg. No cross-compiling:
+          # the host arch matches the target, so electron-rebuild and npm's
+          # optional-dep platform filter (sqlite-vec-linux-arm64) just work.
+          - target: linux-arm64
+            os: ubuntu-22.04-arm
+            target_os: linux
+            target_arch: arm64
 
     runs-on: ${{ matrix.os }}
     steps:

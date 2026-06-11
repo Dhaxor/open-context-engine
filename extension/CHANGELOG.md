@@ -1,5 +1,9 @@
 # Change Log
 
+## Unreleased
+
+- **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.35 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
+
 ## 0.2.0
 
 **One VSIX now covers VS Code 1.103 → current.** Each platform package bundles a `better_sqlite3.node` per supported Electron ABI (37.x / 39.x / 42.x); at activation the extension selects the one matching your VS Code's runtime. The `engines.vscode` floor drops from `^1.124.0` back to `^1.103.0` — the 0.1.1 restriction existed only because a single binary can't span Electron ABIs, and that constraint is gone. When VS Code ships a new Electron, a target is appended and republished; no floor bump, no stranded users.

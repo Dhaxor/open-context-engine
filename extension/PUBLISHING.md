@@ -16,7 +16,7 @@ constraints behind it.
 | `darwin-x64` | macOS 11+ | Intel | `macos-13` | ✅ Supported until macos-13 retirement (see "Drift") |
 | `darwin-arm64` | macOS 11+ | Apple Silicon | `macos-latest` | ✅ Supported |
 | `win32-arm64` | Windows 11 ARM | arm64 | — | ❌ See "Unsupported platforms" |
-| `linux-arm64` | Linux | arm64 | — | ❌ See "Unsupported platforms" |
+| `linux-arm64` | Linux glibc ≥ 2.35 | arm64 | `ubuntu-22.04-arm` | ✅ Supported |
 | `alpine-*` | musl libc | — | — | ❌ See "Unsupported platforms" |
 
 VS Code Marketplace serves the matching `.vsix` to each client automatically
@@ -53,8 +53,7 @@ guard, so affected users get a specific error message instead of a silent
 
 | Platform | Reason | Workaround |
 |---|---|---|
-| `win32-arm64` | No `sqlite-vec-windows-arm64` build; `better-sqlite3` prebuild gaps | Install the `win32-x64` VSIX manually — Windows-on-ARM runs it under emulation with a perf hit. Or use VS Code's WSL backend with `linux-x64`. |
-| `linux-arm64` | Cross-compile fragility on x64 GitHub runners; awaiting `ubuntu-24.04-arm` capacity | Use `oce` CLI / MCP server on a glibc-based arm64 host directly. |
+| `win32-arm64` | No `sqlite-vec-windows-arm64` package exists — the VSIX would ship without vector search | Install the `win32-x64` VSIX manually — Windows-on-ARM runs it under emulation with a perf hit. Or use VS Code's WSL backend with `linux-arm64`/`linux-x64`. |
 | Alpine / musl | `better-sqlite3` is glibc-linked | Use a glibc-based devcontainer image (debian, ubuntu, fedora). |
 | VS Code < 1.103 | Electron ABI not in the shipped set | Update VS Code to 1.103+, or build locally with `npm run rebuild -v <your electron>`. The activation error names the running ABI and the shipped ABIs. |
 
@@ -71,13 +70,13 @@ code --install-extension ../oce-linux-x64-local.vsix
 
 This is the right loop for smoke-testing changes before pushing a tag.
 
-## CI: build all four supported platforms
+## CI: build all five supported platforms
 
-`.github/workflows/release-vsix.yml` defines a 4-leg matrix. Trigger paths:
+`.github/workflows/release-vsix.yml` defines a 5-leg matrix. Trigger paths:
 
-- **Tag push** (`git tag v0.1.1 && git push origin v0.1.1`) → builds all 4
+- **Tag push** (`git tag v0.1.1 && git push origin v0.1.1`) → builds all 5
   platforms and publishes each to the Marketplace via `VSCE_PAT`.
-- **`workflow_dispatch`** with `publish: false` → builds all 4 without
+- **`workflow_dispatch`** with `publish: false` → builds all 5 without
   publishing. Useful for verifying a release before tagging.
 - **PR touching `extension/**`** → builds `linux-x64` only as a smoke test.
 
@@ -97,7 +96,7 @@ upstream's Electron diverges from our pin. When that issue lands:
    `.github/workflows/release-vsix.yml` (don't replace — old ABIs keep
    covering old VS Code), and bump `devDependencies.electron` +
    `scripts.rebuild`'s `-v` flag for local dev builds.
-3. Tag and let CI rebuild + republish all 4 platforms. No `engines.vscode`
+3. Tag and let CI rebuild + republish all 5 platforms. No `engines.vscode`
    change needed — the floor only moves when you *drop* an old ABI.
 
 ## Multi-ABI bundling (how it works)
