@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCaseMetrics, aggregate, dedupeRanked } from "./metrics";
+import { computeCaseMetrics, aggregate, dedupeRanked, packedContextRecall } from "./metrics";
 
 describe("dedupeRanked", () => {
   it("keeps first occurrence order", () => {
@@ -71,6 +71,57 @@ describe("computeCaseMetrics", () => {
     const zeroK = computeCaseMetrics(["a"], ["a"], 0);
     expect(zeroK.hit).toBe(false);
     expect(Number.isNaN(zeroK.ndcg)).toBe(false);
+  });
+});
+
+describe("packedContextRecall", () => {
+  const packed = [
+    "Relevant context (packed): 2 files, 3 chunks.",
+    "## src/core/retriever.ts",
+    "Symbols: HybridRetriever",
+    "Lines 1-10 (score 0.9):",
+    "    1 │ code",
+    "",
+    "---",
+    "",
+    "## extension/src/extension.ts",
+    "Lines 5-9 (score 0.5):",
+    "    5 │ more",
+  ].join("\n");
+
+  it("finds gold files by their section header", () => {
+    expect(packedContextRecall(packed, ["src/core/retriever.ts"])).toBe(1);
+    expect(packedContextRecall(packed, ["src/core/retriever.ts", "extension/src/extension.ts"])).toBe(1);
+  });
+  it("scores partial presence fractionally", () => {
+    expect(packedContextRecall(packed, ["src/core/retriever.ts", "src/missing.ts"])).toBe(0.5);
+  });
+  it("does not match a short path inside a longer one", () => {
+    // "src/extension.ts" is a suffix of "extension/src/extension.ts" but has
+    // no "## " header of its own.
+    expect(packedContextRecall(packed, ["src/extension.ts"])).toBe(0);
+  });
+  it("matches a header at end-of-string", () => {
+    expect(packedContextRecall("intro\n## last/file.ts", ["last/file.ts"])).toBe(1);
+  });
+  it("empty gold yields 0", () => {
+    expect(packedContextRecall(packed, [])).toBe(0);
+  });
+});
+
+describe("aggregate with context metrics", () => {
+  it("aggregates contextRecall only over cases that have it", () => {
+    const a = { ...computeCaseMetrics(["g"], ["g"], 10), contextRecall: 1 };
+    const b = { ...computeCaseMetrics(["x"], ["g"], 10), contextRecall: 0 };
+    const c = computeCaseMetrics(["g"], ["g"], 10); // no packed evaluation
+    const agg = aggregate([a, b, c]);
+    expect(agg.contextRecall).toBeCloseTo(0.5, 10);
+    expect(agg.contextHitRate).toBeCloseTo(0.5, 10);
+  });
+  it("omits context metrics when no case evaluated packing", () => {
+    const agg = aggregate([computeCaseMetrics(["g"], ["g"], 10)]);
+    expect(agg.contextRecall).toBeUndefined();
+    expect(agg.contextHitRate).toBeUndefined();
   });
 });
 

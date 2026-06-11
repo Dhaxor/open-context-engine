@@ -9,7 +9,7 @@
  * default requests 3x.
  */
 import { SearchResult } from "../core/types";
-import { CaseMetrics, AggregateMetrics, computeCaseMetrics, aggregate, dedupeRanked } from "./metrics";
+import { CaseMetrics, AggregateMetrics, computeCaseMetrics, aggregate, dedupeRanked, packedContextRecall } from "./metrics";
 
 export interface EvalCase {
   /** Stable identifier, used for baseline comparison. */
@@ -50,6 +50,13 @@ export type SearchFn = (query: string) => Promise<SearchResult[]>;
 
 export interface RunEvalOptions {
   k?: number;
+  /**
+   * When provided, each case ALSO runs the full search-and-pack pipeline (the
+   * string actually handed to the LLM) and scores gold-file presence in it as
+   * contextRecall. This is the only metric that can see contributions landing
+   * below the top-k ranking — e.g. graph/symbol expansion.
+   */
+  packedSearch?: (query: string) => Promise<string>;
   /** Invoked after each case completes — lets the CLI stream progress. */
   onCase?: (result: EvalCaseResult, index: number, total: number) => void;
 }
@@ -64,12 +71,17 @@ export async function runEval(search: SearchFn, cases: EvalCase[], opts: RunEval
     try {
       const raw = await search(c.query);
       const rankedFiles = dedupeRanked(raw.map(r => r.chunk.path));
+      const metrics = computeCaseMetrics(rankedFiles, c.expectedPaths, k);
+      if (opts.packedSearch) {
+        const packed = await opts.packedSearch(c.query);
+        metrics.contextRecall = packedContextRecall(packed, c.expectedPaths);
+      }
       result = {
         id: c.id,
         query: c.query,
         expectedPaths: c.expectedPaths,
         retrievedFiles: rankedFiles.slice(0, k),
-        metrics: computeCaseMetrics(rankedFiles, c.expectedPaths, k),
+        metrics,
         elapsedMs: Date.now() - started,
       };
     } catch (err: any) {
@@ -139,6 +151,9 @@ export interface EvalComparison {
     mrr: number;
     ndcgAtK: number;
     hitRate: number;
+    /** Present only when BOTH reports evaluated packed context. */
+    contextRecall?: number;
+    contextHitRate?: number;
   };
   perCase: CaseDelta[];
   improved: number;
@@ -177,6 +192,12 @@ export function compareReports(baseline: EvalReport, current: EvalReport): EvalC
       mrr: curShared.mrr - baseShared.mrr,
       ndcgAtK: curShared.ndcgAtK - baseShared.ndcgAtK,
       hitRate: curShared.hitRate - baseShared.hitRate,
+      ...(curShared.contextRecall !== undefined && baseShared.contextRecall !== undefined
+        ? {
+            contextRecall: curShared.contextRecall - baseShared.contextRecall,
+            contextHitRate: (curShared.contextHitRate ?? 0) - (baseShared.contextHitRate ?? 0),
+          }
+        : {}),
     },
     perCase,
     improved: perCase.filter(d => d.direction === "improved").length,

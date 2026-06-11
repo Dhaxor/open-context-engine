@@ -35,6 +35,17 @@ describe("runEval", () => {
     expect(report.results[0].metrics.firstHitRank).toBe(2);
   });
 
+  it("scores packed-context recall when packedSearch is provided", async () => {
+    const search = async () => [result("src/x.ts")]; // rank miss
+    // ...but the packed pipeline (with expansion) pulls the gold file in.
+    const packedSearch = async () => "summary\n## src/a.ts\nLines 1-3 (score 0.4):\n    1 │ x";
+    const report = await runEval(search, [CASES[0]], { k: 5, packedSearch });
+    expect(report.results[0].metrics.hit).toBe(false);
+    expect(report.results[0].metrics.contextRecall).toBe(1);
+    expect(report.aggregate.contextRecall).toBe(1);
+    expect(report.aggregate.contextHitRate).toBe(1);
+  });
+
   it("captures search errors per-case without aborting the run", async () => {
     const search = async (query: string) => {
       if (query === "first query") throw new Error("provider down");

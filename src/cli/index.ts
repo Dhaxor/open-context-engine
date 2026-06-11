@@ -153,6 +153,7 @@ program.command("eval").description("Score retrieval quality against a labeled q
   .option("-k, --top-k <n>", "Metric cutoff: gold files must rank in the top k unique files", "10")
   .option("--retrieve-k <n>", "Chunks requested per query before files are deduped (default 3x top-k)")
   .option("--no-expand", "Disable symbol/graph expansion — measures what expansion contributes")
+  .option("--no-packed", "Skip the packed-context check (one extra search per case)")
   .option("--no-index", "Skip the incremental index before evaluating (use the index as-is)")
   .option("--out <file>", "Write the full report JSON to this file")
   .option("--baseline <file>", "Compare against a previously saved report and print deltas")
@@ -180,10 +181,14 @@ program.command("eval").description("Score retrieval quality against a labeled q
         cases,
         {
           k,
+          // The packed check runs the REAL search() pipeline (default topK +
+          // packing budget) — gold presence in it is what the LLM actually sees.
+          packedSearch: opts.packed !== false ? (query) => ctx.search(query, undefined, { expandSymbols: expand }) : undefined,
           onCase: (r, i, total) => {
             if (opts.json) return;
             const mark = r.error ? "✗ ERR" : r.metrics.hit ? `✓ @${r.metrics.firstHitRank}` : "✗ miss";
-            console.log(`[${String(i + 1).padStart(2)}/${total}] ${mark.padEnd(7)} ndcg=${r.metrics.ndcg.toFixed(3)} ${r.id}${r.error ? ` (${r.error})` : ""}`);
+            const ctxMark = r.metrics.contextRecall === undefined ? "" : ` ctx=${r.metrics.contextRecall > 0 ? "✓" : "✗"}`;
+            console.log(`[${String(i + 1).padStart(2)}/${total}] ${mark.padEnd(7)} ndcg=${r.metrics.ndcg.toFixed(3)}${ctxMark} ${r.id}${r.error ? ` (${r.error})` : ""}`);
           },
         },
       );
@@ -191,7 +196,8 @@ program.command("eval").description("Score retrieval quality against a labeled q
       if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
       const a = report.aggregate;
       console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}`);
-      console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
+      const ctxLine = a.contextRecall !== undefined ? `  ctx-recall=${a.contextRecall.toFixed(3)}  ctx-hit-rate=${(a.contextHitRate ?? 0).toFixed(3)}` : "";
+      console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}${ctxLine}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
       const misses = report.results.filter(r => !r.metrics.hit);
       if (misses.length) {
         console.log(`\nMisses (${misses.length}):`);
@@ -201,7 +207,8 @@ program.command("eval").description("Score retrieval quality against a labeled q
         const baseline = JSON.parse(await fs.promises.readFile(opts.baseline, "utf8"));
         const cmp = compareReports(baseline, report);
         const sign = (x: number) => (x >= 0 ? "+" : "") + x.toFixed(3);
-        console.log(`\nvs baseline (${cmp.perCase.length} shared cases): ΔnDCG=${sign(cmp.aggregate.ndcgAtK)} ΔMRR=${sign(cmp.aggregate.mrr)} Δrecall=${sign(cmp.aggregate.recallAtK)} Δhit-rate=${sign(cmp.aggregate.hitRate)}`);
+        const ctxDelta = cmp.aggregate.contextRecall !== undefined ? ` Δctx-recall=${sign(cmp.aggregate.contextRecall)} Δctx-hit=${sign(cmp.aggregate.contextHitRate ?? 0)}` : "";
+        console.log(`\nvs baseline (${cmp.perCase.length} shared cases): ΔnDCG=${sign(cmp.aggregate.ndcgAtK)} ΔMRR=${sign(cmp.aggregate.mrr)} Δrecall=${sign(cmp.aggregate.recallAtK)} Δhit-rate=${sign(cmp.aggregate.hitRate)}${ctxDelta}`);
         console.log(`improved: ${cmp.improved}  regressed: ${cmp.regressed}  unchanged: ${cmp.unchanged}`);
         for (const d of cmp.perCase.filter(d => d.direction === "regressed")) console.log(`  ▼ ${d.id} ΔnDCG=${sign(d.ndcg)}`);
         if (cmp.onlyInBaseline.length || cmp.onlyInCurrent.length) {

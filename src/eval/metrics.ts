@@ -22,6 +22,25 @@ export interface CaseMetrics {
   hit: boolean;
   /** 1-based rank of the first gold file, or null when none retrieved. */
   firstHitRank: number | null;
+  /**
+   * Fraction of gold files present in the PACKED context — the formatted
+   * output actually handed to the LLM. Rank metrics can't see contributions
+   * that land below the top-k (e.g. graph/symbol expansion appends after the
+   * core ranking); this can. Undefined when the run didn't evaluate packing.
+   */
+  contextRecall?: number;
+}
+
+/** Which gold paths appear as file sections in a packed-context string. */
+export function packedContextRecall(packed: string, goldPaths: string[]): number {
+  if (!goldPaths.length) return 0;
+  let present = 0;
+  for (const p of goldPaths) {
+    // context-packer renders each file section as a "## <path>" header line.
+    // Anchor on the newline so "## src/a.ts" can't match inside a longer path.
+    if (packed.includes(`## ${p}\n`) || packed.endsWith(`## ${p}`)) present++;
+  }
+  return present / goldPaths.length;
 }
 
 /** Collapse a ranked chunk-path list into ranked unique file paths. */
@@ -74,17 +93,28 @@ export interface AggregateMetrics {
   mrr: number;
   ndcgAtK: number;
   hitRate: number;
+  /** Mean fraction of gold files present in the packed context. Undefined
+   *  when no case in the run evaluated packing. */
+  contextRecall?: number;
+  /** Fraction of cases where at least one gold file made the packed context. */
+  contextHitRate?: number;
 }
 
 export function aggregate(all: CaseMetrics[]): AggregateMetrics {
   const n = all.length;
   if (!n) return { cases: 0, recallAtK: 0, mrr: 0, ndcgAtK: 0, hitRate: 0 };
   const sum = (f: (m: CaseMetrics) => number) => all.reduce((s, m) => s + f(m), 0);
-  return {
+  const out: AggregateMetrics = {
     cases: n,
     recallAtK: sum(m => m.recall) / n,
     mrr: sum(m => m.reciprocalRank) / n,
     ndcgAtK: sum(m => m.ndcg) / n,
     hitRate: sum(m => (m.hit ? 1 : 0)) / n,
   };
+  const withContext = all.filter(m => m.contextRecall !== undefined);
+  if (withContext.length) {
+    out.contextRecall = withContext.reduce((s, m) => s + (m.contextRecall ?? 0), 0) / withContext.length;
+    out.contextHitRate = withContext.filter(m => (m.contextRecall ?? 0) > 0).length / withContext.length;
+  }
+  return out;
 }
