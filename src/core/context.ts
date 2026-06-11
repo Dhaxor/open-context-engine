@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { OpenContextConfig, EmbeddingConfig, SearchConfig, File, Chunk, IndexingResult, SearchResult, FreshnessReport, DEFAULT_EMBEDDING_CONFIG, DEFAULT_SEARCH_CONFIG, EMBEDDING_MODELS } from "./types";
-import { EmbeddingProvider, createEmbeddingProvider } from "./embedder";
+import { EmbeddingProvider, createEmbeddingProvider, isAuthError } from "./embedder";
 import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
 import { AstChunker } from "./ast-chunker";
@@ -43,7 +43,7 @@ export class OpenContext {
     ctx.workspaceRoot = config.workspaceRoot;
     ctx.embeddingConfig = { ...DEFAULT_EMBEDDING_CONFIG, ...config.embedding };
     ctx.searchConfig = { ...DEFAULT_SEARCH_CONFIG, ...config.search };
-    ctx.embedder = createEmbeddingProvider(ctx.embeddingConfig);
+    ctx.embedder = config.embedder ?? createEmbeddingProvider(ctx.embeddingConfig);
     ctx.reranker = createReranker(config.reranker);
     const maxChunkChars = ctx.getMaxChunkChars();
     const fallback = new CodeChunker(config.chunkSize, config.chunkOverlap, maxChunkChars);
@@ -104,11 +104,16 @@ export class OpenContext {
       const start = Date.now();
       const files = await this.fileFilter.collectFiles(this.workspaceRoot, (n) => onProgress?.("collecting", n, 0));
       for (const p of this.store.getIndexedPaths()) this.store.removeByPath(p);
-      await this.embedAndStoreFiles(files, onProgress);
+      const { failed, failedReason } = await this.embedAndStoreFiles(files, onProgress);
       this.queryCache.invalidate();
       this.refreshRecencyScores();
       await this.recordGitState();
-      return { newlyIndexed: files.map(f => f.path), alreadyIndexed: [], removed: [], duration: Date.now() - start };
+      const failedSet = new Set(failed);
+      return {
+        newlyIndexed: files.map(f => f.path).filter(p => !failedSet.has(p)),
+        alreadyIndexed: [], removed: [], duration: Date.now() - start,
+        ...(failed.length ? { failed, failedReason } : {}),
+      };
     });
   }
 
@@ -128,17 +133,26 @@ export class OpenContext {
         if (prev === hash) alreadyIndexed.push(file.path);
         else toIndex.push(file);
       }
-      for (const [p] of known) {
+      // Stale sweep over the union of hashed files AND chunk-table paths: a
+      // file whose embedding failed has chunks but no hash row — if it's
+      // deleted before a successful retry, the hash-only sweep would never
+      // clean its partial chunks out of the index.
+      for (const p of new Set([...known.keys(), ...this.store.getIndexedPaths()])) {
         if (!seen.has(p)) { removed.push(p); this.store.removeByPath(p); }
       }
       for (const f of toIndex) this.store.removeByPath(f.path);
-      await this.embedAndStoreFiles(toIndex, onProgress);
+      const { failed, failedReason } = await this.embedAndStoreFiles(toIndex, onProgress);
       if (toIndex.length || removed.length) {
         this.queryCache.invalidate();
         this.refreshRecencyScores();
       }
       await this.recordGitState();
-      return { newlyIndexed: toIndex.map(f => f.path), alreadyIndexed, removed, duration: Date.now() - start };
+      const failedSet = new Set(failed);
+      return {
+        newlyIndexed: toIndex.map(f => f.path).filter(p => !failedSet.has(p)),
+        alreadyIndexed, removed, duration: Date.now() - start,
+        ...(failed.length ? { failed, failedReason } : {}),
+      };
     });
   }
 
@@ -146,8 +160,13 @@ export class OpenContext {
     return this.withLock(async () => {
       const start = Date.now();
       for (const f of files) this.store.removeByPath(f.path);
-      await this.embedAndStoreFiles(files);
-      return { newlyIndexed: files.map(f => f.path), alreadyIndexed: [], removed: [], duration: Date.now() - start };
+      const { failed, failedReason } = await this.embedAndStoreFiles(files);
+      const failedSet = new Set(failed);
+      return {
+        newlyIndexed: files.map(f => f.path).filter(p => !failedSet.has(p)),
+        alreadyIndexed: [], removed: [], duration: Date.now() - start,
+        ...(failed.length ? { failed, failedReason } : {}),
+      };
     });
   }
 
@@ -157,11 +176,32 @@ export class OpenContext {
     });
   }
 
-  private async embedAndStoreFiles(files: File[], onProgress?: ProgressCb): Promise<void> {
+  /**
+   * Chunk, embed, and store files in bounded windows.
+   *
+   * Resilient by design: an embedding failure poisons only its own window —
+   * those files are reported in `failed`, their hashes are NOT recorded (so
+   * the next incremental index retries exactly them), and the run continues.
+   * Two deliberate exceptions:
+   *  - Auth errors (401/403) abort immediately: every batch would fail the
+   *    same way, and the user needs a clear "fix your API key" signal, not a
+   *    10-minute crawl through hundreds of doomed batches.
+   *  - After MAX_CONSECUTIVE_WINDOW_FAILURES in a row the provider is treated
+   *    as down: remaining files are marked failed without further calls.
+   *
+   * A failed window may leave some of its chunks already stored (the window
+   * embeds in sub-batches). They stay searchable — partial context beats
+   * none — and the retry's removeByPath clears them before re-embedding.
+   */
+  private async embedAndStoreFiles(files: File[], onProgress?: ProgressCb): Promise<{ failed: string[]; failedReason?: string }> {
     // Process files in bounded batches so we never hold the whole repo's chunks
     // and embedding vectors in memory at once — only one FILE_BATCH window.
     const FILE_BATCH = 48;
+    const MAX_CONSECUTIVE_WINDOW_FAILURES = 3;
     let filesDone = 0;
+    const failed: string[] = [];
+    let failedReason: string | undefined;
+    let consecutiveFailures = 0;
     onProgress?.("indexing", 0, files.length);
     for (let fb = 0; fb < files.length; fb += FILE_BATCH) {
       const fileBatch = files.slice(fb, fb + FILE_BATCH);
@@ -188,12 +228,42 @@ export class OpenContext {
           parsed?.dispose();
         }
       }
-      await this.embedAndStoreChunks(chunks);
-      // Record hashes for every file in the batch (including files with no chunks).
-      for (const file of fileBatch) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
+      // The try covers ONLY the embed call. Store writes (upsertFile below,
+      // addBatch inside) indicate local DB trouble, not a skippable provider
+      // blip — letting them propagate keeps "failed = will be retried" honest.
+      let embedErr: any = null;
+      try {
+        await this.embedAndStoreChunks(chunks);
+      } catch (err) {
+        embedErr = err;
+      }
+      if (embedErr) {
+        if (isAuthError(embedErr)) {
+          throw new Error(`Embedding provider rejected the API key (${embedErr?.message ?? embedErr}). Fix the key and re-run the index.`);
+        }
+        failed.push(...fileBatch.map(f => f.path));
+        failedReason = failedReason ?? (embedErr?.message ?? String(embedErr));
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_WINDOW_FAILURES) {
+          // Provider looks down — don't hammer it for the rest of the repo.
+          for (const f of files.slice(fb + FILE_BATCH)) failed.push(f.path);
+          failedReason = `Embedding provider unavailable (${consecutiveFailures} consecutive batch failures). Last error: ${failedReason}`;
+          // Close out the progress stream so UIs don't freeze mid-count;
+          // the result accounts for every file either way.
+          onProgress?.("indexing", files.length, files.length);
+          break;
+        }
+      } else {
+        // Record hashes for every file in the batch (including files with no chunks).
+        for (const file of fileBatch) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
+        // Only a window that actually contacted the provider proves it's
+        // healthy — a zero-chunk window must not reset the circuit breaker.
+        if (chunks.length) consecutiveFailures = 0;
+      }
       filesDone += fileBatch.length;
       onProgress?.("indexing", filesDone, files.length);
     }
+    return { failed, failedReason };
   }
 
   private async embedAndStoreChunks(chunks: Chunk[]): Promise<void> {

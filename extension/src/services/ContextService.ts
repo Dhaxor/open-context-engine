@@ -89,30 +89,33 @@ export class ContextService implements vscode.Disposable {
         return this._context;
     }
 
-    public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
+    public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
             const ctx = await this.getContext();
-            await ctx.incrementalIndex((stage, current, total) => {
+            const result = await ctx.incrementalIndex((stage, current, total) => {
                 if (token?.isCancellationRequested) throw new vscode.CancellationError();
                 onProgress?.(stage, current, total);
             });
-            this._lastIndexError = undefined;
+            // Partial failures aren't thrown — record them so the health panel shows why.
+            this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
+            return result;
         } catch (err: any) {
             this._lastIndexError = err?.message ?? String(err);
             throw err;
         }
     }
 
-    public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<void> {
+    public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
             await this.setIndexWorkspaceRoot(dirPath);
             const config = await this.getConfigForPath(this.resolveWorkspaceRoot());
             this._context = await OpenContext.create(config);
-            await this._context.indexWorkspace((stage, current, total) => {
+            const result = await this._context.indexWorkspace((stage, current, total) => {
                 if (token?.isCancellationRequested) throw new vscode.CancellationError();
                 onProgress?.(stage, current, total);
             });
-            this._lastIndexError = undefined;
+            this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
+            return result;
         } catch (err: any) {
             this._lastIndexError = err?.message ?? String(err);
             throw err;
@@ -125,7 +128,12 @@ export class ContextService implements vscode.Disposable {
         const config = await this.getWorkspaceConfig();
         this._watcher = new FileWatcher(ctx, config);
         await this._watcher.start({
-            onReindex: (result) => this._onReindex.fire(result),
+            onReindex: (result) => {
+                // Keep the health panel honest in watch mode: a degraded
+                // provider mid-session shows as warn; a clean reindex clears it.
+                this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
+                this._onReindex.fire(result);
+            },
             onError: (err) => console.error("[FileWatcher]", err),
         });
     }

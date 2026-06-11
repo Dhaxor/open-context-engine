@@ -78,12 +78,13 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
   // Bring the index up to date and keep it live, without blocking startup.
   void liveIndex(ctx, config, {
     watch: opts.watch ?? true,
-    onReindex: (r) => log(`reindexed: +${r.newlyIndexed.length} ~${r.removed.length} removed (${r.duration}ms)`),
+    onReindex: (r) => log(`reindexed: +${r.newlyIndexed.length} ~${r.removed.length} removed (${r.duration}ms)${r.failed?.length ? ` — ${r.failed.length} FAILED to embed (will retry next index): ${r.failedReason ?? ""}` : ""}`),
     onError: (e) => log(`watch error: ${e.message}`),
   })
     .then(({ result, watcher: w }) => {
       watcher = w;
       log(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
+      if (result.failed?.length) log(`WARNING: ${result.failed.length} file(s) failed to embed — they will be retried on the next index. ${result.failedReason ?? ""}`);
     })
     .catch((e) => log(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));
 }
