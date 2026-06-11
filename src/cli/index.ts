@@ -107,6 +107,75 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
   p();
 });
 
+program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)")
+  .requiredOption("--cases <file>", "JSON file of eval cases: [{ id, query, expectedPaths: [..] }]")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("-p, --provider <provider>", "Embedding provider")
+  .option("-m, --model <model>", "Embedding model")
+  .option("--api-key <key>", "API key")
+  .option("-k, --top-k <n>", "Metric cutoff: gold files must rank in the top k unique files", "10")
+  .option("--retrieve-k <n>", "Chunks requested per query before files are deduped (default 3x top-k)")
+  .option("--no-expand", "Disable symbol/graph expansion — measures what expansion contributes")
+  .option("--no-index", "Skip the incremental index before evaluating (use the index as-is)")
+  .option("--out <file>", "Write the full report JSON to this file")
+  .option("--baseline <file>", "Compare against a previously saved report and print deltas")
+  .option("--json", "Print the report as JSON to stdout (suppresses the table)")
+  .action(async (opts: any) => {
+    const fs = await import("fs");
+    const { runEval, parseEvalCases, compareReports } = await import("../eval/runner");
+    const cases = parseEvalCases(JSON.parse(await fs.promises.readFile(opts.cases, "utf8")));
+    const k = Math.max(1, Number(opts.topK));
+    const retrieveK = opts.retrieveK ? Math.max(k, Number(opts.retrieveK)) : k * 3;
+    const ctx = await OpenContext.create(resolveConfig(opts));
+    try {
+      if (opts.index !== false) {
+        process.stderr.write("Refreshing index...\n");
+        await ctx.incrementalIndex((s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `));
+        process.stderr.write("\n");
+      }
+      if (!ctx.getChunkCount()) {
+        console.error("Index is empty — run 'oce index' first or drop --no-index.");
+        process.exit(1);
+      }
+      const expand = opts.expand !== false;
+      const report = await runEval(
+        (query) => ctx.searchRaw(query, retrieveK, { expandSymbols: expand }),
+        cases,
+        {
+          k,
+          onCase: (r, i, total) => {
+            if (opts.json) return;
+            const mark = r.error ? "✗ ERR" : r.metrics.hit ? `✓ @${r.metrics.firstHitRank}` : "✗ miss";
+            console.log(`[${String(i + 1).padStart(2)}/${total}] ${mark.padEnd(7)} ndcg=${r.metrics.ndcg.toFixed(3)} ${r.id}${r.error ? ` (${r.error})` : ""}`);
+          },
+        },
+      );
+      if (opts.out) await fs.promises.writeFile(opts.out, JSON.stringify(report, null, 2));
+      if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
+      const a = report.aggregate;
+      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}`);
+      console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
+      const misses = report.results.filter(r => !r.metrics.hit);
+      if (misses.length) {
+        console.log(`\nMisses (${misses.length}):`);
+        for (const m of misses) console.log(`  ${m.id}: expected ${m.expectedPaths.join(", ")} — got [${m.retrievedFiles.slice(0, 3).join(", ")}${m.retrievedFiles.length > 3 ? ", …" : ""}]`);
+      }
+      if (opts.baseline) {
+        const baseline = JSON.parse(await fs.promises.readFile(opts.baseline, "utf8"));
+        const cmp = compareReports(baseline, report);
+        const sign = (x: number) => (x >= 0 ? "+" : "") + x.toFixed(3);
+        console.log(`\nvs baseline (${cmp.perCase.length} shared cases): ΔnDCG=${sign(cmp.aggregate.ndcgAtK)} ΔMRR=${sign(cmp.aggregate.mrr)} Δrecall=${sign(cmp.aggregate.recallAtK)} Δhit-rate=${sign(cmp.aggregate.hitRate)}`);
+        console.log(`improved: ${cmp.improved}  regressed: ${cmp.regressed}  unchanged: ${cmp.unchanged}`);
+        for (const d of cmp.perCase.filter(d => d.direction === "regressed")) console.log(`  ▼ ${d.id} ΔnDCG=${sign(d.ndcg)}`);
+        if (cmp.onlyInBaseline.length || cmp.onlyInCurrent.length) {
+          console.log(`(cases only in baseline: ${cmp.onlyInBaseline.length}; only in current: ${cmp.onlyInCurrent.length} — excluded from deltas)`);
+        }
+      }
+    } finally {
+      ctx.close();
+    }
+  });
+
 program.command("multi-search <query>").description("Search across multiple repositories at once (Team license required)")
   .option("--repos <paths>", "Comma-separated repo paths to search")
   .option("-p, --provider <provider>", "Embedding provider")

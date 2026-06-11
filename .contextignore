@@ -1,0 +1,4 @@
+# Files excluded from the search index (same syntax as .gitignore).
+# Eval gold sets map queries to their answers — indexing them contaminates
+# the very rankings they measure.
+eval/

@@ -1,5 +1,9 @@
 export { OpenContext } from "./core/context";
 export { FileWatcher } from "./core/file-watcher";
+export { runEval, parseEvalCases, compareReports } from "./eval/runner";
+export type { EvalCase, EvalCaseResult, EvalReport, EvalComparison, SearchFn } from "./eval/runner";
+export { computeCaseMetrics, aggregate as aggregateEvalMetrics, dedupeRanked } from "./eval/metrics";
+export type { CaseMetrics, AggregateMetrics } from "./eval/metrics";
 export { liveIndex, createLiveContext } from "./core/live-index";
 export type { LiveIndexOptions, LiveIndexHandle } from "./core/live-index";
 export { CodeChunker } from "./core/chunker";
