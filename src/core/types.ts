@@ -35,7 +35,17 @@ export interface SearchResult {
   rerankScore?: number;
 }
 
-export interface IndexingResult { newlyIndexed: string[]; alreadyIndexed: string[]; removed: string[]; duration: number; }
+export interface IndexingResult {
+  newlyIndexed: string[];
+  alreadyIndexed: string[];
+  removed: string[];
+  duration: number;
+  /** Files whose embedding failed this run. Their hashes are NOT recorded, so
+   *  the next incremental index retries exactly these. Absent/empty = clean run. */
+  failed?: string[];
+  /** First failure message, for surfacing to the user. */
+  failedReason?: string;
+}
 export interface OpenContextState { version: 1; files: FileIndexEntry[]; storePath: string; workspaceRoot: string; lastSynced: string; embeddingProvider: string; embeddingModel: string; embeddingDimension: number; }
 export interface FileIndexEntry { path: string; hash: string; chunkIds: string[]; lastModified: number; }
 export interface GitState { available: boolean; branch?: string; commit?: string; gitDir?: string; }
@@ -69,6 +79,10 @@ export interface SearchConfig {
 export interface OpenContextConfig {
   workspaceRoot: string;
   embedding: EmbeddingConfig;
+  /** Bring-your-own embedding provider. When set, `embedding` is only used for
+   *  bookkeeping (provider/model names in status); all embed calls go here.
+   *  Type-only import — no runtime cycle with embedder.ts. */
+  embedder?: import("./embedder").EmbeddingProvider;
   reranker?: RerankerConfig;
   search?: Partial<SearchConfig>;
   storePath?: string;

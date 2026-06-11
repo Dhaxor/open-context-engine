@@ -43,6 +43,11 @@ program.command("index").description("Index workspace").option("-w, --workspace 
   const ctx = await OpenContext.create(resolveConfig(opts));
   console.log("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`));
   console.log(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
+  if (r.failed?.length) {
+    console.error(`\n⚠ ${r.failed.length} file(s) failed to embed and will be retried on the next index run.`);
+    if (r.failedReason) console.error(`  Reason: ${r.failedReason}`);
+    process.exitCode = 1;
+  }
 });
 
 program.command("search <query>").description("Search codebase").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").action(async (query, opts) => { console.log(await (await OpenContext.create(resolveConfig(opts))).search(query)); });
@@ -55,7 +60,7 @@ program.command("watch").description("Index the workspace and keep it live as fi
   console.log(`Indexing ${config.workspaceRoot} ...`);
   const handle = await createLiveContext(config, {
     onProgress: (s, c, t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}   `),
-    onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks`),
+    onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks${r.failed?.length ? ` | ⚠ ${r.failed.length} failed (will retry)` : ""}`),
     onError: (e) => console.error(`\n[watch error] ${e.message}`),
   });
   console.log(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
@@ -74,9 +79,14 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     const { result, watcher: w } = await liveIndex(ctx, config, {
       watch: !!opts.watch,
       onProgress: (s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `),
+      onReindex: (r) => { if (r.failed?.length) process.stderr.write(`\n[watch] ⚠ ${r.failed.length} file(s) failed to embed (will retry on next index): ${r.failedReason ?? ""}\n`); },
+      onError: (e) => process.stderr.write(`\n[watch error] ${e.message}\n`),
     });
     watcher = w;
     process.stderr.write(`\rIndexed ${ctx.getChunkCount()} chunks (+${result.newlyIndexed.length} new)${watcher ? "; watching for changes" : ""}.\n`);
+    if (result.failed?.length) {
+      process.stderr.write(`⚠ ${result.failed.length} file(s) failed to embed — answers may miss context until the next index retries them. ${result.failedReason ?? ""}\n`);
+    }
   }
   const agent = new ContextAgent({
     provider: (opts.provider || "openai") as LLMProvider,
