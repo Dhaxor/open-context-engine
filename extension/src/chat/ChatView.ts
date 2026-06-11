@@ -65,6 +65,10 @@ export class ChatView implements vscode.WebviewViewProvider {
         return this._review;
     }
 
+    public getAgentService(): AgentService {
+        return this._agent;
+    }
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         _context: vscode.WebviewViewResolveContext,
@@ -488,6 +492,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                 onCompaction: (info) => post({ type: "compaction", dropped: info.dropped }),
                 onStep: (info) => post({ type: "agent_step", step: info.step, status: info.status }),
                 onSources: (files) => post({ type: "sources", files }),
+                onModelSelected: (tier) => post({ type: "model_routed", tier }),
                 onDone: () => { post({ type: "done" }); this._busy = false; flush(); },
                 onError: (err) => { post({ type: "error", text: err.message }); this._busy = false; flush(); },
             }, this._abort.signal);

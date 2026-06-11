@@ -69,7 +69,23 @@ program.command("watch").description("Index the workspace and keep it live as fi
   process.on("SIGTERM", stop);
 });
 
-program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model", "gpt-4o").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--allow-shell", "Enable the run-command shell tool (off by default)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").action(async (opts) => {
+program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model (default: provider-appropriate)").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--allow-shell", "Enable the run-command shell tool (off by default)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").option("--route", "Route each query to a cost-appropriate model tier (fast/standard/reasoning)").option("--memory", "Remember codebase insights across sessions (.open-context/memories.json)").action(async (opts) => {
+  // Routing config is validated up front — before the (potentially long)
+  // index run — so `-p google --route` fails in milliseconds, not minutes.
+  const provider = (opts.provider || "openai") as LLMProvider;
+  let router: import("../agent/model-router").ModelRouter | undefined;
+  if (opts.route) {
+    try {
+      const { ModelRouter, defaultRoutingConfig } = await import("../agent/model-router");
+      // No commander default for --llm-model: only an EXPLICIT model should
+      // override the routed standard tier (a hardcoded gpt-4o default used to
+      // silently hijack the anthropic standard tier).
+      router = new ModelRouter(defaultRoutingConfig(provider, { apiKey: opts.apiKey, standardModel: opts.llmModel }));
+    } catch (e: any) {
+      console.error(`--route: ${e?.message ?? e}`);
+      process.exit(1);
+    }
+  }
   const config = resolveConfig(opts);
   const ctx = await OpenContext.create(config);
   let watcher: import("../core/file-watcher").FileWatcher | null = null;
@@ -88,15 +104,26 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
       process.stderr.write(`⚠ ${result.failed.length} file(s) failed to embed — answers may miss context until the next index retries them. ${result.failedReason ?? ""}\n`);
     }
   }
+  let memory: import("../agent/session-memory").SessionMemory | undefined;
+  if (opts.memory) {
+    const { SessionMemory } = await import("../agent/session-memory");
+    const pathMod = await import("path");
+    memory = new SessionMemory({ storePath: config.storePath || pathMod.join(config.workspaceRoot, ".open-context") });
+  }
+  const FALLBACK_MODEL: Record<string, string> = { openai: "gpt-4o", anthropic: "claude-sonnet-4-6" };
   const agent = new ContextAgent({
-    provider: (opts.provider || "openai") as LLMProvider,
-    model: opts.llmModel || "gpt-4o",
+    provider,
+    model: opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o",
     apiKey: opts.apiKey,
     tools: defaultAgentTools({ context: ctx, includeEdits: !!opts.allowEdits, shell: !!opts.allowShell }),
+    router,
+    memory,
+    memorySource: "cli-agent",
   });
-  process.stderr.write(`Tools: codebase-retrieval, list-files, read-file${opts.allowEdits ? ", edits" : ""}${opts.allowShell ? ", run-command" : ""}.\n`);
+  process.stderr.write(`Tools: codebase-retrieval, list-files, read-file${opts.allowEdits ? ", edits" : ""}${opts.allowShell ? ", run-command" : ""}.${opts.route ? " Routing: on." : ""}${opts.memory ? ` Memory: on (${memory ? "loaded " + memory.getAll().length + " entries" : ""}).` : ""}\n`);
   const stream = (ev: any) => {
     if (ev.type === "text") process.stdout.write(ev.text);
+    else if (ev.type === "model_selected") process.stderr.write(`[routed: ${ev.tier.name} → ${ev.tier.model}]\n`);
     else if (ev.type === "tool_call") process.stdout.write(`\n[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);
     else if (ev.type === "tool_result") process.stdout.write(`[tool ${ev.toolResult.name} result: ${ev.toolResult.result.length} chars]\n`);
     else if (ev.type === "retry") process.stdout.write(`\n[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);

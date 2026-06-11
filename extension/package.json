@@ -121,6 +121,17 @@
         "icon": "$(discard)"
       },
       {
+        "command": "openContext.showMemories",
+        "title": "Show Remembered Insights",
+        "category": "Open Context",
+        "icon": "$(notebook)"
+      },
+      {
+        "command": "openContext.clearMemories",
+        "title": "Clear Remembered Insights",
+        "category": "Open Context"
+      },
+      {
         "command": "openContext.activateLicense",
         "title": "Activate License",
         "category": "Open Context",
@@ -369,6 +380,26 @@
           "type": "number",
           "default": 60000,
           "description": "Default timeout for each shell command in milliseconds (1000..300000)"
+        },
+        "openContext.agent.routing.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable — your configured `openContext.llm.model` is the standard tier."
+        },
+        "openContext.agent.routing.fastModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the fast tier (empty = provider default, e.g. claude-haiku-4-5 / gpt-5.4-mini)"
+        },
+        "openContext.agent.routing.reasoningModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the reasoning tier (empty = provider default, e.g. claude-opus-4-7)"
+        },
+        "openContext.agent.memory.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Remember codebase insights across chat sessions (stored locally in `.open-context/memories.json`). Relevant memories are injected into the agent's context per query."
         },
         "openContext.agent.webSearch.enabled": {
           "type": "boolean",

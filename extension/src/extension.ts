@@ -230,6 +230,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             chatView.refreshLicense();
         }),
 
+        vscode.commands.registerCommand("openContext.showMemories", async () => {
+            try {
+                const ctx = await svc.getContext();
+                const memPath = path.join(ctx.getWorkspaceRoot(), ".open-context", "memories.json");
+                const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(memPath));
+                await vscode.window.showTextDocument(doc, { preview: true });
+            } catch {
+                vscode.window.showInformationMessage("No memories stored yet for this workspace.");
+            }
+        }),
+
+        vscode.commands.registerCommand("openContext.clearMemories", async () => {
+            const pick = await vscode.window.showWarningMessage(
+                "Clear all remembered codebase insights for this workspace?",
+                { modal: true },
+                "Clear",
+            );
+            if (pick !== "Clear") return;
+            let cleared = chatView.getAgentService().clearMemories();
+            if (cleared === null) {
+                // Agent (and its memory) not built this session — clear the file directly.
+                try {
+                    const ctx = await svc.getContext();
+                    const memPath = path.join(ctx.getWorkspaceRoot(), ".open-context", "memories.json");
+                    await vscode.workspace.fs.delete(vscode.Uri.file(memPath));
+                    cleared = -1;
+                } catch { cleared = 0; }
+            }
+            vscode.window.showInformationMessage(cleared === 0 ? "No memories to clear." : "Memories cleared.");
+        }),
+
         vscode.commands.registerCommand("openContext.undoLastEdit", async () => {
             try {
                 const reverted = await reviewService.undoLast();

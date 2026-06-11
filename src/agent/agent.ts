@@ -96,7 +96,7 @@ export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
 }
 
 export class ContextAgent {
-  private caller: LLMCaller;
+  private caller: LLMCaller | null = null;
   private tools: Map<string, ToolDefinition> = new Map();
   private messages: AgentMessage[] = [];
   private system: string;
@@ -105,6 +105,9 @@ export class ContextAgent {
   private maxToolResultChars: number;
   private maxRetries: number;
   private guidelinesProvider?: (query: string) => string | null;
+  private router?: import("./model-router").ModelRouter;
+  private memory?: import("./session-memory").SessionMemory;
+  private memorySource: string;
 
   constructor(config: AgentConfig) {
     for (const t of config.tools) this.tools.set(t.name, t);
@@ -114,11 +117,18 @@ export class ContextAgent {
     this.maxToolResultChars = config.maxToolResultChars ?? 24_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.guidelinesProvider = config.guidelinesProvider;
-    const apiKey = config.apiKey ?? envKey(config.provider);
-    if (!apiKey) throw new Error(`Missing API key for provider ${config.provider}`);
-    if (config.provider === "openai") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
-    else if (config.provider === "anthropic") this.caller = new AnthropicCaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
-    else throw new Error(`Provider ${config.provider} not yet supported`);
+    this.router = config.router;
+    this.memory = config.memory;
+    this.memorySource = config.memorySource ?? "agent";
+    if (!this.router) {
+      // No router: a single fixed caller is built up front, as before. With a
+      // router, callers are created lazily per tier inside the router itself.
+      const apiKey = config.apiKey ?? envKey(config.provider);
+      if (!apiKey) throw new Error(`Missing API key for provider ${config.provider}`);
+      if (config.provider === "openai") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
+      else if (config.provider === "anthropic") this.caller = new AnthropicCaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
+      else throw new Error(`Provider ${config.provider} not yet supported`);
+    }
   }
 
   getMessages(): readonly AgentMessage[] { return this.messages; }
@@ -127,6 +137,17 @@ export class ContextAgent {
   loadMessages(messages: AgentMessage[]): void { this.messages = [...messages]; }
 
   async run(query: string, options: AgentRunOptions = {}): Promise<string> {
+    // Pick the caller once per run: routed by query complexity when a router
+    // is configured, the fixed caller otherwise. Routing happens BEFORE the
+    // user message is appended so conversation depth reflects prior turns.
+    let caller: LLMCaller;
+    if (this.router) {
+      const routed = this.router.getCallerForQuery(query, this.messages);
+      caller = routed.caller;
+      options.onStream?.({ type: "model_selected", tier: { name: routed.tier.name, provider: routed.tier.provider, model: routed.tier.model } });
+    } else {
+      caller = this.caller!;
+    }
     this.messages.push({ role: "user", content: query });
     const budget = new StepBudget(query, {
       baseSimple: this.maxSteps,
@@ -139,7 +160,7 @@ export class ContextAgent {
       this.compactIfNeeded(options);
       const systemWithGuidelines = this.buildSystemPrompt(query);
       const resp = await withRetry(
-        () => this.caller.call(this.messages, [...this.tools.values()], systemWithGuidelines, options.onStream, options.signal),
+        () => caller.call(this.messages, [...this.tools.values()], systemWithGuidelines, options.onStream, options.signal),
         {
           maxRetries: this.maxRetries,
           signal: options.signal,
@@ -153,6 +174,10 @@ export class ContextAgent {
       });
       if (!resp.toolCalls.length) {
         options.onStream?.({ type: "step_end", step });
+        // Final answer: harvest durable codebase insights into session memory.
+        if (this.memory && resp.text) {
+          try { this.memory.extractFacts(resp.text, this.memorySource); } catch {}
+        }
         return resp.text;
       }
       let lastResultLength = 0;
@@ -191,10 +216,17 @@ export class ContextAgent {
   }
 
   private buildSystemPrompt(query: string): string {
-    if (!this.guidelinesProvider) return this.system;
-    const guidelines = this.guidelinesProvider(query);
-    if (!guidelines) return this.system;
-    return `${this.system}\n\n## Project Guidelines\n${guidelines}`;
+    let prompt = this.system;
+    const guidelines = this.guidelinesProvider?.(query);
+    if (guidelines) prompt += `\n\n## Project Guidelines\n${guidelines}`;
+    if (this.memory) {
+      try {
+        // formatForSystemPrompt returns "" when nothing relevant is remembered.
+        const remembered = this.memory.formatForSystemPrompt(query);
+        if (remembered) prompt += `\n\n${remembered}`;
+      } catch {}
+    }
+    return prompt;
   }
 
   private compactIfNeeded(options: AgentRunOptions): void {
