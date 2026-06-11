@@ -65,13 +65,32 @@ try {
   const vecSuffix = targetOs === "win32" ? "dll" : targetOs === "darwin" ? "dylib" : "so";
 
   expectedBins.push({
-    label: "better-sqlite3",
+    label: "better-sqlite3 (default)",
     expected: path.join(extensionRoot, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node"),
   });
   expectedBins.push({
     label: `sqlite-vec (${sqliteVecPkgName})`,
     expected: path.join(extensionRoot, "node_modules", sqliteVecPkgName, `vec0.${vecSuffix}`),
   });
+
+  // Multi-ABI bundle: one better_sqlite3.node per supported Electron ABI.
+  // A packaged VSIX without dist-native/abi-* would make the runtime selector
+  // silently no-op — only one VS Code Electron line would work.
+  const nativeDir = path.join(extensionRoot, "dist-native");
+  const abiDirs = fs.existsSync(nativeDir)
+    ? fs.readdirSync(nativeDir).filter(n => /^abi-\d+$/.test(n))
+    : [];
+  if (!abiDirs.length) {
+    console.error("FAIL  dist-native: no abi-* directories in the VSIX — multi-ABI bundle missing.");
+    process.exit(1);
+  }
+  console.log(`OK    dist-native: shipping ABIs ${abiDirs.map(d => d.slice(4)).join(", ")}`);
+  for (const dirName of abiDirs) {
+    expectedBins.push({
+      label: `better-sqlite3 (${dirName})`,
+      expected: path.join(nativeDir, dirName, "better_sqlite3.node"),
+    });
+  }
 
   let failed = false;
   for (const { label, expected } of expectedBins) {

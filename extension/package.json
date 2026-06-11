@@ -2,11 +2,11 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "AI-powered codebase indexing, semantic search, and context-aware chat",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "open-context",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.124.0"
+    "vscode": "^1.103.0"
   },
   "categories": [
     "Programming Languages",
@@ -451,9 +451,10 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.124.0",
+    "@types/vscode": "^1.103.0",
     "@vscode/vsce": "^3.6.0",
     "electron": "42.3.0",
+    "node-abi": "^4.12.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
   },
