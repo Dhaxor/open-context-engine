@@ -23,7 +23,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read our pinned Electron version
         id: ours
@@ -53,7 +53,7 @@ jobs:
 
       - name: Compare and report
         if: steps.ours.outputs.version != '' && steps.upstream.outputs.main != '' && steps.ours.outputs.version != steps.upstream.outputs.main
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           OURS: ${{ steps.ours.outputs.version }}
           UPSTREAM: ${{ steps.upstream.outputs.main }}

@@ -91,10 +91,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js 22.16.0
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Pinned exact: setup-node's "22.x" floats with new releases, which
           # broke deterministic builds before. Bump in lockstep with @electron/
@@ -156,7 +156,7 @@ jobs:
           node ./scripts/verify-vsix.mjs "$VSIX" "${{ matrix.target }}"
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vsix-${{ matrix.target }}
           path: artifacts/*.vsix
@@ -173,9 +173,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22.16.0"
 
@@ -183,7 +183,7 @@ jobs:
         run: npm install -g @vscode/vsce@^3.6.0
 
       - name: Download all VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: vsix-*
           path: artifacts
