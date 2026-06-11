@@ -1,6 +1,9 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { ContextService } from "./ContextService";
 import { ContextAgent, defaultAgentTools } from "../../../src/agent/agent";
+import { ModelRouter, defaultRoutingConfig } from "../../../src/agent/model-router";
+import { SessionMemory } from "../../../src/agent/session-memory";
 import { EditProposal, LLMProvider, StreamEvent, ToolCall } from "../../../src/agent/types";
 import { VSCodeEditApplier } from "./VSCodeEditApplier";
 
@@ -23,6 +26,7 @@ export interface AgentEvents {
     onCompaction?: (info: CompactionInfo) => void;
     onStep?: (info: { step: number; status: "running" | "complete" }) => void;
     onSources?: (files: { path: string; lines?: string }[]) => void;
+    onModelSelected?: (tier: { name: string; provider: string; model: string }) => void;
     onDone: () => void;
     onError: (err: Error) => void;
 }
@@ -36,6 +40,12 @@ const DEFAULT_LLM_MODEL: Record<string, string> = {
 export class AgentService {
     private agent: ContextAgent | null = null;
     private currentProviderKey = "";
+    private memoryRef: SessionMemory | null = null;
+
+    /** Clear the cached session memory (and its file). Returns entries removed, or null when memory is off/unbuilt. */
+    clearMemories(): number | null {
+        return this.memoryRef ? this.memoryRef.clearAll() : null;
+    }
 
     async run(query: string, events: AgentEvents, signal?: AbortSignal): Promise<void> {
         try {
@@ -75,6 +85,8 @@ export class AgentService {
                         events.onStep?.({ step: ev.step ?? 0, status: "running" });
                     } else if (ev.type === "step_end") {
                         events.onStep?.({ step: ev.step ?? 0, status: "complete" });
+                    } else if (ev.type === "model_selected" && ev.tier) {
+                        events.onModelSelected?.(ev.tier);
                     }
                 },
             });
@@ -107,13 +119,32 @@ export class AgentService {
         const shellTimeoutMs = cfg.get<number>("agent.shell.timeoutMs", 60000);
         const webSearchEnabled = cfg.get<boolean>("agent.webSearch.enabled", true);
         const webSearchKey = webSearchEnabled ? await svc.getWebSearchApiKey() : undefined;
+        const routingEnabled = cfg.get<boolean>("agent.routing.enabled", false);
+        const routingFast = cfg.get<string>("agent.routing.fastModel", "");
+        const routingReasoning = cfg.get<string>("agent.routing.reasoningModel", "");
+        const memoryEnabled = cfg.get<boolean>("agent.memory.enabled", true);
+        const maxTokens = cfg.get<number>("agent.maxTokens", 4096);
         const ctx = await svc.getContext();
         const key = `${provider}|${model}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
-        const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}`;
+        const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}`;
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
+        let router: ModelRouter | undefined;
+        if (routingEnabled && (provider === "openai" || provider === "anthropic")) {
+            router = new ModelRouter(defaultRoutingConfig(provider, {
+                apiKey,
+                standardModel: model,
+                fastModel: routingFast || undefined,
+                reasoningModel: routingReasoning || undefined,
+                maxTokens,
+            }));
+        }
+        const memory = memoryEnabled
+            ? new SessionMemory({ storePath: path.join(ctx.getWorkspaceRoot(), ".open-context") })
+            : undefined;
+        this.memoryRef = memory ?? null;
         const applier = new VSCodeEditApplier(ctx.getWorkspaceRoot());
         this.editForwarder = events.onEdit;
         this.agent = new ContextAgent({
@@ -125,6 +156,9 @@ export class AgentService {
             historyTokenBudget: cfg.get<number>("agent.historyTokenBudget", 120000),
             maxToolResultChars: cfg.get<number>("agent.maxToolResultChars", 24000),
             maxRetries: cfg.get<number>("agent.maxRetries", 3),
+            router,
+            memory,
+            memorySource: "vscode-agent",
             tools: defaultAgentTools({
                 context: ctx,
                 applier,

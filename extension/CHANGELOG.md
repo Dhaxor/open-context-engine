@@ -17,6 +17,9 @@ Smaller things:
 
 ## Unreleased
 
+- **Session memory (on by default)** — the agent now remembers codebase insights across chat sessions, stored locally in `.open-context/memories.json`. Relevant memories ride along in the agent's context per query. Disable with `openContext.agent.memory.enabled`.
+- **Model routing (opt-in)** — `openContext.agent.routing.enabled` routes each query to a cost-appropriate tier: quick lookups go to a fast model (e.g. Haiku), multi-file/analytical work to the strongest (e.g. Opus), everything else to your configured model. Tier models are overridable; the chat shows which tier each turn used.
+
 - **Smooth streaming render** — agent responses no longer flicker. The chat bubble keeps a stable rendered prefix (the *committed* markdown) and a live plain-text *tail* that grows by single text-node append per token, with a dedicated cursor element anchored to the end. Full markdown-it + highlight.js only re-runs when a paragraph or code fence closes — not every animation frame.
 - **Auto-scroll respects the user** — if you scroll up to read, the chat stops yanking you back down. A floating "Latest" pill reattaches with one click. Sending a new message snaps to the bottom regardless.
 - **Review & undo agent edits** — every file the agent changes now shows *Open diff* (native side-by-side), *Undo*, and *Redo*, with a per-turn "N files changed · Undo all" summary. Undo/redo apply exact inverses and keep the index in sync.

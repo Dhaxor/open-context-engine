@@ -408,6 +408,7 @@ window.addEventListener("message", (e: any) => {
     case "edit_status": setEditStatus(m.id, m.status); break;
     case "edit_summary": showEditSummary(m.ids); break;
     case "retry": notice("Retrying (attempt " + m.attempt + ", " + Math.round(m.delayMs) + "ms): " + m.reason); break;
+    case "model_routed": notice("Routed to " + m.tier.name + " tier (" + m.tier.model + ")"); break;
     case "compaction": notice("Compacted " + m.dropped + " older messages to fit context"); break;
     case "addUserMessage": addUser(m.text); break;
     case "model": modelBadge.querySelector(".txt").textContent = m.model; modelBadge.title = "Model: " + m.provider + "/" + m.model + " (click to change)"; break;

@@ -79,6 +79,11 @@ oce agent --workspace ./my-project --allow-edits
 
 The agent is **read-only by default** (codebase retrieval + file reads). Grant write/exec access explicitly: `--allow-edits` enables the file-editing tools and `--allow-shell` enables the `run-command` tool. The same applies to the programmatic API — `defaultAgentTools({ context })` returns read-only tools unless you pass `includeEdits: true` and/or `shell: true`.
 
+Two optional smarts:
+
+- `--route` sends each query to a cost-appropriate model tier — quick lookups to a fast model, multi-file/analytical work to the strongest, everything else to your `--llm-model`.
+- `--memory` makes the agent remember codebase insights across sessions (stored locally in `.open-context/memories.json`) and inject the relevant ones per query.
+
 ### 6. Connect to Claude / Cursor via MCP
 
 ```bash
