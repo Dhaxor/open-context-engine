@@ -82,8 +82,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         try {
             const s = await svc.getStatus();
             const rootName = path.basename(s.workspaceRoot) || s.workspaceRoot;
-            statusBarItem.text = `$(database) Open Context: ${rootName} · ${s.indexedFiles} files`;
-            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks`;
+            const modeSuffix = s.searchMode === "keyword-only" ? " · keyword-only" : "";
+            statusBarItem.text = `$(database) Open Context: ${rootName} · ${s.indexedFiles} files${modeSuffix}`;
+            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks${s.searchMode === "keyword-only" ? `\nKeyword-only (BM25) search — sqlite-vec unavailable on this platform.` : ""}`;
             treeProvider.refresh();
         } catch {}
     };
@@ -225,7 +226,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("openContext.showStatus", async () => {
             try {
                 const s = await svc.getStatus();
-                vscode.window.showInformationMessage(`Open Context: ${s.workspaceRoot} | ${s.indexedFiles} files, ${s.totalChunks} chunks | ${s.embeddingProvider}/${s.embeddingModel} | Last: ${s.lastSynced || "never"}`);
+                vscode.window.showInformationMessage(`Open Context: ${s.workspaceRoot} | ${s.indexedFiles} files, ${s.totalChunks} chunks | ${s.embeddingProvider}/${s.embeddingModel}${s.searchMode === "keyword-only" ? " | ⚠ keyword-only (BM25) search" : ""} | Last: ${s.lastSynced || "never"}`);
             } catch {
                 vscode.window.showInformationMessage("Open Context: Not initialized yet");
             }
@@ -350,6 +351,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             try {
                 const r = await svc.indexWorkspace();
                 await refreshStatus();
+                // One-time keyword-only notice: persistent signal lives in the
+                // status bar + health panel, so don't toast on every command.
+                const status = await svc.getStatus();
+                if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                    await context.globalState.update("openContext.keywordOnlyNoticeShown", true);
+                    outputChannel?.appendLine(`[${new Date().toISOString()}] keyword-only mode: ${status.degradedReason ?? "sqlite-vec unavailable"}`);
+                    vscode.window.showWarningMessage(
+                        "Open Context: semantic search is unavailable on this platform — running keyword-only (BM25) search. Indexing and search still work.",
+                        "Open Output",
+                    ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
+                }
                 if (r.failed?.length) {
                     outputChannel?.appendLine(`[${new Date().toISOString()}] startup index: ${r.failed.length} file(s) failed to embed (will retry on next index). ${r.failedReason ?? ""}`);
                     vscode.window.showWarningMessage(

@@ -43,6 +43,9 @@ program.command("index").description("Index workspace").option("-w, --workspace 
   const ctx = await OpenContext.create(resolveConfig(opts));
   console.log("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`));
   console.log(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
+  if (ctx.getStatus().searchMode === "keyword-only") {
+    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking. ${ctx.getStatus().degradedReason ?? ""}`);
+  }
   if (r.failed?.length) {
     console.error(`\n⚠ ${r.failed.length} file(s) failed to embed and will be retried on the next index run.`);
     if (r.failedReason) console.error(`  Reason: ${r.failedReason}`);
@@ -63,6 +66,9 @@ program.command("watch").description("Index the workspace and keep it live as fi
     onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks${r.failed?.length ? ` | ⚠ ${r.failed.length} failed (will retry)` : ""}`),
     onError: (e) => console.error(`\n[watch error] ${e.message}`),
   });
+  if (handle.context.getStatus().searchMode === "keyword-only") {
+    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.`);
+  }
   console.log(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
   const stop = async () => { await handle.stop(); process.exit(0); };
   process.on("SIGINT", stop);
@@ -100,6 +106,9 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     });
     watcher = w;
     process.stderr.write(`\rIndexed ${ctx.getChunkCount()} chunks (+${result.newlyIndexed.length} new)${watcher ? "; watching for changes" : ""}.\n`);
+    if (ctx.getStatus().searchMode === "keyword-only") {
+      process.stderr.write(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.\n`);
+    }
     if (result.failed?.length) {
       process.stderr.write(`⚠ ${result.failed.length} file(s) failed to embed — answers may miss context until the next index retries them. ${result.failedReason ?? ""}\n`);
     }
@@ -195,7 +204,8 @@ program.command("eval").description("Score retrieval quality against a labeled q
       if (opts.out) await fs.promises.writeFile(opts.out, JSON.stringify(report, null, 2));
       if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
       const a = report.aggregate;
-      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}`);
+      const mode = ctx.getStatus().searchMode;
+      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}${mode === "keyword-only" ? " | ⚠ KEYWORD-ONLY MODE — not comparable to hybrid baselines" : ""}`);
       const ctxLine = a.contextRecall !== undefined ? `  ctx-recall=${a.contextRecall.toFixed(3)}  ctx-hit-rate=${(a.contextHitRate ?? 0).toFixed(3)}` : "";
       console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}${ctxLine}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
       const misses = report.results.filter(r => !r.metrics.hit);

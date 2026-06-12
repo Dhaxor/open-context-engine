@@ -84,6 +84,10 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
     .then(({ result, watcher: w }) => {
       watcher = w;
       log(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
+      const status = ctx.getStatus();
+      if (status.searchMode === "keyword-only") {
+        log(`WARNING: sqlite-vec unavailable — running keyword-only (BM25) search without semantic ranking. ${status.degradedReason ?? ""}`);
+      }
       if (result.failed?.length) log(`WARNING: ${result.failed.length} file(s) failed to embed — they will be retried on the next index. ${result.failedReason ?? ""}`);
     })
     .catch((e) => log(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));

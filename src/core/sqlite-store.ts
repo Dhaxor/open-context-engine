@@ -61,6 +61,13 @@ function sqliteVecExtensionPath(): string {
   }
 }
 
+export interface SqliteStoreOptions {
+  /** Override how the sqlite-vec extension path is resolved. Primarily a test
+   *  seam (createRequire.resolve defeats module mocking); pointing this at a
+   *  nonexistent path forces keyword-only mode. */
+  resolveVecPath?: () => string;
+}
+
 export interface HybridSearchOptions {
   topK: number;
   candidateK: number;
@@ -101,18 +108,22 @@ export class SqliteStore {
   private storeDir: string;
   private dbPath: string;
   private expectedDim: number;
+  private opts: SqliteStoreOptions;
+  private _vectorAvailable = true;
+  private _vectorDiagnosis?: NativeBindingDiagnosis;
   private insertChunkStmt!: Statement<any[]>;
-  private insertVecStmt!: Statement<any[]>;
+  private insertVecStmt?: Statement<any[]>;
   private insertFtsStmt!: Statement<any[]>;
   private deleteByPathStmt!: Statement<any[]>;
-  private deleteVecStmt!: Statement<any[]>;
+  private deleteVecStmt?: Statement<any[]>;
   private deleteFtsStmt!: Statement<any[]>;
   private deleteFileStmt!: Statement<any[]>;
   private upsertFileStmt!: Statement<any[]>;
 
-  constructor(storeDir: string, expectedDim: number) {
+  constructor(storeDir: string, expectedDim: number, opts: SqliteStoreOptions = {}) {
     this.storeDir = storeDir;
     this.expectedDim = expectedDim;
+    this.opts = opts;
     this.dbPath = path.join(storeDir, "context.db");
   }
 
@@ -120,17 +131,65 @@ export class SqliteStore {
     await fs.promises.mkdir(this.storeDir, { recursive: true });
     const Database = await loadBetterSqlite3();
     this.maybeMigrateLegacy();
+    this.openDatabase(Database);
+    // The index is a rebuildable cache. When its persisted mode (vector vs
+    // keyword-only) doesn't match this runtime, recreating the file is the
+    // only clean path: SQLite can't even DROP a vec0 virtual table while the
+    // module is unloaded, and file hashes from a keyword-only run would make
+    // incremental indexing skip embedding forever once vectors come back.
+    if (this.vectorStateChanged()) {
+      const mode = this._vectorAvailable ? "vector" : "keyword-only";
+      console.warn(`Index was built in a different search mode than this runtime supports (now: ${mode}). Recreating the store — a re-index is required.`);
+      this.db.close();
+      for (const suffix of ["", "-wal", "-shm"]) {
+        try { fs.unlinkSync(this.dbPath + suffix); } catch {}
+      }
+      this.openDatabase(Database);
+    }
+    this.ensureSchema();
+    this.prepareStatements();
+  }
+
+  private openDatabase(Database: typeof import("better-sqlite3")): void {
     try {
       this.db = new Database(this.dbPath);
       this.db.pragma("journal_mode = WAL");
       this.db.pragma("synchronous = NORMAL");
       this.db.pragma("foreign_keys = ON");
-      this.db.loadExtension(sqliteVecExtensionPath());
     } catch (err) {
+      // better-sqlite3 itself failed — nothing can work. Stay fatal.
       throw nativeBindingError(err);
     }
-    this.ensureSchema();
-    this.prepareStatements();
+    try {
+      this.db.loadExtension((this.opts.resolveVecPath ?? sqliteVecExtensionPath)());
+      this._vectorAvailable = true;
+      this._vectorDiagnosis = undefined;
+    } catch (err) {
+      // Only the vec0 extension failed (unsupported platform, missing
+      // sqlite-vec package, broken binary). FTS5 + BM25 still work, so
+      // degrade to keyword-only search instead of killing the engine.
+      this._vectorAvailable = false;
+      this._vectorDiagnosis = classifyNativeBindingError(err);
+    }
+  }
+
+  /** True when the persisted index was built in a different vector/keyword
+   *  mode than this runtime provides. Pre-feature DBs have no vector_state
+   *  key — they were necessarily vector-built, so default them to "vec". */
+  private vectorStateChanged(): boolean {
+    let stored: string | null;
+    try {
+      const row = this.db.prepare("SELECT value FROM meta WHERE key = 'vector_state'").get() as { value: string } | undefined;
+      stored = row?.value ?? null;
+      if (stored == null) {
+        const schema = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+        stored = schema ? "vec" : null;
+      }
+    } catch {
+      return false; // no meta table — fresh database, nothing to transition
+    }
+    if (stored == null) return false;
+    return stored !== (this._vectorAvailable ? "vec" : "fts-only");
   }
 
   private maybeMigrateLegacy(): void {
@@ -168,18 +227,22 @@ export class SqliteStore {
     `);
     const storedDim = this.getMeta("embedding_dimension");
     const storedSchema = this.getMeta("schema_version");
-    const dimChanged = storedDim != null && Number(storedDim) !== this.expectedDim;
+    // The embedding dimension is meaningless without vectors — comparing it
+    // in keyword-only mode would force spurious wipes on provider changes.
+    const dimChanged = this._vectorAvailable && storedDim != null && Number(storedDim) !== this.expectedDim;
     const schemaChanged = storedSchema != null && storedSchema !== SCHEMA_VERSION;
     const needsReindex = dimChanged || schemaChanged;
     if (needsReindex) {
       // The vector/FTS layout or embedding space changed — drop the derived
-      // indexes so they can be recreated with the new definition.
-      this.db.exec(`
-        DROP TABLE IF EXISTS chunks_vec;
-        DROP TABLE IF EXISTS chunks_fts;
-      `);
+      // indexes so they can be recreated with the new definition. chunks_vec
+      // only when vec0 is loaded: SQLite cannot DROP a virtual table whose
+      // module isn't registered (and keyword-only DBs never created one).
+      if (this._vectorAvailable) this.db.exec("DROP TABLE IF EXISTS chunks_vec");
+      this.db.exec("DROP TABLE IF EXISTS chunks_fts");
     }
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}] distance_metric=cosine)`);
+    if (this._vectorAvailable) {
+      this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(embedding float[${this.expectedDim}] distance_metric=cosine)`);
+    }
     // Porter stemming folds "chunk/chunks/chunker/chunking" into one stem so
     // natural-language queries match code identifiers and paths lexically.
     this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(path, symbol, content, tokenize='porter unicode61 remove_diacritics 0')`);
@@ -208,7 +271,8 @@ export class SqliteStore {
       this.db.exec("DELETE FROM chunks; DELETE FROM files; DELETE FROM graph_edges;");
     }
     this.setMeta("schema_version", SCHEMA_VERSION);
-    this.setMeta("embedding_dimension", String(this.expectedDim));
+    this.setMeta("vector_state", this._vectorAvailable ? "vec" : "fts-only");
+    if (this._vectorAvailable) this.setMeta("embedding_dimension", String(this.expectedDim));
   }
 
   private prepareStatements(): void {
@@ -216,10 +280,14 @@ export class SqliteStore {
       INSERT INTO chunks (id, path, start_line, end_line, hash, symbol_name, symbol_kind, parent_symbol, language, contents)
       VALUES (@id, @path, @start_line, @end_line, @hash, @symbol_name, @symbol_kind, @parent_symbol, @language, @contents)
     `);
-    this.insertVecStmt = this.db.prepare("INSERT INTO chunks_vec (rowid, embedding) VALUES (?, ?)");
+    if (this._vectorAvailable) {
+      // better-sqlite3 compiles at prepare time — these would throw with
+      // chunks_vec absent, so they only exist in vector mode.
+      this.insertVecStmt = this.db.prepare("INSERT INTO chunks_vec (rowid, embedding) VALUES (?, ?)");
+      this.deleteVecStmt = this.db.prepare("DELETE FROM chunks_vec WHERE rowid = ?");
+    }
     this.insertFtsStmt = this.db.prepare("INSERT INTO chunks_fts (rowid, path, symbol, content) VALUES (?, ?, ?, ?)");
     this.deleteByPathStmt = this.db.prepare("SELECT rowid FROM chunks WHERE path = ?");
-    this.deleteVecStmt = this.db.prepare("DELETE FROM chunks_vec WHERE rowid = ?");
     this.deleteFtsStmt = this.db.prepare("DELETE FROM chunks_fts WHERE rowid = ?");
     this.deleteFileStmt = this.db.prepare("DELETE FROM files WHERE path = ?");
     this.upsertFileStmt = this.db.prepare(`
@@ -239,6 +307,13 @@ export class SqliteStore {
 
   getExpectedDimension(): number { return this.expectedDim; }
 
+  /** False when the sqlite-vec extension failed to load and the store is
+   *  running keyword-only (BM25/FTS5) search. */
+  isVectorAvailable(): boolean { return this._vectorAvailable; }
+
+  /** Why vector search is unavailable, when isVectorAvailable() is false. */
+  getVectorDiagnosis(): NativeBindingDiagnosis | undefined { return this._vectorDiagnosis; }
+
   /** Record the git branch/commit the index was last built against. */
   setIndexedGit(state: GitState | undefined): void {
     this.setMeta("git_branch", state?.branch ?? "");
@@ -254,9 +329,11 @@ export class SqliteStore {
   }
 
   add(chunk: Chunk): void {
-    if (!chunk.vector) throw new Error("Cannot add chunk without an embedding vector");
-    if (chunk.vector.length !== this.expectedDim) {
-      throw new Error(`Vector dimension mismatch: got ${chunk.vector.length}, store expects ${this.expectedDim}`);
+    if (this._vectorAvailable) {
+      if (!chunk.vector) throw new Error("Cannot add chunk without an embedding vector");
+      if (chunk.vector.length !== this.expectedDim) {
+        throw new Error(`Vector dimension mismatch: got ${chunk.vector.length}, store expects ${this.expectedDim}`);
+      }
     }
     const info = this.insertChunkStmt.run({
       id: chunk.id,
@@ -271,7 +348,7 @@ export class SqliteStore {
       contents: chunk.contents,
     });
     const rowid = BigInt(info.lastInsertRowid as number);
-    this.insertVecStmt.run(rowid, vectorToBlob(chunk.vector));
+    if (this._vectorAvailable) this.insertVecStmt!.run(rowid, vectorToBlob(chunk.vector!));
     // Index symbols both verbatim and camel/snake-split: unicode61 keeps
     // "chunkFile" as one token, so without the split a query for "chunking"
     // could never lexically reach the chunkFile symbol.
@@ -295,7 +372,7 @@ export class SqliteStore {
     if (!rows.length) return 0;
     const tx = this.db.transaction((items: { rowid: number }[]) => {
       for (const r of items) {
-        this.deleteVecStmt.run(BigInt(r.rowid));
+        if (this._vectorAvailable) this.deleteVecStmt!.run(BigInt(r.rowid));
         this.deleteFtsStmt.run(BigInt(r.rowid));
       }
       this.db.prepare("DELETE FROM chunks WHERE path = ?").run(filePath);
@@ -343,6 +420,7 @@ export class SqliteStore {
   }
 
   vectorSearch(queryVec: number[], topK: number, pathPrefix?: string): SearchResult[] {
+    if (!this._vectorAvailable) return [];
     if (queryVec.length !== this.expectedDim) {
       throw new Error(`Query dim ${queryVec.length} != store dim ${this.expectedDim}`);
     }

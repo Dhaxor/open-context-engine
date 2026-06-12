@@ -89,6 +89,9 @@ export interface OpenContextConfig {
   maxFileSize?: number;
   chunkSize?: number;
   chunkOverlap?: number;
+  /** Advanced/test seam: override how the sqlite-vec extension path is
+   *  resolved. Pointing at a nonexistent path forces keyword-only mode. */
+  resolveVecPath?: () => string;
 }
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = { provider: "voyage", model: "voyage-code-3", dimension: 1024, batchSize: 32 };
 export const DEFAULT_SEARCH_CONFIG: SearchConfig = { topK: 15, maxOutputLength: 80000, minScore: 0.0, candidateK: 60, bm25Weight: 1.0, vectorWeight: 1.0, rerank: true, expandSymbols: true };
