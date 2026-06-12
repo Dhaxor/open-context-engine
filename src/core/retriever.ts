@@ -116,16 +116,19 @@ export class HybridRetriever {
     const { original, expanded } = expandQuery(query);
     const vectorQuery = expanded;
 
-    let queryVec = this.cache.getEmbedding(vectorQuery);
-    if (!queryVec) {
-      queryVec = (await this.embedder.embed([vectorQuery], "query"))[0];
-      this.cache.setEmbedding(vectorQuery, queryVec);
+    // Keyword-only mode (sqlite-vec unavailable): the short-circuit must come
+    // BEFORE the query embed — an empty vectorSearch alone would still spend
+    // (or crash on) an embedding call that has nothing to consume it.
+    let vectorHits: SearchResult[] = [];
+    if (this.store.isVectorAvailable()) {
+      let queryVec = this.cache.getEmbedding(vectorQuery);
+      if (!queryVec) {
+        queryVec = (await this.embedder.embed([vectorQuery], "query"))[0];
+        this.cache.setEmbedding(vectorQuery, queryVec);
+      }
+      vectorHits = this.store.vectorSearch(queryVec, candidateK, opts.pathPrefix);
     }
-
-    const [vectorHits, bm25Hits] = await Promise.all([
-      Promise.resolve(this.store.vectorSearch(queryVec, candidateK, opts.pathPrefix)),
-      Promise.resolve(this.store.bm25Search(original, candidateK, opts.pathPrefix)),
-    ]);
+    const bm25Hits = this.store.bm25Search(original, candidateK, opts.pathPrefix);
 
     let fused = applyEditorContextBoost(applySymbolAwareBoost(reciprocalRankFusion(
       [

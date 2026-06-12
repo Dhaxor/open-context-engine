@@ -134,7 +134,8 @@ export function classifyNativeBindingError(err: unknown): NativeBindingDiagnosis
         `sqlite-vec ships per-platform native extensions and none was found for this machine ` +
         `(${process.platform}-${process.arch}). This typically means you're on a platform we don't ` +
         `yet ship binaries for (e.g. win32-arm64, linux-armhf, Alpine). ` +
-        `See PUBLISHING.md for the currently supported (os, arch) matrix.`,
+        `The engine continues in keyword-only (BM25) search mode — indexing and search still work, ` +
+        `but without semantic ranking. See PUBLISHING.md for the supported (os, arch) matrix.`,
       recognized: true,
       raw,
     };

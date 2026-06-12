@@ -44,6 +44,9 @@ export interface EvalReport {
   results: EvalCaseResult[];
   /** Mean per-query latency across non-erroring cases. */
   meanLatencyMs: number;
+  /** Engine mode during the run. Keyword-only numbers are not comparable to
+   *  hybrid baselines. Optional so pre-field reports still parse. */
+  searchMode?: "hybrid" | "keyword-only";
 }
 
 export type SearchFn = (query: string) => Promise<SearchResult[]>;

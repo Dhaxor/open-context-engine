@@ -255,3 +255,119 @@ describe("SqliteStore", () => {
     });
   });
 });
+
+describe("SqliteStore keyword-only mode (sqlite-vec unavailable)", () => {
+  // Mirrors the real resolver's missing-platform throw — the message must
+  // classify as sqlite_vec_platform for the store to degrade (an unknown
+  // load failure on a binary that EXISTS stays fatal by design).
+  const brokenVec = {
+    resolveVecPath: (): string => {
+      throw new Error("Could not locate sqlite-vec native extension. (test stub)");
+    },
+  };
+  const dirs: string[] = [];
+
+  afterEach(async () => {
+    for (const d of dirs.splice(0)) {
+      try { await fs.promises.rm(d, { recursive: true, force: true }); } catch {}
+    }
+  });
+
+  async function keywordOnlyStore(dir?: string): Promise<{ store: SqliteStore; dir: string }> {
+    const d = dir ?? (await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-kw-")));
+    if (!dir) dirs.push(d);
+    const store = new SqliteStore(d, DIM, brokenVec);
+    await store.initialize();
+    return { store, dir: d };
+  }
+
+  function vectorlessChunk(id: string, opts: Partial<Chunk> = {}): Chunk {
+    const c = makeChunk(id, opts);
+    delete (c as any).vector;
+    return c;
+  }
+
+  it("initializes without vec0 and reports keyword-only", async () => {
+    const { store } = await keywordOnlyStore();
+    expect(store.isVectorAvailable()).toBe(false);
+    expect(store.getVectorDiagnosis()).toBeDefined();
+    store.close();
+  });
+
+  it("an unrecognized vec0 load failure stays fatal — no destructive degrade", async () => {
+    // The resolver succeeds but the binary fails to load with a message the
+    // classifier doesn't recognize as permanent (here: file doesn't exist).
+    // Degrading would wipe a possibly fully-embedded index over a transient
+    // blip, so this must throw instead.
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-kw-"));
+    dirs.push(dir);
+    const store = new SqliteStore(dir, DIM, { resolveVecPath: () => path.join(dir, "missing-vec0.so") });
+    await expect(store.initialize()).rejects.toThrow();
+  });
+
+  it("accepts vector-less chunks and serves BM25 search; vectorSearch is empty", async () => {
+    const { store } = await keywordOnlyStore();
+    store.add(vectorlessChunk("alpha", { contents: "export function authenticateUser() { return session; }" }));
+    store.add(vectorlessChunk("beta", { contents: "export function renderChart() { return svg; }" }));
+    expect(store.getChunkCount()).toBe(2);
+    const hits = store.bm25Search("authenticateUser", 5);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0].chunk.path).toBe("src/alpha.ts");
+    expect(store.vectorSearch(makeVec(1), 5)).toEqual([]);
+    store.close();
+  });
+
+  it("removeByPath works without vec statements", async () => {
+    const { store } = await keywordOnlyStore();
+    store.add(vectorlessChunk("gamma"));
+    expect(store.removeByPath("src/gamma.ts")).toBe(1);
+    expect(store.getChunkCount()).toBe(0);
+    expect(store.bm25Search("gamma", 5)).toEqual([]);
+    store.close();
+  });
+
+  it("persists across keyword-only reopens without wiping", async () => {
+    const { store, dir } = await keywordOnlyStore();
+    store.add(vectorlessChunk("delta"));
+    store.close();
+    const { store: reopened } = await keywordOnlyStore(dir);
+    expect(reopened.isVectorAvailable()).toBe(false);
+    expect(reopened.getChunkCount()).toBe(1);
+    expect(reopened.bm25Search("delta", 5).length).toBeGreaterThan(0);
+    reopened.close();
+  });
+
+  it("recreates the store when a keyword-only DB is reopened with vectors available", async () => {
+    const { store, dir } = await keywordOnlyStore();
+    store.add(vectorlessChunk("epsilon"));
+    // A real hash row is the poison the rebuild must purge — without it the
+    // getFileHashes assertion below would pass vacuously.
+    store.upsertFile("src/epsilon.ts", "hash-kw");
+    store.close();
+    // Real vec0 loads in CI — the persisted fts-only state must force a clean
+    // rebuild, otherwise hash-matched files would never get embeddings.
+    const vecStore = new SqliteStore(dir, DIM);
+    await vecStore.initialize();
+    expect(vecStore.isVectorAvailable()).toBe(true);
+    expect(vecStore.getChunkCount()).toBe(0);
+    expect(vecStore.getFileHashes().size).toBe(0);
+    vecStore.close();
+  });
+
+  it("recreates the store when a vector DB is reopened keyword-only", async () => {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-kw-"));
+    dirs.push(dir);
+    const vecStore = new SqliteStore(dir, DIM);
+    await vecStore.initialize();
+    vecStore.add(makeChunk("zeta"));
+    vecStore.upsertFile("src/zeta.ts", "hash1");
+    vecStore.close();
+    const { store } = await keywordOnlyStore(dir);
+    expect(store.isVectorAvailable()).toBe(false);
+    expect(store.getChunkCount()).toBe(0);
+    expect(store.getFileHashes().size).toBe(0);
+    store.add(vectorlessChunk("eta"));
+    expect(store.bm25Search("eta", 5).length).toBeGreaterThan(0);
+    store.close();
+  });
+});

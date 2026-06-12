@@ -20,6 +20,9 @@ export interface ContextStatus {
     embeddingModel: string;
     lastSynced: string;
     workspaceRoot: string;
+    /** "keyword-only" when sqlite-vec couldn't load and search runs on BM25 alone. */
+    searchMode: "hybrid" | "keyword-only";
+    degradedReason?: string;
 }
 
 export interface IndexHealthReport {
@@ -153,6 +156,8 @@ export class ContextService implements vscode.Disposable {
             embeddingModel: inner.model,
             lastSynced: inner.lastSynced,
             workspaceRoot: ctx.getWorkspaceRoot(),
+            searchMode: inner.searchMode,
+            ...(inner.degradedReason ? { degradedReason: inner.degradedReason } : {}),
         };
     }
 
@@ -301,6 +306,9 @@ export class ContextService implements vscode.Disposable {
                 const ctx = await this.getContext();
                 const status = await this.getStatus();
                 contextReady = true; indexedFiles = status.indexedFiles; totalChunks = status.totalChunks;
+                if (status.searchMode === "keyword-only") {
+                    notes.push(`sqlite-vec unavailable on this platform — keyword-only (BM25) search; semantic ranking disabled. ${status.degradedReason ?? ""}`.trim());
+                }
                 freshness = await ctx.checkFreshness();
                 activeFile = await this.getActiveFileHealth(ctx.getWorkspaceRoot(), await ctx.listFiles());
             }

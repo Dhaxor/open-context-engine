@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { OpenContext } from "../core/context";
+import { SqliteStore } from "../core/sqlite-store";
 import { OpenContextConfig, EMBEDDING_MODELS } from "../core/types";
 import { runMCPServer } from "../mcp/server";
 import { ContextAgent, defaultAgentTools, LLMProvider } from "../agent/agent";
@@ -11,10 +12,15 @@ const program = new Command();
 
 function validateConfig(config: OpenContextConfig): void {
   const { provider, apiKey, baseUrl } = config.embedding;
-  if (provider === "openai" && !apiKey) {
+  // On platforms with no sqlite-vec build the engine runs keyword-only and
+  // never embeds — demanding an API key there would block the only mode that
+  // works. The probe is resolution-only (no dlopen): if the package resolves
+  // but fails to load, the engine throws its own clearer error later.
+  const embedsAreUsable = SqliteStore.sqliteVecResolvable();
+  if (provider === "openai" && !apiKey && embedsAreUsable) {
     throw new Error("OPENAI_API_KEY is required for OpenAI embeddings. Set it via --api-key, OPENAI_API_KEY env var, or OCE_EMBEDDING_API_KEY env var.");
   }
-  if (provider === "voyage" && !apiKey) {
+  if (provider === "voyage" && !apiKey && embedsAreUsable) {
     throw new Error("VOYAGE_API_KEY is required for Voyage embeddings. Set it via --api-key, VOYAGE_API_KEY env var, or OCE_EMBEDDING_API_KEY env var.");
   }
   if (provider === "ollama" && !baseUrl) {
@@ -43,6 +49,9 @@ program.command("index").description("Index workspace").option("-w, --workspace 
   const ctx = await OpenContext.create(resolveConfig(opts));
   console.log("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`));
   console.log(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
+  if (ctx.getStatus().searchMode === "keyword-only") {
+    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking. ${ctx.getStatus().degradedReason ?? ""}`);
+  }
   if (r.failed?.length) {
     console.error(`\n⚠ ${r.failed.length} file(s) failed to embed and will be retried on the next index run.`);
     if (r.failedReason) console.error(`  Reason: ${r.failedReason}`);
@@ -63,6 +72,9 @@ program.command("watch").description("Index the workspace and keep it live as fi
     onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks${r.failed?.length ? ` | ⚠ ${r.failed.length} failed (will retry)` : ""}`),
     onError: (e) => console.error(`\n[watch error] ${e.message}`),
   });
+  if (handle.context.getStatus().searchMode === "keyword-only") {
+    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.`);
+  }
   console.log(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
   const stop = async () => { await handle.stop(); process.exit(0); };
   process.on("SIGINT", stop);
@@ -88,6 +100,9 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
   }
   const config = resolveConfig(opts);
   const ctx = await OpenContext.create(config);
+  if (ctx.getStatus().searchMode === "keyword-only") {
+    process.stderr.write(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.\n`);
+  }
   let watcher: import("../core/file-watcher").FileWatcher | null = null;
   if (opts.index !== false) {
     const { liveIndex } = await import("../core/live-index");
@@ -192,10 +207,12 @@ program.command("eval").description("Score retrieval quality against a labeled q
           },
         },
       );
+      const mode = ctx.getStatus().searchMode;
+      report.searchMode = mode; // persisted into --out/--json so saved baselines carry their mode
       if (opts.out) await fs.promises.writeFile(opts.out, JSON.stringify(report, null, 2));
       if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
       const a = report.aggregate;
-      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}`);
+      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}${mode === "keyword-only" ? " | ⚠ KEYWORD-ONLY MODE — not comparable to hybrid baselines" : ""}`);
       const ctxLine = a.contextRecall !== undefined ? `  ctx-recall=${a.contextRecall.toFixed(3)}  ctx-hit-rate=${(a.contextHitRate ?? 0).toFixed(3)}` : "";
       console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}${ctxLine}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
       const misses = report.results.filter(r => !r.metrics.hit);
@@ -205,6 +222,11 @@ program.command("eval").description("Score retrieval quality against a labeled q
       }
       if (opts.baseline) {
         const baseline = JSON.parse(await fs.promises.readFile(opts.baseline, "utf8"));
+        if (baseline.searchMode && baseline.searchMode !== mode) {
+          console.log(`\n⚠ baseline was ${baseline.searchMode}, this run is ${mode} — deltas reflect the mode change, not retrieval quality.`);
+        } else if (!baseline.searchMode && mode === "keyword-only") {
+          console.log(`\n⚠ baseline has no search-mode marker (likely hybrid); this run is keyword-only — deltas are not meaningful.`);
+        }
         const cmp = compareReports(baseline, report);
         const sign = (x: number) => (x >= 0 ? "+" : "") + x.toFixed(3);
         const ctxDelta = cmp.aggregate.contextRecall !== undefined ? ` Δctx-recall=${sign(cmp.aggregate.contextRecall)} Δctx-hit=${sign(cmp.aggregate.contextHitRate ?? 0)}` : "";

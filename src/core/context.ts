@@ -50,7 +50,9 @@ export class OpenContext {
     ctx.chunker = new AstChunker({ maxChunkChars, fallback });
     ctx.fileFilter = new FileFilter(config.maxFileSize);
     const storePath = config.storePath || defaultStorePath(config.workspaceRoot);
-    ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension());
+    ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension(), {
+      ...(config.resolveVecPath ? { resolveVecPath: config.resolveVecPath } : {}),
+    });
     await ctx.store.initialize();
     ctx.queryCache = new QueryCache(ctx.searchConfig.queryCacheSize ?? 128);
     ctx.retriever = new HybridRetriever(ctx.store, ctx.embedder, ctx.searchConfig, ctx.reranker, ctx.queryCache);
@@ -228,6 +230,17 @@ export class OpenContext {
           parsed?.dispose();
         }
       }
+      // Keyword-only mode (sqlite-vec unavailable): no embedding round-trips
+      // at all — write chunk + FTS rows directly. Store writes propagate:
+      // they're local DB trouble, not retryable provider blips, so the
+      // failed[]/circuit-breaker machinery below doesn't apply.
+      if (!this.store.isVectorAvailable()) {
+        this.store.addBatch(chunks);
+        for (const file of fileBatch) this.store.upsertFile(file.path, computeBlobName(file.path, file.contents));
+        filesDone += fileBatch.length;
+        onProgress?.("indexing", filesDone, files.length);
+        continue;
+      }
       // The try covers ONLY the embed call. Store writes (upsertFile below,
       // addBatch inside) indicate local DB trouble, not a skippable provider
       // blip — letting them propagate keeps "failed = will be retried" honest.
@@ -342,13 +355,16 @@ export class OpenContext {
     return state.files.map(f => ({ path: f.path, chunkCount: counts.get(f.path) ?? 0, lastModified: f.lastModified }));
   }
 
-  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string } {
+  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string; searchMode: "hybrid" | "keyword-only"; degradedReason?: string } {
+    const vectorAvailable = this.store.isVectorAvailable();
     return {
       indexedFiles: this.store.getFileCount(),
       totalChunks: this.store.getChunkCount(),
       provider: this.embeddingConfig.provider,
       model: this.embedder.getModel(),
       lastSynced: new Date().toISOString(),
+      searchMode: vectorAvailable ? "hybrid" : "keyword-only",
+      ...(vectorAvailable ? {} : { degradedReason: this.store.getVectorDiagnosis()?.title }),
     };
   }
 
