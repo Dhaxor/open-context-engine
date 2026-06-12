@@ -52,9 +52,12 @@ if (!rule) {
 const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "oce-verify-"));
 try {
   // VSIX is a zip; use the bundled `unzip` on *nix, and PowerShell's
-  // Expand-Archive on Windows runners.
+  // Expand-Archive on Windows runners. Expand-Archive (PS 5.1) refuses any
+  // file extension other than .zip, so stage a .zip-named copy first.
   if (process.platform === "win32") {
-    execFileSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath "${vsixPath}" -DestinationPath "${stagingDir}" -Force`], { stdio: "inherit" });
+    const zipCopy = path.join(stagingDir, "_vsix_copy.zip");
+    fs.copyFileSync(vsixPath, zipCopy);
+    execFileSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath "${zipCopy}" -DestinationPath "${stagingDir}" -Force`], { stdio: "inherit" });
   } else {
     execFileSync("unzip", ["-q", "-o", vsixPath, "-d", stagingDir]);
   }

@@ -3,16 +3,16 @@
 # Why this exists: better-sqlite3 ships a native .node compiled for a specific
 # Node ABI, and each Electron major has its own ABI — one binary can't span
 # them. Each platform VSIX therefore bundles ONE binding per supported
-# Electron ABI under dist-native/abi-<N>/ (built by the ELECTRON_TARGETS loop
+# Electron ABI under dist-native/abi-<N>/ (built by the BINDING_TARGETS loop
 # below); at activation the extension copies the binding matching the running
 # VS Code's ABI into place (extension/src/services/NativeBindingSelector.ts).
 #
-# ELECTRON_TARGETS — one version per Electron major that shipped in a stable
-# VS Code we support. Empirical map (microsoft/vscode release branches'
-# .npmrc "target"): 1.103-1.106 -> Electron 37.x; 1.107-1.121 -> 39.x;
-# 1.122+ -> 42.x. Update this list (and engines.vscode ^1.103.0) when the
-# drift workflow flags a new Electron. ABI numbers come from node-abi at
-# build time — never hardcoded.
+# BINDING_TARGETS — "<runtime>:<version>" pairs covering every ABI a real
+# VS Code 1.103+ runtime may request (see the env block for the full
+# reasoning). VS Code Electron map (release branches' .npmrc "target"):
+# 1.103-1.106 -> Electron 37.x; 1.107-1.121 -> 39.x; 1.122+ -> 42.x.
+# Bundled Node: 22.x through 1.121, 24.x from 1.122. ABI numbers come from
+# node-abi at build time — never hardcoded.
 #
 # Triggers:
 #  - push to a tag like v0.1.1 → build all platforms + publish to Marketplace.
@@ -45,8 +45,18 @@ permissions:
   contents: read
 
 env:
-  # One Electron version per major shipped by a supported stable VS Code.
-  ELECTRON_TARGETS: "37.2.3 39.8.8 42.3.0"
+  # ABI targets as "<runtime>:<version>" pairs. Two conventions are covered
+  # deliberately: the original field crash demanded NODE_MODULE_VERSION 137 —
+  # which is Node 24's ABI, NOT any Electron's (37->136, 38->139, 39->140,
+  # 42->146 per node-abi) — strong evidence VS Code's runtime reports the
+  # BUNDLED NODE's ABI. Node prebuilds (22->127, 24->137) cover that world
+  # with better-sqlite3's official binaries; Electron rebuilds (37->136,
+  # 39->140) cover the classic convention. Electron 42 (146) is EXCLUDED:
+  # better-sqlite3 <=12.10 cannot compile against its V8
+  # (SetNativeDataProperty overload ambiguity, External::Value removal) —
+  # re-add when upstream ships support. Order matters only for the default
+  # binary left in node_modules: keep node:24 last (most likely runtime).
+  BINDING_TARGETS: "electron:37.2.3 electron:39.8.8 node:22.16.0 node:24.15.0"
 
 jobs:
   build:
@@ -91,10 +101,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js 22.16.0
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Pinned exact: setup-node's "22.x" floats with new releases, which
           # broke deterministic builds before. Bump in lockstep with @electron/
@@ -115,17 +125,38 @@ jobs:
         working-directory: extension
         run: npm ci
 
-      - name: Build better-sqlite3 for every supported Electron ABI
+      - name: Build better-sqlite3 for every supported ABI
         working-directory: extension
         shell: bash
         run: |
           set -euo pipefail
           rm -rf dist-native
-          for EV in $ELECTRON_TARGETS; do
-            echo "::group::electron-rebuild for Electron $EV"
-            npx electron-rebuild -f -w better-sqlite3 -v "$EV"
-            ABI=$(node -p "require('node-abi').getAbi('$EV','electron')")
-            echo "Electron $EV -> ABI $ABI"
+          for T in $BINDING_TARGETS; do
+            KIND="${T%%:*}"; VER="${T##*:}"
+            ABI=$(node -p "require('node-abi').getAbi('$VER','$KIND')")
+            echo "::group::better-sqlite3 for $KIND $VER (ABI $ABI)"
+            # Clean slate per target: a stale config.gypi from the previous
+            # iteration would defeat the ABI assertion below.
+            rm -rf node_modules/better-sqlite3/build
+            if [ "$KIND" = "electron" ]; then
+              npx electron-rebuild -f -w better-sqlite3 -v "$VER"
+            else
+              # Official upstream prebuild for this Node ABI; fall back to
+              # compiling against that version's downloaded headers when no
+              # prebuild exists (12.10 ships none for Node 24). --target is
+              # load-bearing: a bare build-release compiles against the
+              # RUNNER's Node and silently mislabels the ABI.
+              (cd node_modules/better-sqlite3 && (npx prebuild-install -r node -t "$VER" -f --verbose || npm run build-release -- --target="$VER"))
+            fi
+            # If this target went through a source build, config.gypi records
+            # which headers were used — assert they match the ABI we are
+            # about to label this binary with. Prebuilds skip this (no
+            # config.gypi; the download is keyed on the exact ABI already).
+            GYPI=node_modules/better-sqlite3/build/config.gypi
+            if [ -f "$GYPI" ] && ! grep -Eq "\"node_module_version\": $ABI\b" "$GYPI"; then
+              echo "::error::ABI mismatch for $T: built $(grep -Eo '"node_module_version": [0-9]+' "$GYPI"), wanted $ABI"
+              exit 1
+            fi
             mkdir -p "dist-native/abi-$ABI"
             cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "dist-native/abi-$ABI/"
             echo "::endgroup::"
@@ -145,7 +176,13 @@ jobs:
 
       - name: Package VSIX (${{ matrix.target }})
         working-directory: extension
-        run: npx vsce package --target ${{ matrix.target }} --out ../artifacts/
+        # vsce does not create the --out directory; without the mkdir it
+        # falls back to treating "../artifacts/" as a literal file path and
+        # dies with ENOTDIR. bash shell so mkdir -p works on the win32 leg.
+        shell: bash
+        run: |
+          mkdir -p ../artifacts
+          npx vsce package --target ${{ matrix.target }} --out ../artifacts/
 
       - name: Verify VSIX contents
         working-directory: extension
@@ -156,7 +193,7 @@ jobs:
           node ./scripts/verify-vsix.mjs "$VSIX" "${{ matrix.target }}"
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vsix-${{ matrix.target }}
           path: artifacts/*.vsix
@@ -173,9 +210,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22.16.0"
 
@@ -183,7 +220,7 @@ jobs:
         run: npm install -g @vscode/vsce@^3.6.0
 
       - name: Download all VSIX artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: vsix-*
           path: artifacts
