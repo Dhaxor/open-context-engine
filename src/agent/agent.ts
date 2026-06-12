@@ -15,6 +15,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an expert coding assistant with tools to 
 - Before answering a question about code, call codebase-retrieval at least once to ground your answer in real files.
 - For broad questions (overview, architecture, "what does this codebase do"), issue multiple codebase-retrieval calls with different angles (entry points, top-level modules, domain models, tests) and synthesize across all results — do not rely on a single snippet.
 - codebase-retrieval returns many ranked snippets across files; read them all before answering. Use list-files and read-file to fill in gaps.
+- When you already know an exact symbol name, prefer find-symbol-definition (where it's declared) and find-symbol-references (every usage) over codebase-retrieval — they are precise, instant, and don't burn ranking budget.
 - Use run-command for build/test/lint/git/shell work when available. Commands run non-interactively in the workspace; pass all input as flags and assume no human will respond.
 - Use web-search when the answer depends on external docs, library references, or up-to-date facts not in the codebase.
 - When making edits, use str-replace with enough surrounding context so the old_str is unique. Use create-file for new files and remove-file to delete.
@@ -61,7 +62,74 @@ export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () 
       },
       handler: async (args) => (await context.readFile(args.path, args.start_line, args.end_line)) ?? `Not found: ${args.path}`,
     },
+    {
+      name: "find-symbol-definition",
+      description:
+        "Find where a symbol (function, class, method, type) is DEFINED, by exact name. Precise and instant — prefer this over codebase-retrieval when you already know the exact identifier. Returns the defining chunk(s) with file path, line range, and source.",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: { type: "string", description: "Exact symbol name, e.g. 'HybridRetriever' or 'reciprocalRankFusion'. Case-sensitive." },
+        },
+        required: ["symbol"],
+      },
+      handler: async (args) => {
+        const symbol = String(args.symbol ?? "").trim();
+        if (!symbol) return "No symbol given.";
+        const defs = context.findSymbolDefinitions(symbol, 5);
+        if (!defs.length) {
+          return `No definition found for '${symbol}'. The name must match the declared identifier exactly (case-sensitive) — try codebase-retrieval for fuzzy/conceptual lookup, or find-symbol-references to locate usages.`;
+        }
+        return defs.map(c => renderDefinition(c)).join("\n\n");
+      },
+    },
+    {
+      name: "find-symbol-references",
+      description:
+        "Find every indexed place a symbol/identifier is USED (exact word-boundary match, case-sensitive). Use to trace callers, check impact of a change, or find usage examples. Returns matching lines with file:line locations.",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: { type: "string", description: "Exact identifier to look up, e.g. 'vectorSearch'." },
+          path: { type: "string", description: "Optional: restrict to one indexed file path." },
+        },
+        required: ["symbol"],
+      },
+      handler: async (args) => {
+        const symbol = String(args.symbol ?? "").trim();
+        if (!symbol) return "No symbol given.";
+        const refs = context.findSymbolReferences(symbol, args.path ? String(args.path) : undefined, 12);
+        if (!refs.length) return `No references to '${symbol}' found${args.path ? ` in ${args.path}` : ""} (exact, case-sensitive match).`;
+        return refs.map(c => renderReference(c, symbol)).join("\n");
+      },
+    },
   ];
+}
+
+const SNIPPET_MAX_LINES = 40;
+
+function renderDefinition(c: import("../core/types").Chunk): string {
+  const kind = c.symbolKind ? `${c.symbolKind} ` : "";
+  const parent = c.parentSymbol ? ` (in ${c.parentSymbol})` : "";
+  const lines = c.contents.split("\n");
+  const body = lines.length > SNIPPET_MAX_LINES
+    ? lines.slice(0, SNIPPET_MAX_LINES).join("\n") + `\n… (${lines.length - SNIPPET_MAX_LINES} more lines — read-file for the rest)`
+    : c.contents;
+  return `${kind}${c.symbolName ?? "?"}${parent} — ${c.path}:${c.startLine}-${c.endLine}\n\`\`\`${c.language ?? ""}\n${body}\n\`\`\``;
+}
+
+function renderReference(c: import("../core/types").Chunk, symbol: string): string {
+  // Show the exact matching lines with absolute line numbers, not the whole
+  // chunk — references are about WHERE, the agent can read-file for context.
+  const re = new RegExp(`(^|[^A-Za-z0-9_])${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9_]|$)`);
+  const hits: string[] = [];
+  const lines = c.contents.split("\n");
+  for (let i = 0; i < lines.length && hits.length < 3; i++) {
+    if (re.test(lines[i])) hits.push(`  ${c.path}:${c.startLine + i}: ${lines[i].trim().slice(0, 160)}`);
+  }
+  const where = c.symbolName ? ` (${c.symbolKind ?? "symbol"} ${c.symbolName})` : "";
+  const header = `${c.path}:${c.startLine}-${c.endLine}${where}${c.symbolName === symbol ? " [definition]" : ""}`;
+  return hits.length ? `${header}\n${hits.join("\n")}` : header;
 }
 
 export interface DefaultToolsOptions {
