@@ -257,7 +257,14 @@ describe("SqliteStore", () => {
 });
 
 describe("SqliteStore keyword-only mode (sqlite-vec unavailable)", () => {
-  const brokenVec = { resolveVecPath: () => "/nonexistent/vec0.so" };
+  // Mirrors the real resolver's missing-platform throw — the message must
+  // classify as sqlite_vec_platform for the store to degrade (an unknown
+  // load failure on a binary that EXISTS stays fatal by design).
+  const brokenVec = {
+    resolveVecPath: (): string => {
+      throw new Error("Could not locate sqlite-vec native extension. (test stub)");
+    },
+  };
   const dirs: string[] = [];
 
   afterEach(async () => {
@@ -285,6 +292,17 @@ describe("SqliteStore keyword-only mode (sqlite-vec unavailable)", () => {
     expect(store.isVectorAvailable()).toBe(false);
     expect(store.getVectorDiagnosis()).toBeDefined();
     store.close();
+  });
+
+  it("an unrecognized vec0 load failure stays fatal — no destructive degrade", async () => {
+    // The resolver succeeds but the binary fails to load with a message the
+    // classifier doesn't recognize as permanent (here: file doesn't exist).
+    // Degrading would wipe a possibly fully-embedded index over a transient
+    // blip, so this must throw instead.
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-kw-"));
+    dirs.push(dir);
+    const store = new SqliteStore(dir, DIM, { resolveVecPath: () => path.join(dir, "missing-vec0.so") });
+    await expect(store.initialize()).rejects.toThrow();
   });
 
   it("accepts vector-less chunks and serves BM25 search; vectorSearch is empty", async () => {
@@ -322,6 +340,9 @@ describe("SqliteStore keyword-only mode (sqlite-vec unavailable)", () => {
   it("recreates the store when a keyword-only DB is reopened with vectors available", async () => {
     const { store, dir } = await keywordOnlyStore();
     store.add(vectorlessChunk("epsilon"));
+    // A real hash row is the poison the rebuild must purge — without it the
+    // getFileHashes assertion below would pass vacuously.
+    store.upsertFile("src/epsilon.ts", "hash-kw");
     store.close();
     // Real vec0 loads in CI — the persisted fts-only state must force a clean
     // rebuild, otherwise hash-matched files would never get embeddings.

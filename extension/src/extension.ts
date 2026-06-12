@@ -361,6 +361,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         "Open Context: semantic search is unavailable on this platform — running keyword-only (BM25) search. Indexing and search still work.",
                         "Open Output",
                     ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
+                } else if (status.searchMode === "hybrid" && context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                    // Healthy again — re-arm so a future degraded period gets
+                    // its one toast instead of being suppressed forever.
+                    await context.globalState.update("openContext.keywordOnlyNoticeShown", undefined);
                 }
                 if (r.failed?.length) {
                     outputChannel?.appendLine(`[${new Date().toISOString()}] startup index: ${r.failed.length} file(s) failed to embed (will retry on next index). ${r.failedReason ?? ""}`);

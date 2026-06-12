@@ -134,7 +134,7 @@ export class SqliteStore {
     this.openDatabase(Database);
     // The index is a rebuildable cache. When its persisted mode (vector vs
     // keyword-only) doesn't match this runtime, recreating the file is the
-    // only clean path: SQLite can't even DROP a vec0 virtual table while the
+    // cleanest path: SQLite can't even DROP a vec0 virtual table while the
     // module is unloaded, and file hashes from a keyword-only run would make
     // incremental indexing skip embedding forever once vectors come back.
     if (this.vectorStateChanged()) {
@@ -144,7 +144,29 @@ export class SqliteStore {
       for (const suffix of ["", "-wal", "-shm"]) {
         try { fs.unlinkSync(this.dbPath + suffix); } catch {}
       }
+      // The unlink can fail — Windows denies deletion while any sibling
+      // process (extension host + CLI share the default store path) has the
+      // DB open; AV/backup handles do the same. Verify before trusting it:
+      // ensureSchema() stamps the NEW vector_state below, and stamping it
+      // over a non-wiped DB would cement stale hashes next to an empty (or
+      // orphaned) vector table with no signal that anything is wrong.
+      const survived = fs.existsSync(this.dbPath);
       this.openDatabase(Database);
+      if (survived) {
+        console.warn("Could not delete the index database (held open by another process?). Falling back to an in-place wipe.");
+        // Logical wipe: clear every derived row so the mode-change invariant
+        // holds — file hashes never outlive a transition. chunks_vec can only
+        // be dropped when the vec module is loaded; in the vec->keyword
+        // direction it stays behind untouched (keyword mode never reads it)
+        // and the next vector-mode open drops it here or via recreation.
+        try { this.db.exec("DROP TABLE IF EXISTS chunks_fts"); } catch {}
+        if (this._vectorAvailable) {
+          try { this.db.exec("DROP TABLE IF EXISTS chunks_vec"); } catch {}
+        }
+        for (const table of ["chunks", "files", "graph_edges"]) {
+          try { this.db.exec(`DELETE FROM ${table}`); } catch {}
+        }
+      }
     }
     this.ensureSchema();
     this.prepareStatements();
@@ -160,17 +182,43 @@ export class SqliteStore {
       // better-sqlite3 itself failed — nothing can work. Stay fatal.
       throw nativeBindingError(err);
     }
+    let vecPath: string | null = null;
+    let vecErr: unknown = null;
     try {
-      this.db.loadExtension((this.opts.resolveVecPath ?? sqliteVecExtensionPath)());
-      this._vectorAvailable = true;
-      this._vectorDiagnosis = undefined;
+      vecPath = (this.opts.resolveVecPath ?? sqliteVecExtensionPath)();
     } catch (err) {
-      // Only the vec0 extension failed (unsupported platform, missing
-      // sqlite-vec package, broken binary). FTS5 + BM25 still work, so
-      // degrade to keyword-only search instead of killing the engine.
-      this._vectorAvailable = false;
-      this._vectorDiagnosis = classifyNativeBindingError(err);
+      vecErr = err; // no sqlite-vec build for this platform — permanent
     }
+    if (vecPath != null) {
+      try {
+        this.db.loadExtension(vecPath);
+        this._vectorAvailable = true;
+        this._vectorDiagnosis = undefined;
+        return;
+      } catch (err) {
+        vecErr = err;
+      }
+    }
+    // Only the vec0 extension failed; FTS5 + BM25 still work. Degrade to
+    // keyword-only ONLY for failures that are permanent properties of this
+    // machine (no platform build, wrong arch, libc mismatch). Degrading is
+    // destructive — the mode transition wipes the index — so an unrecognized
+    // dlopen blip on a binary that DOES exist must not nuke a fully-embedded
+    // store: keep the old fatal behavior for that case instead.
+    const diagnosis = classifyNativeBindingError(vecErr);
+    const permanentKinds = ["sqlite_vec_platform", "wrong_arch", "glibc_too_old", "musl_libc", "missing_module"];
+    if (vecPath != null && !permanentKinds.includes(diagnosis.kind)) {
+      throw new NativeBindingError(diagnosis);
+    }
+    this._vectorAvailable = false;
+    this._vectorDiagnosis = diagnosis;
+  }
+
+  /** Cheap static probe: can a sqlite-vec build be resolved for this platform?
+   *  Resolution only — no dlopen, no DB. Lets CLIs decide whether an embedding
+   *  API key will ever be used before constructing an engine. */
+  static sqliteVecResolvable(): boolean {
+    try { sqliteVecExtensionPath(); return true; } catch { return false; }
   }
 
   /** True when the persisted index was built in a different vector/keyword

@@ -46,7 +46,9 @@ async function makeContext(embedder: EmbeddingProvider, keywordOnly: boolean): P
     storePath: path.join(dir, ".store"),
     embedding: { provider: "ollama", model: "mock", dimension: DIM, batchSize: 32 },
     embedder,
-    ...(keywordOnly ? { resolveVecPath: () => "/nonexistent/vec0.so" } : {}),
+    // Throwing resolver mirrors the real missing-platform path — the message
+    // classifies as sqlite_vec_platform, the only kind that degrades.
+    ...(keywordOnly ? { resolveVecPath: (): string => { throw new Error("Could not locate sqlite-vec native extension. (test stub)"); } } : {}),
   };
   return OpenContext.create(config);
 }

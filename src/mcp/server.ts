@@ -63,6 +63,16 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
   await server.connect(new StdioServerTransport());
   const log = (m: string) => process.stderr.write(`[open-context] ${m}\n`);
 
+  // Mode is known as soon as the store opened — warn now, not only after a
+  // successful index (the initial index can fail while degraded search keeps
+  // serving, and that path used to skip the warning entirely).
+  {
+    const status = ctx.getStatus();
+    if (status.searchMode === "keyword-only") {
+      log(`WARNING: sqlite-vec unavailable — running keyword-only (BM25) search without semantic ranking. ${status.degradedReason ?? ""}`);
+    }
+  }
+
   let watcher: FileWatcher | null = null;
   let closed = false;
   const shutdown = async () => {
@@ -84,10 +94,6 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
     .then(({ result, watcher: w }) => {
       watcher = w;
       log(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
-      const status = ctx.getStatus();
-      if (status.searchMode === "keyword-only") {
-        log(`WARNING: sqlite-vec unavailable — running keyword-only (BM25) search without semantic ranking. ${status.degradedReason ?? ""}`);
-      }
       if (result.failed?.length) log(`WARNING: ${result.failed.length} file(s) failed to embed — they will be retried on the next index. ${result.failedReason ?? ""}`);
     })
     .catch((e) => log(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));
