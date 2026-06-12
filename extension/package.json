@@ -388,7 +388,7 @@
         "openContext.agent.routing.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable — your configured `openContext.llm.model` is the standard tier."
+          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable \u2014 your configured `openContext.llm.model` is the standard tier."
         },
         "openContext.agent.routing.fastModel": {
           "type": "string",
@@ -454,16 +454,16 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.103.0",
     "@vscode/vsce": "^3.6.0",
     "electron": "42.3.0",
-    "node-abi": "^4.12.0",
     "esbuild": "^0.24.0",
+    "node-abi": "^4.12.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "@types/markdown-it": "^14.1.2",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.3",
     "highlight.js": "^11.11.1",
