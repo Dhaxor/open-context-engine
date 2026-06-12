@@ -22,6 +22,33 @@ scripts/**
 # Documentation that belongs on GitHub, not in the runtime bundle.
 CHANGELOG.md
 PUBLISHING.md
+dev/**
+
+# Build-time-only renderer deps: markdown-it + highlight.js are bundled INTO
+# dist/webview.js by esbuild — dist/extension.js never references them
+# (verified by verify-vsix.mjs's runtime-require check). ~12 MB.
+node_modules/highlight.js/**
+node_modules/@types/markdown-it/**
+node_modules/markdown-it/**
+node_modules/argparse/**
+node_modules/entities/**
+node_modules/linkify-it/**
+node_modules/mdurl/**
+node_modules/uc.micro/**
+node_modules/punycode.js/**
+
+# tree-sitter-wasms ships ~40 language grammars (~50 MB); the engine can only
+# ever request the 8 in languageForPath (src/core/ast-graph-shared.ts). Keep
+# that list in sync — verify-vsix.mjs asserts exactly these 8 ship.
+node_modules/tree-sitter-wasms/out/*.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-typescript.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-tsx.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-javascript.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-python.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-go.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-rust.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-java.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-c_sharp.wasm
 
 # IMPORTANT: keep the native bindings in. Without these explicit negations a
 # future broad ignore (e.g. node_modules/*) would silently strip the .node and
@@ -33,6 +60,9 @@ PUBLISHING.md
 !node_modules/sqlite-vec/**
 !node_modules/sqlite-vec-*/**
 !node_modules/web-tree-sitter/**
-!node_modules/tree-sitter-wasms/**
 !node_modules/chokidar/**
 !node_modules/openai/**
+# tree-sitter-wasms deliberately has NO broad negation — vsce negations are
+# not order-sensitive (a `!pkg/**` would re-include every grammar and defeat
+# the *.wasm prune above). Only package.json + the 8 grammar negations ship.
+!node_modules/tree-sitter-wasms/package.json
