@@ -52,3 +52,7 @@ coverage/
 *.tmp
 *.temp
 dist-native/
+
+# webview dev harness (generated)
+extension/dev/harness.html
+extension/dev/_chat-html.cjs

@@ -3,11 +3,8 @@ import { icon } from "./webview/icons";
 // Static webview body. Behavior is wired by the compiled client (dist/webview.js).
 export const chatBody = `
 <header id="hdr">
-  <div class="brand"><span class="logo">${icon("sparkle")}</span><span>Open Context</span></div>
+  <div class="brand"><span class="logo">${icon("sparkle")}</span><span class="brand-name">Open Context</span></div>
   <div class="spacer"></div>
-  <button id="planBadge" class="plan free" title="Account & license">Free</button>
-  <button id="modelBadge" class="model-badge" title="Change model"><span class="txt">—</span></button>
-  <button id="stopBtn" class="iconbtn" title="Stop" hidden>${icon("stop")}</button>
   <button id="newBtn" class="iconbtn" title="New chat">${icon("add")}</button>
   <button id="historyBtn" class="iconbtn" title="History">${icon("history")}</button>
   <button id="accountBtn" class="iconbtn" title="Account & license">${icon("account")}</button>
@@ -48,30 +45,33 @@ export const chatBody = `
   <div class="welcome" id="welcome">
     <div class="w-logo">${icon("sparkle")}</div>
     <div class="w-title">Open Context</div>
-    <div class="w-sub">Ask about your codebase, request edits, run commands, or search the web — all grounded in a local index of your code.</div>
+    <div class="w-sub">Agentic chat grounded in a local index of your code.</div>
     <div class="chips">
-      <button class="chip" data-prompt="Give me a high-level overview of this codebase.">Codebase overview</button>
-      <button class="chip" data-prompt="Where is authentication handled and what are the key entry points?">Find auth flow</button>
-      <button class="chip" data-prompt="Run the test suite and summarize any failures.">Run tests</button>
-      <button class="chip" data-prompt="Search the web for the latest Tree-sitter WASM release notes.">Web search</button>
+      <button class="chip" data-prompt="Give me a high-level overview of this codebase.">${icon("repos")}<span>Explain this codebase</span></button>
+      <button class="chip" data-prompt="Where is authentication handled and what are the key entry points?">${icon("search")}<span>Find the auth flow</span></button>
+      <button class="chip" data-prompt="Run the test suite and summarize any failures.">${icon("check")}<span>Run the tests</span></button>
+      <button class="chip" data-prompt="Find dead code and unused exports in this project.">${icon("trash")}<span>Find dead code</span></button>
     </div>
-    <div class="w-tip">Switch to <b>Search</b> for raw snippets · <kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> newline</div>
   </div>
 </div>
-<button id="jumpBottom" class="jump-bottom" hidden title="Jump to latest">${icon("chevron")} <span>Latest</span></button>
+<button id="jumpBottom" class="jump-bottom" hidden title="Jump to latest">${icon("chevronDown")} <span>Latest</span></button>
 
 <div id="composer">
-  <div class="composer-tools">
-    <div class="seg" id="modeSeg">
-      <span class="opt active" data-mode="agent">${icon("sparkle")} Agent</span>
-      <span class="opt" data-mode="search">${icon("search")} Search</span>
-    </div>
-    <button id="reposBtn" class="chipbtn" title="Search across all workspace folders (Team)">${icon("repos")} Repos</button>
-  </div>
-  <div id="contextBar" class="context-bar"></div>
-  <div class="input-wrap">
+  <div class="input-frame">
+    <div id="contextBar" class="context-bar"></div>
     <textarea id="q" rows="1" placeholder="Ask anything, or describe an edit…"></textarea>
-    <button id="sendBtn" class="send" title="Send (Enter)">${icon("send")}</button>
+    <div class="input-foot">
+      <div class="seg" id="modeSeg">
+        <span class="opt active" data-mode="agent" title="Agent mode — chat, edits, commands">${icon("sparkle")} Agent</span>
+        <span class="opt" data-mode="search" title="Search mode — raw code snippets">${icon("search")} Search</span>
+      </div>
+      <button id="modelBadge" class="model-badge" title="Change model"><span class="txt">—</span>${icon("chevronDown")}</button>
+      <button id="planBadge" class="plan free" title="Account & license">Free</button>
+      <div class="spacer"></div>
+      <button id="reposBtn" class="iconbtn small" title="Search across all workspace folders (Team)">${icon("repos")}</button>
+      <button id="stopBtn" class="send stop" title="Stop" hidden>${icon("stop")}</button>
+      <button id="sendBtn" class="send" title="Send (Enter)">${icon("send")}</button>
+    </div>
   </div>
 </div>
 `;

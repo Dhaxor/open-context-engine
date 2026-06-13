@@ -110,8 +110,8 @@ function renderContext() {
 function renderSources(files: any[]) {
   if (!files || !files.length) return;
   sealBubble();
-  const el = document.createElement("div"); el.className = "card sources open";
-  el.innerHTML = `<div class="chead">${icon("repos")}<span class="ttl">Sources · ${files.length} file${files.length === 1 ? "" : "s"}</span><span class="chev">${icon("chevron")}</span></div>` +
+  const el = document.createElement("div"); el.className = "card sources";
+  el.innerHTML = `<div class="chead">${icon("repos")}<span class="ttl">${files.length} source${files.length === 1 ? "" : "s"}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody">${files.map((f) => `<div class="src-file" data-open="${esc(f.path)}" data-line="${esc((f.lines || "").split("-")[0] || "")}">${icon("open")} ${esc(f.path)}${f.lines ? ":" + esc(f.lines) : ""}</div>`).join("")}</div>`;
   el.querySelector(".chead").onclick = () => el.classList.toggle("open");
   msgs.appendChild(el); scroll();
@@ -218,10 +218,10 @@ function addEdit(e: any) {
   const el = document.createElement("div"); el.className = "card edit open"; el.dataset.editId = e.id; el._diff = e.diff;
   const title = e.kind === "create" ? "Created" : e.kind === "remove" ? "Deleted" : "Edited";
   const count = e.replacedOccurrences ? ` (${e.replacedOccurrences})` : "";
-  const openBtn = e.kind === "remove" ? "" : `<button class="btn" data-open="${esc(e.path)}">${icon("open")} Open</button>`;
-  el.innerHTML = `<div class="chead"><span class="kind ${e.kind}">${e.kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
+  const openBtn = e.kind === "remove" ? "" : `<button class="mini" data-open="${esc(e.path)}">${icon("open")} Open</button>`;
+  el.innerHTML = `<div class="chead"><span class="kind ${e.kind}">${e.kind === "str-replace" ? "edit" : e.kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody"><div class="diff">${fmtDiff(e.diff)}</div></div>` +
-    `<div class="acts"><button class="btn" data-diff="${e.id}">${icon("diff")} Diff</button>${openBtn}<button class="btn undo" data-undo="${e.id}">${icon("undo")} Undo</button></div>`;
+    `<div class="acts"><button class="mini" data-diff="${e.id}">${icon("diff")} Diff</button>${openBtn}<span class="spacer"></span><button class="mini undo" data-undo="${e.id}">${icon("undo")} Undo</button></div>`;
   el.querySelector(".chead").onclick = () => el.classList.toggle("open");
   edits[e.id] = el; msgs.appendChild(el); scroll();
 }
@@ -231,8 +231,8 @@ function setEditStatus(id: string, status: string) {
   const st = el.querySelector(".state"); if (st) st.textContent = undone ? "Reverted" : (el.querySelector(".kind.create") ? "Created" : el.querySelector(".kind.remove") ? "Deleted" : "Edited");
   const btn = el.querySelector(".acts .undo, .acts .redo");
   if (btn) {
-    if (undone) { btn.className = "btn redo"; btn.innerHTML = icon("redo") + " Redo"; btn.setAttribute("data-redo", id); btn.removeAttribute("data-undo"); }
-    else { btn.className = "btn undo"; btn.innerHTML = icon("undo") + " Undo"; btn.setAttribute("data-undo", id); btn.removeAttribute("data-redo"); }
+    if (undone) { btn.className = "mini redo"; btn.innerHTML = icon("redo") + " Redo"; btn.setAttribute("data-redo", id); btn.removeAttribute("data-undo"); }
+    else { btn.className = "mini undo"; btn.innerHTML = icon("undo") + " Undo"; btn.setAttribute("data-undo", id); btn.removeAttribute("data-redo"); }
   }
 }
 function showEditSummary(ids: string[]) {
@@ -424,7 +424,7 @@ window.addEventListener("message", (e: any) => {
     case "history_list": renderHistory(m.sessions, m.currentId); break;
     case "history_load": replaySession(m.session); historyPanel.hidden = true; break;
     case "clear":
-      msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-logo">${icon("sparkle")}</div><div class="w-title">New chat</div><div class="w-sub">Ask a question, or switch to <b>Search</b> for raw snippet lookup.</div></div>`;
+      msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-logo">${icon("sparkle")}</div><div class="w-title">New chat</div><div class="w-sub">Ask a question, or switch to Search for raw snippet lookup.</div></div>`;
       cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; break;
   }
 });
