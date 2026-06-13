@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 
 const [vsixPath, target] = process.argv.slice(2);
 if (!vsixPath || !target) {
@@ -134,6 +135,59 @@ try {
     failed = true;
   } else {
     console.log(`OK    sqlite-vec packages: exactly ${sqliteVecPkgName}.`);
+  }
+
+  // --- VSIX-diet guards (the .vscodeignore prunes ~60 MB; these prove the
+  // pruning never cuts into the runtime) -----------------------------------
+
+  // 1) tree-sitter grammars: exactly the languages languageForPath() can
+  //    request (src/core/ast-graph-shared.ts). A new language needs BOTH the
+  //    .vscodeignore negation and this list updated.
+  const EXPECTED_WASMS = ["typescript", "tsx", "javascript", "python", "go", "rust", "java", "c_sharp"];
+  const wasmDir = path.join(nmDir, "tree-sitter-wasms", "out");
+  const shippedWasms = fs.existsSync(wasmDir)
+    ? fs.readdirSync(wasmDir).filter(f => f.endsWith(".wasm")).map(f => f.replace(/^tree-sitter-/, "").replace(/\.wasm$/, "")).sort()
+    : [];
+  const expectedSorted = [...EXPECTED_WASMS].sort();
+  if (JSON.stringify(shippedWasms) !== JSON.stringify(expectedSorted)) {
+    console.error(`FAIL  tree-sitter grammars: shipped [${shippedWasms.join(", ")}], expected [${expectedSorted.join(", ")}].`);
+    failed = true;
+  } else {
+    console.log(`OK    tree-sitter grammars: exactly the ${EXPECTED_WASMS.length} supported languages.`);
+  }
+
+  // 2) build-time-only renderer deps must be pruned (they live inside
+  //    dist/webview.js; shipping them is dead weight).
+  for (const pruned of ["highlight.js", "markdown-it"]) {
+    if (fs.existsSync(path.join(nmDir, pruned))) {
+      console.error(`FAIL  pruned package shipped: ${pruned} should be excluded by .vscodeignore.`);
+      failed = true;
+    }
+  }
+
+  // 3) Runtime require check: every pure-JS external dist/extension.js loads
+  //    must be fully loadable from the extracted tree — this walks transitive
+  //    deps for real, so an over-aggressive exclusion fails HERE, not on a
+  //    user's machine. Native packages are resolve-only (their binding's ABI
+  //    may not match this script's Node).
+  const req = createRequire(path.join(extensionRoot, "noop.js"));
+  for (const mod of ["chokidar", "minimatch", "ignore", "openai", "web-tree-sitter"]) {
+    try {
+      req(mod);
+      console.log(`OK    runtime require: ${mod}`);
+    } catch (err) {
+      console.error(`FAIL  runtime require: ${mod} — ${err.message}`);
+      failed = true;
+    }
+  }
+  for (const mod of ["better-sqlite3", "sqlite-vec"]) {
+    try {
+      req.resolve(mod);
+      console.log(`OK    runtime resolve: ${mod}`);
+    } catch (err) {
+      console.error(`FAIL  runtime resolve: ${mod} — ${err.message}`);
+      failed = true;
+    }
   }
 
   if (failed) process.exit(1);
