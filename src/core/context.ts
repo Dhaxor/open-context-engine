@@ -347,6 +347,17 @@ export class OpenContext {
 
   getChunkCount(): number { return this.store.getChunkCount(); }
 
+  /** Chunks whose extracted symbol name matches exactly — definition lookup. */
+  findSymbolDefinitions(symbol: string, limit = 5): Chunk[] {
+    return this.store.getChunksBySymbol(symbol, limit);
+  }
+
+  /** Chunks whose contents mention the identifier (FTS-accelerated, exact
+   *  word-boundary match) — reference lookup. */
+  findSymbolReferences(symbol: string, pathFilter?: string, limit = 8): Chunk[] {
+    return this.store.getChunksReferencingIdentifier(symbol, pathFilter, limit);
+  }
+
   getWorkspaceRoot(): string { return this.workspaceRoot; }
 
   getIndexedFiles(): { path: string; chunkCount: number; lastModified: number }[] {
