@@ -75,10 +75,12 @@ node ./scripts/verify-vsix.mjs ../oce-linux-x64-local.vsix linux-x64
 code --install-extension ../oce-linux-x64-local.vsix
 ```
 
-`npm run rebuild` mirrors CI's `BINDING_TARGETS` loop locally. The Node-ABI
-targets are plain prebuild downloads and always succeed; the Electron
-targets need a local C++ toolchain and are skipped with a warning if you
-don't have one (the Node prebuilds cover current VS Code either way).
+`npm run rebuild` mirrors CI's `BINDING_TARGETS` loop locally. ALL targets
+are official upstream prebuild downloads first (v12.10 ships both
+conventions: electron 136/139/140/143/145 and node 127/137/141/147), so no
+C++ toolchain is needed; a source compile only happens as a fallback for a
+target upstream doesn't cover, and is skipped with a warning if no
+toolchain is available.
 
 This is the right loop for smoke-testing changes before pushing a tag.
 

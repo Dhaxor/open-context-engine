@@ -45,23 +45,24 @@ for (const target of TARGETS) {
   // iteration would defeat the ABI assertion below.
   fs.rmSync(buildDir, { recursive: true, force: true });
   try {
-    if (kind === "electron") {
-      execSync(`npx electron-rebuild -f -w better-sqlite3 -v ${version}`, {
-        cwd: extRoot,
+    // Same order as CI for BOTH conventions: official upstream prebuild
+    // first (no toolchain needed — v12.10 ships electron 136/139/140/143/145
+    // and node 127/137/141/147), source build only as the fallback. On the
+    // node fallback, --target is load-bearing: a bare build-release compiles
+    // against the SHELL's Node and silently mislabels the ABI.
+    try {
+      execSync(`npx prebuild-install -r ${kind} -t ${version} -f`, {
+        cwd: bs3Dir,
         stdio: "inherit",
       });
-    } else {
-      // Same order as CI: official prebuild first, source build against the
-      // requested version's headers as the fallback (12.10 ships no Node-24
-      // prebuild). --target is load-bearing: a bare build-release compiles
-      // against the SHELL's Node and silently mislabels the ABI.
-      try {
-        execSync(`npx prebuild-install -r node -t ${version} -f`, {
-          cwd: bs3Dir,
+    } catch {
+      console.warn(`No ${kind} prebuild for ${version}; compiling from source…`);
+      if (kind === "electron") {
+        execSync(`npx electron-rebuild -f -w better-sqlite3 -v ${version}`, {
+          cwd: extRoot,
           stdio: "inherit",
         });
-      } catch {
-        console.warn(`No prebuild for node ${version}; compiling from source…`);
+      } else {
         execSync(`npm run build-release -- --target=${version}`, {
           cwd: bs3Dir,
           stdio: "inherit",
