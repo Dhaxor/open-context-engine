@@ -27,8 +27,12 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | ⚡ **Local SQLite + Vectors** | Stores everything in a local SQLite database with `sqlite-vec`—no external vector DB, no network latency, no subscription fees. |
 | 🔗 **Symbol Expansion** | Automatically resolves identifiers in search results, pulling in definitions of functions, classes, and types referenced in snippets. |
 | 🎯 **Optional Re-ranking** | Plug in Voyage or Cohere re-rankers to boost result quality for complex queries. |
-| 🤖 **Built-in Agent** | Includes a full tool-use agent with codebase retrieval, file editing, shell execution, and web search—ready to run interactively or headless. |
+| 🕸️ **Code Graph** | A tree-sitter AST pass extracts import/call/definition edges into a queryable graph; top search results are graph-expanded so callers and callees ride along. |
+| 🤖 **Built-in Agent** | Includes a full tool-use agent with codebase retrieval, file editing, shell execution, and web search—plus opt-in model routing (cost-appropriate tier per query) and cross-session memory. |
 | 🔌 **MCP Native** | Exposes all retrieval tools through the Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP-compatible client. |
+| 🧰 **VS Code Extension** | Sidebar chat grounded in the index, agent edits with per-file diff/undo/redo, live re-indexing on save, and an index-health panel. Ships per-platform with multi-ABI native bindings. |
+| 🛟 **Degrades, Never Dies** | No sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
+| 📏 **Measured, Not Guessed** | Retrieval quality is scored against a committed 44-case gold set: **recall@10 0.977 · nDCG@10 0.812 · ctx-recall 0.943** on this repo. Ranking changes ship with before/after deltas. |
 
 ## 🚀 Quick Start
 
@@ -103,6 +107,24 @@ Then add to your MCP config:
     }
   }
 }
+```
+
+### 7. Or use the VS Code extension
+
+The `extension/` folder ships a full VS Code experience on top of the same
+engine: a sidebar **chat** grounded in your index (streaming, markdown,
+code-block copy/insert/apply), **agent edits** with per-file diff /
+undo / redo and a per-turn "undo all", **quick search**
+(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd>), auto-indexing on save, and an
+**index health panel** for debugging retrieval. Platform packages bundle
+native bindings for every supported VS Code runtime ABI — see
+[`extension/PUBLISHING.md`](extension/PUBLISHING.md) for the support matrix,
+or build your own VSIX:
+
+```bash
+cd extension && npm ci
+npm run rebuild        # downloads native bindings for all supported ABIs
+npx vsce package --target linux-x64
 ```
 
 ## 📖 Usage Guide
@@ -195,9 +217,10 @@ Exposed MCP tools:
 ├─────────────────────────────────────────────────────────────┤
 │  HybridRetriever                                             │
 │  ├── Vector Search (sqlite-vec)                              │
-│  ├── BM25 Search (SQLite FTS5)                               │
-│  ├── Reciprocal Rank Fusion                                  │
-│  └── Optional Re-ranking (Voyage / Cohere)                   │
+│  ├── BM25 Search (SQLite FTS5, porter-stemmed)               │
+│  ├── Reciprocal Rank Fusion + symbol/editor/recency boosts   │
+│  ├── Optional Re-ranking (Voyage / Cohere)                   │
+│  └── Graph Expansion (callers/callees via code graph)        │
 ├─────────────────────────────────────────────────────────────┤
 │  AstChunker + CodeChunker                                    │
 │  ├── Tree-sitter parsers (TS, JS, Py, Go, Rust, Java, C#)   │
@@ -210,8 +233,9 @@ Exposed MCP tools:
 ├─────────────────────────────────────────────────────────────┤
 │  SqliteStore                                                 │
 │  ├── chunks (metadata)                                       │
-│  ├── chunks_vec (vector index)                               │
+│  ├── chunks_vec (vector index — skipped in keyword-only)     │
 │  ├── chunks_fts (full-text index)                            │
+│  ├── graph_edges (import/call/definition graph)              │
 │  └── files (index state)                                     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -259,7 +283,7 @@ Exposed MCP tools:
 ## 🛠️ Development
 
 ```bash
-git clone https://github.com/yourusername/open-context-engine.git
+git clone https://github.com/Dhaxor/open-context-engine.git
 cd open-context-engine
 npm install
 npm run build
@@ -275,21 +299,29 @@ src/
 │   ├── ast-chunker.ts      # Tree-sitter chunking
 │   ├── chunker.ts          # Fallback line chunking
 │   ├── embedder.ts         # Embedding providers
-│   ├── retriever.ts        # Hybrid search + RRF
+│   ├── retriever.ts        # Hybrid search + RRF + boosts
 │   ├── reranker.ts         # Re-ranking providers
-│   ├── sqlite-store.ts     # SQLite persistence
+│   ├── sqlite-store.ts     # SQLite persistence (vec + FTS5 + graph)
+│   ├── code-graph.ts       # Import/call/definition edge queries
+│   ├── ast-graph-extractor.ts # Single-DFS AST edge extraction
+│   ├── graph-expander.ts   # Graph-aware result expansion
 │   ├── search.ts           # Output formatting
 │   ├── file-filter.ts      # Gitignore-aware file collection
 │   └── file-watcher.ts     # Watch for changes
 ├── agent/
 │   ├── agent.ts            # ContextAgent + tools
 │   ├── providers.ts        # LLM callers (OpenAI, Anthropic)
+│   ├── model-router.ts     # Cost-appropriate tier per query
+│   ├── session-memory.ts   # Cross-session insight memory
 │   ├── edit-tools.ts       # File editing tools
 │   └── extra-tools.ts      # Shell + web search
+├── eval/
+│   └── runner.ts           # Retrieval-quality scoring (oce eval)
 ├── mcp/
 │   └── server.ts           # MCP server implementation
 └── cli/
     └── index.ts            # oce CLI entrypoint
+extension/                  # VS Code extension (chat, edit review, health)
 ```
 
 ## 🧪 How Search Works
@@ -298,9 +330,11 @@ src/
 2. **Embedding**: Each chunk is embedded using your chosen provider. Voyage Code-3 is optimized for code and gives the best retrieval quality.
 3. **Indexing**: Vectors go into `sqlite-vec`, text into FTS5, metadata into SQLite tables. All local.
 4. **Query**: Your natural language query is embedded and searched simultaneously via vector similarity and BM25.
-5. **Fusion**: Results are fused with Reciprocal Rank Fusion, balancing semantic and lexical signals.
+5. **Fusion**: Results are fused with Reciprocal Rank Fusion, then boosted by symbol-name matches, your editor context (active file, open tabs), and git recency.
 6. **Re-ranking** (optional): Top candidates are re-scored by a dedicated re-ranker for higher precision.
-7. **Symbol Expansion**: Identifiers in top results are resolved, pulling in definitions so the LLM sees the full picture.
+7. **Graph Expansion**: Top results are expanded along the code graph — callers, callees, and referenced definitions ride along so the LLM sees the full picture.
+
+If the `sqlite-vec` extension can't load on your platform, steps 2 and 4's vector half are skipped automatically and the engine runs **keyword-only (BM25)** — slower to find conceptual matches, but everything keeps working and `getStatus()` / the CLI / the extension all surface the mode.
 
 ## 📏 Measuring Retrieval Quality
 
@@ -321,6 +355,14 @@ oce eval --cases eval/oce.eval.json --no-expand --baseline baseline.json
 
 Reports **recall@k**, **MRR**, **nDCG@k**, **hit-rate**, and per-query latency, plus per-case deltas (improved / regressed) against a saved baseline. Metrics are file-granular: a case passes when the gold file ranks in the top-k unique files returned.
 
+Current numbers on this repo's committed 44-case gold set ([`eval/oce.eval.json`](eval/oce.eval.json), baseline at [`eval/baseline.json`](eval/baseline.json)):
+
+| recall@10 | MRR | nDCG@10 | hit-rate | ctx-recall | mean latency |
+|---|---|---|---|---|---|
+| **0.977** | 0.768 | 0.812 | 0.977 | 0.943 | 251 ms |
+
+Reports record which search mode produced them (`hybrid` vs `keyword-only`), and baseline comparisons warn loudly on a mode mismatch.
+
 A case file is a JSON array (or `{ cases: [...] }`):
 
 ```json
@@ -334,6 +376,7 @@ Keep your eval sets out of the index by listing their directory in `.contextigno
 - Node.js 18+
 - For local embeddings: [Ollama](https://ollama.com) running locally
 - For cloud embeddings: API key for Voyage or OpenAI
+- Platforms without a [sqlite-vec](https://github.com/asg017/sqlite-vec) build (e.g. win32-arm64, Alpine) run keyword-only — no API key needed at all in that mode
 
 ## 📄 License
 
