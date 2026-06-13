@@ -1,0 +1,50 @@
+# Core test suite + typechecks on every PR and main push.
+#
+# The release-vsix workflow only smoke-builds the extension when extension/
+# files change — until this workflow, the 278-test vitest suite never ran in
+# CI at all, and core-only PRs could break extension typechecking unnoticed
+# (the extension imports ../src directly).
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Vitest + core typecheck
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          # Same pin as release-vsix.yml — bump them together.
+          node-version: "22.16.0"
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+
+  extension-types:
+    name: Extension typecheck
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.16.0"
+      # Extension tsc resolves imports from BOTH dependency trees: it
+      # imports ../src (root deps) and its own node_modules.
+      - run: npm ci
+      - run: npm ci
+        working-directory: extension
+      - run: npx tsc --noEmit
+        working-directory: extension
