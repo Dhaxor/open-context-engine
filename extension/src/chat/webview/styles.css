@@ -182,8 +182,12 @@ body {
 .card { align-self: stretch; border: 1px solid var(--oc-border); border-radius: var(--oc-radius-sm); background: var(--oc-surface); overflow: hidden; }
 .card .chead { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 11.5px; cursor: pointer; color: var(--vscode-descriptionForeground); }
 .card .chead:hover { color: var(--vscode-foreground); }
-.card .chead .ttl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card .chead .chev { color: var(--vscode-descriptionForeground); transition: transform .15s; opacity: .7; }
+.card .chead .ttl { flex-shrink: 0; color: var(--vscode-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The self-describing argument (query / file / command). Monospace so paths
+   and code read cleanly; ellipsized so long queries never break the row. */
+.card .chead .tdetail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--vscode-editor-font-family, monospace); font-size: 10.5px; opacity: .8; }
+.card .chead .tdetail:not(:empty)::before { content: ""; }
+.card .chead .chev { color: var(--vscode-descriptionForeground); transition: transform .15s; opacity: .7; flex-shrink: 0; }
 .card .chead .chev .ic { width: 13px; height: 13px; }
 .card.open .chead .chev { transform: rotate(90deg); }
 .card .cbody { display: none; padding: 8px 10px; border-top: 1px solid var(--oc-border); font-size: 11.5px; color: var(--vscode-descriptionForeground); }

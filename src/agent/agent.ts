@@ -20,6 +20,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an expert coding assistant with tools to 
 - Use web-search when the answer depends on external docs, library references, or up-to-date facts not in the codebase.
 - When making edits, use str-replace with enough surrounding context so the old_str is unique. Use create-file for new files and remove-file to delete.
 - Cite file paths and line ranges when you reference code.
+- When your answer is about specific code, SHOW it: include the relevant excerpt as a fenced code block tagged with the language AND the file path (e.g. \`\`\`ts src/core/retriever.ts), not just a prose description. The reader sees tool results collapsed, so quote the lines that matter directly in your answer. Keep excerpts focused — the lines under discussion, not whole files.
 - Do not fabricate file paths or symbols — verify them with the tools first.`;
 
 export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>): ToolDefinition[] {
