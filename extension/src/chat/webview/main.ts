@@ -176,23 +176,50 @@ function showError(t: string) { if (cur) { cur.remove(); cur = null; } const d =
 function notice(t: string, cls?: string) { const d = document.createElement("div"); d.className = "notice" + (cls ? " " + cls : ""); d.textContent = t; msgs.appendChild(d); scroll(); }
 
 // --- agent cards ---
+// The one-line argument that makes a collapsed tool card self-describing:
+// which file, what query, which command. Without it every call reads as a
+// generic "Searched codebase" with no hint of what it actually did.
+function toolDetail(name: string, args: any): string {
+  if (!args) return "";
+  const pick = (...keys: string[]) => { for (const k of keys) if (args[k] != null && String(args[k]).trim()) return String(args[k]).trim(); return ""; };
+  let d = "";
+  if (name === "read-file" || name === "view-range" || name === "str-replace" || name === "create-file" || name === "remove-file") {
+    d = pick("path");
+    const s = args.start_line, e = args.end_line;
+    if (d && s != null) d += e != null ? `:${s}-${e}` : `:${s}`;
+  } else if (name === "list-files") {
+    d = pick("pattern", "directory") || "all";
+  } else if (name === "find-symbol-definition" || name === "find-symbol-references") {
+    d = pick("symbol");
+  } else if (name === "run-command") {
+    d = pick("command");
+  } else if (name === "web-search") {
+    d = pick("query");
+  } else {
+    // codebase-retrieval and anything else: show the main text argument.
+    d = pick("information_request", "query", "command", "path", "symbol");
+  }
+  return d;
+}
 function toolBody(args: any, summary?: string) {
   let rows = "";
-  if (args) for (const k in args) { let v: any = args[k]; if (typeof v !== "string") v = JSON.stringify(v); rows += `<div><span class="k">${esc(k)}:</span>${esc(v.length > 280 ? v.slice(0, 280) + "…" : v)}</div>`; }
-  if (summary) rows += `<pre>${esc(summary)}</pre>`;
+  if (args) for (const k in args) { let v: any = args[k]; if (typeof v !== "string") v = JSON.stringify(v); rows += `<div><span class="k">${esc(k)}:</span>${esc(v.length > 600 ? v.slice(0, 600) + "…" : v)}</div>`; }
+  if (summary) rows += `<div class="k" style="margin-top:6px">result</div><pre>${esc(summary)}</pre>`;
   return rows || '<div class="k">no arguments</div>';
 }
-function toolUpdate(id: string, _name: string, status: string, label: string, summary?: string, args?: any) {
+function toolUpdate(id: string, name: string, status: string, label: string, summary?: string, args?: any) {
   let t = tools[id];
   if (!t) {
     sealBubble();
     t = document.createElement("div"); t.className = "card tool running";
-    t.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl"></span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
+    t.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl"></span><span class="tdetail"></span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
     msgs.appendChild(t); tools[id] = t;
     t.querySelector(".chead").onclick = () => t.classList.toggle("open");
   }
   t.classList.remove("running", "complete", "error"); t.classList.add(status);
   t.querySelector(".ttl").textContent = label;
+  const detail = toolDetail(name, args);
+  const de = t.querySelector(".tdetail"); de.textContent = detail; de.title = detail;
   if (status !== "running") { t.querySelector(".status-ic").innerHTML = status === "error" ? icon("warning") : icon("check"); }
   t.querySelector(".cbody").innerHTML = toolBody(args, summary);
   scroll();
