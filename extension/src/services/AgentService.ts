@@ -35,6 +35,7 @@ const DEFAULT_LLM_MODEL: Record<string, string> = {
     openai: "gpt-5.4",
     anthropic: "claude-opus-4-7",
     google: "gemini-3.1-pro-preview",
+    custom: "",
 };
 
 export class AgentService {
@@ -108,6 +109,7 @@ export class AgentService {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<LLMProvider>("llm.provider", "openai");
         const model = cfg.get<string>("llm.model", "") || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
+        const baseUrl = cfg.get<string>("llm.baseUrl", "") || undefined;
         const svc = ContextService.getInstance();
         const apiKey = (await svc.getLLMApiKey(provider)) ?? envKey(provider);
         if (!apiKey) {
@@ -125,7 +127,7 @@ export class AgentService {
         const memoryEnabled = cfg.get<boolean>("agent.memory.enabled", true);
         const maxTokens = cfg.get<number>("agent.maxTokens", 4096);
         const ctx = await svc.getContext();
-        const key = `${provider}|${model}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
+        const key = `${provider}|${model}|${baseUrl ?? ""}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
         const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}`;
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
@@ -151,6 +153,7 @@ export class AgentService {
             provider,
             model,
             apiKey,
+            baseUrl,
             maxSteps: cfg.get<number>("agent.maxSteps", 10),
             maxTokens: cfg.get<number>("agent.maxTokens", 4096),
             historyTokenBudget: cfg.get<number>("agent.historyTokenBudget", 120000),
@@ -205,6 +208,9 @@ function envKey(provider: LLMProvider): string {
 }
 
 function buildMissingKeyMessage(provider: LLMProvider): string {
+    if (provider === "custom") {
+        return `LLM API key not set. Open Model & API keys and enter your custom endpoint key.`;
+    }
     const envName = provider === "openai" ? "OPENAI_API_KEY" : provider === "anthropic" ? "ANTHROPIC_API_KEY" : "GOOGLE_API_KEY";
     return `LLM API key not set. Run the command "Open Context: Set LLM API Key" or set the ${envName} environment variable.`;
 }

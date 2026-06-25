@@ -214,6 +214,19 @@ export class ContextService implements vscode.Disposable {
         await cfg.update("llm.model", model, vscode.ConfigurationTarget.Global);
     }
 
+    public async getLLMBaseUrl(): Promise<string> {
+        return vscode.workspace.getConfiguration("openContext").get<string>("llm.baseUrl", "");
+    }
+
+    public async setLLMBaseUrl(url: string): Promise<void> {
+        const cfg = vscode.workspace.getConfiguration("openContext");
+        await cfg.update("llm.baseUrl", url, vscode.ConfigurationTarget.Global);
+    }
+
+    public async hasEmbeddingApiKey(): Promise<boolean> {
+        return (await this.getEmbeddingApiKey()) != null;
+    }
+
     public async getEmbeddingApiKey(): Promise<string | undefined> {
         if (!this._extContext) return undefined;
         const secret = await this._extContext.secrets.get("openContext.embedding.apiKey");

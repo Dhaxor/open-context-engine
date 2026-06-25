@@ -313,12 +313,14 @@
           "enum": [
             "openai",
             "anthropic",
-            "google"
+            "google",
+            "custom"
           ],
           "enumDescriptions": [
             "OpenAI (GPT-5.4, GPT-5 Codex, GPT-5)",
             "Anthropic (Claude Opus 4.7, Sonnet 4.6, Haiku 4.5)",
-            "Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5)"
+            "Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5)",
+            "Custom OpenAI-compatible endpoint (OpenRouter, LM Studio, etc.)"
           ],
           "default": "openai",
           "description": "LLM provider for chat and agent",
@@ -327,8 +329,14 @@
         "openContext.llm.model": {
           "type": "string",
           "default": "gpt-5.4",
-          "markdownDescription": "LLM model for chat and agent. Common choices:\n\n**OpenAI:** `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-codex`, `gpt-5.3-codex`, `gpt-5.1-codex-max`, `gpt-5`, `gpt-4.1`\n\n**Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`\n\n**Google:** `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`, `gemini-2.5-pro`, `gemini-2.5-flash`",
+          "markdownDescription": "LLM model for chat and agent. Common choices:\n\n**OpenAI:** `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-codex`, `gpt-5.3-codex`, `gpt-5.1-codex-max`, `gpt-5`, `gpt-4.1`\n\n**Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`\n\n**Google:** `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`, `gemini-2.5-pro`, `gemini-2.5-flash`\n\n**Custom:** any model ID supported by your OpenAI-compatible endpoint",
           "order": 5
+        },
+        "openContext.llm.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for OpenAI-compatible custom LLM endpoints (e.g. https://openrouter.ai/api/v1). Used when llm.provider is custom.",
+          "order": 5.5
         },
         "openContext.llm.apiKey": {
           "type": "string",

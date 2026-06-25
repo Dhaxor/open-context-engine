@@ -152,6 +152,18 @@ export class ChatView implements vscode.WebviewViewProvider {
                         await this._sendConfig();
                     }
                     break;
+                case "setLLMBaseUrl":
+                    if (typeof msg.baseUrl === "string") {
+                        await ContextService.getInstance().setLLMBaseUrl(String(msg.baseUrl));
+                        await this._sendConfig();
+                    }
+                    break;
+                case "saveEmbeddingKey":
+                    if (typeof msg.apiKey === "string") {
+                        await ContextService.getInstance().setEmbeddingApiKey(msg.apiKey);
+                        await this._sendConfig();
+                    }
+                    break;
                 case "getConfig":
                     await this._sendConfig();
                     break;
@@ -341,14 +353,30 @@ export class ChatView implements vscode.WebviewViewProvider {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<string>("llm.provider", "openai");
         const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
+        const baseUrl = cfg.get<string>("llm.baseUrl", "");
+        const embeddingProvider = cfg.get<string>("embedding.provider", "voyage");
+        const embeddingModel = cfg.get<string>("embedding.model", "");
         const svc = ContextService.getInstance();
         const hasKey: Record<string, boolean> = {
             openai: await svc.hasLLMApiKey("openai"),
             anthropic: await svc.hasLLMApiKey("anthropic"),
             google: await svc.hasLLMApiKey("google"),
+            custom: await svc.hasLLMApiKey("custom"),
         };
         const hasWebSearchKey = await svc.hasWebSearchApiKey();
-        this._view?.webview.postMessage({ type: "config", provider, model, hasKey, hasWebSearchKey, indexWorkspaceRoot: svc.getIndexWorkspaceRoot() });
+        const hasEmbeddingKey = await svc.hasEmbeddingApiKey();
+        this._view?.webview.postMessage({
+            type: "config",
+            provider,
+            model,
+            baseUrl,
+            hasKey,
+            hasWebSearchKey,
+            hasEmbeddingKey,
+            embeddingProvider,
+            embeddingModel,
+            indexWorkspaceRoot: svc.getIndexWorkspaceRoot(),
+        });
     }
 
     private async _processSearch(query: string): Promise<void> {
@@ -543,5 +571,6 @@ function defaultModelFor(provider: string): string {
     if (provider === "anthropic") return "claude-opus-4-7";
     if (provider === "openai") return "gpt-5.4";
     if (provider === "google") return "gemini-3.1-pro-preview";
+    if (provider === "custom") return "";
     return provider;
 }
