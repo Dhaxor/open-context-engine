@@ -10,6 +10,8 @@ import { VSCodeEditApplier } from "../services/VSCodeEditApplier";
 import { SearchResult } from "../../../src/core/types";
 import { EditProposal } from "../../../src/agent/types";
 import { unifiedDiff } from "../../../src/core/diff";
+import { buildConfigPayload, defaultModelFor, handleConfigMessage } from "../shared/open-context-config";
+import { SettingsPanel } from "../settings/SettingsPanel";
 
 type ChatMode = "agent" | "search";
 
@@ -129,7 +131,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                     this.clearChat();
                     break;
                 case "openSettings":
-                    vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
+                    SettingsPanel.show(this._extensionUri, "model-keys");
                     break;
                 case "chooseIndexWorkspace":
                     await vscode.commands.executeCommand("openContext.selectIndexWorkspace");
@@ -141,31 +143,15 @@ export class ChatView implements vscode.WebviewViewProvider {
                 case "setMode":
                     break;
                 case "setLLMSelection":
-                    if (msg.provider && msg.model) {
-                        await ContextService.getInstance().setLLMSelection(String(msg.provider), String(msg.model));
-                        this._sendModelInfo();
-                    }
-                    break;
                 case "saveLLMKey":
-                    if (typeof msg.apiKey === "string") {
-                        await ContextService.getInstance().setLLMApiKey(msg.apiKey, msg.provider ? String(msg.provider) : undefined);
-                        await this._sendConfig();
-                    }
-                    break;
                 case "setLLMBaseUrl":
-                    if (typeof msg.baseUrl === "string") {
-                        await ContextService.getInstance().setLLMBaseUrl(String(msg.baseUrl));
-                        await this._sendConfig();
-                    }
-                    break;
                 case "saveEmbeddingKey":
-                    if (typeof msg.apiKey === "string") {
-                        await ContextService.getInstance().setEmbeddingApiKey(msg.apiKey);
-                        await this._sendConfig();
-                    }
-                    break;
+                case "setWebSearchKey":
                 case "getConfig":
-                    await this._sendConfig();
+                    await handleConfigMessage(msg, {
+                        onModelChange: () => this._sendModelInfo(),
+                        onConfigSent: () => this._sendConfig(),
+                    });
                     break;
                 case "listHistory":
                     this._sendHistoryList();
@@ -181,12 +167,6 @@ export class ChatView implements vscode.WebviewViewProvider {
                         this._history?.delete(String(msg.id));
                         if (this._sessionId === msg.id) this._startNewSession();
                         this._sendHistoryList();
-                    }
-                    break;
-                case "setWebSearchKey":
-                    if (typeof msg.apiKey === "string") {
-                        await ContextService.getInstance().setWebSearchApiKey(msg.apiKey);
-                        await this._sendConfig();
                     }
                     break;
                 case "getLicense":
@@ -350,33 +330,7 @@ export class ChatView implements vscode.WebviewViewProvider {
     }
 
     private async _sendConfig(): Promise<void> {
-        const cfg = vscode.workspace.getConfiguration("openContext");
-        const provider = cfg.get<string>("llm.provider", "openai");
-        const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
-        const baseUrl = cfg.get<string>("llm.baseUrl", "");
-        const embeddingProvider = cfg.get<string>("embedding.provider", "voyage");
-        const embeddingModel = cfg.get<string>("embedding.model", "");
-        const svc = ContextService.getInstance();
-        const hasKey: Record<string, boolean> = {
-            openai: await svc.hasLLMApiKey("openai"),
-            anthropic: await svc.hasLLMApiKey("anthropic"),
-            google: await svc.hasLLMApiKey("google"),
-            custom: await svc.hasLLMApiKey("custom"),
-        };
-        const hasWebSearchKey = await svc.hasWebSearchApiKey();
-        const hasEmbeddingKey = await svc.hasEmbeddingApiKey();
-        this._view?.webview.postMessage({
-            type: "config",
-            provider,
-            model,
-            baseUrl,
-            hasKey,
-            hasWebSearchKey,
-            hasEmbeddingKey,
-            embeddingProvider,
-            embeddingModel,
-            indexWorkspaceRoot: svc.getIndexWorkspaceRoot(),
-        });
+        this._view?.webview.postMessage(await buildConfigPayload());
     }
 
     private async _processSearch(query: string): Promise<void> {
@@ -565,12 +519,4 @@ function buildTaskPlan(query: string): string[] {
     if (/test|lint|build|verify|make sure|works/.test(q) || /fix|add|implement|change|update/.test(q)) plan.push("Run the smallest relevant validation command");
     plan.push("Summarize changes, validation, and any follow-up risks");
     return [...new Set(plan)].slice(0, 6);
-}
-
-function defaultModelFor(provider: string): string {
-    if (provider === "anthropic") return "claude-opus-4-7";
-    if (provider === "openai") return "gpt-5.4";
-    if (provider === "google") return "gemini-3.1-pro-preview";
-    if (provider === "custom") return "";
-    return provider;
 }

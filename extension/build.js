@@ -62,15 +62,28 @@ const webviewOptions = {
   logLevel: "info",
 };
 
+const settingsWebviewOptions = {
+  entryPoints: ["src/settings/webview/main.ts"],
+  bundle: true,
+  outfile: "dist/settings-webview.js",
+  platform: "browser",
+  format: "iife",
+  target: "es2020",
+  sourcemap: false,
+  minify,
+  logLevel: "info",
+};
+
 async function run() {
   if (watch) {
     const ctx = await esbuild.context(options);
     const wctx = await esbuild.context(webviewOptions);
-    await Promise.all([ctx.watch(), wctx.watch()]);
-    console.log("[watch] esbuild watching extension + webview…");
+    const sctx = await esbuild.context(settingsWebviewOptions);
+    await Promise.all([ctx.watch(), wctx.watch(), sctx.watch()]);
+    console.log("[watch] esbuild watching extension + webview + settings…");
   } else {
-    await Promise.all([esbuild.build(options), esbuild.build(webviewOptions)]);
-    console.log(`[build] wrote dist/extension.js + dist/webview.js (${minify ? "minified" : "sourcemap"})`);
+    await Promise.all([esbuild.build(options), esbuild.build(webviewOptions), esbuild.build(settingsWebviewOptions)]);
+    console.log(`[build] wrote dist/extension.js + dist/webview.js + dist/settings-webview.js (${minify ? "minified" : "sourcemap"})`);
   }
 }
 

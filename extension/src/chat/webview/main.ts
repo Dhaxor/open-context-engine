@@ -1,6 +1,7 @@
 import "./styles.css";
 import { icon } from "./icons";
 import { esc, md, fmtDiff, relTime, shortPath } from "./render";
+import { wireModelKeysForm } from "../../shared/model-keys-form";
 
 declare function acquireVsCodeApi(): { postMessage(m: any): void };
 const V = acquireVsCodeApi();
@@ -8,26 +9,24 @@ const $ = (id: string) => document.getElementById(id) as any;
 const post = (m: any) => V.postMessage(m);
 
 const GET_TEAM_URL = "https://opencontext.dev/pricing";
-const MODELS: Record<string, string[]> = {
-  openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-codex", "gpt-5.3-codex", "gpt-5.1-codex-max", "gpt-5", "gpt-4.1"],
-  anthropic: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-5"],
-  google: ["gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
-};
 
 // --- element refs ---
 const msgs = $("messages"), q = $("q"), sendBtn = $("sendBtn"), stopBtn = $("stopBtn");
 const modelBadge = $("modelBadge"), planBadge = $("planBadge"), modeSeg = $("modeSeg");
 const settingsPanel = $("settingsPanel"), historyPanel = $("historyPanel"), accountPanel = $("accountPanel");
-const modelSel = $("modelSel"), modelCustom = $("modelCustom"), baseUrl = $("baseUrl"), apiKey = $("apiKey"), keyStatus = $("keyStatus");
-const tavilyKey = $("tavilyKey"), tavilyStatus = $("tavilyStatus");
-const embeddingKey = $("embeddingKey"), embeddingStatus = $("embeddingStatus"), embeddingMeta = $("embeddingMeta");
-const modelSelRow = $("modelSelRow"), modelCustomRow = $("modelCustomRow"), baseUrlRow = $("baseUrlRow"), baseUrlHint = $("baseUrlHint");
 const histList = $("histList"), histEmpty = $("histEmpty"), accountBody = $("accountBody"), reposBtn = $("reposBtn"), contextBar = $("contextBar");
+
+const modelKeysForm = wireModelKeysForm({
+  $,
+  post,
+  notice,
+  root: settingsPanel,
+  showCancel: true,
+});
 
 // --- state ---
 let cur: any = null, fullText = "", busy = false, mode: "agent" | "search" = "agent", renderTimer = 0;
 let tools: Record<string, any> = {}, edits: Record<string, any> = {};
-let uiProvider = "openai", uiHasKey: Record<string, boolean> = {}, uiHasTavily = false, uiHasEmbedding = false;
 let license: any = { plan: "free", valid: false }, multiOn = false;
 let lastUserText = "", contextInfo: any = { activeFile: "", hasSelection: false };
 const isTeam = () => !!license.valid && (license.plan === "team" || license.plan === "enterprise");
@@ -290,55 +289,6 @@ function renderSearchResults(results: any[]) {
 // --- panels ---
 function closePanels(except?: any) { [settingsPanel, historyPanel, accountPanel].forEach((p) => { if (p !== except) p.hidden = true; }); }
 function togglePanel(p: any, onOpen?: () => void) { const show = p.hidden; closePanels(show ? p : null); p.hidden = !show; if (show && onOpen) onOpen(); }
-function rebuildModels() {
-  if (uiProvider === "custom") return;
-  modelSel.innerHTML = (MODELS[uiProvider] || []).map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
-}
-function setProviderUI(p: string) {
-  uiProvider = p;
-  const isCustom = p === "custom";
-  settingsPanel.querySelectorAll(".pill").forEach((b: any) => b.classList.toggle("active", b.dataset.provider === p));
-  modelSelRow.hidden = isCustom;
-  modelCustomRow.hidden = !isCustom;
-  baseUrlRow.hidden = !isCustom;
-  baseUrlHint.hidden = !isCustom;
-  if (!isCustom) rebuildModels();
-  updateKeyStatus();
-}
-function updateKeyStatus() {
-  const has = !!uiHasKey[uiProvider];
-  keyStatus.className = "key-status " + (has ? "set" : "unset"); keyStatus.textContent = has ? "set" : "not set";
-  apiKey.placeholder = has ? "•••••• (blank = keep)" : (uiProvider === "custom" ? "API key (stored securely)" : "sk-… (stored securely)");
-  apiKey.value = "";
-  tavilyStatus.className = "key-status " + (uiHasTavily ? "set" : "unset"); tavilyStatus.textContent = uiHasTavily ? "set" : "not set";
-  tavilyKey.placeholder = uiHasTavily ? "•••••• (blank = keep)" : "tvly-… (web search)"; tavilyKey.value = "";
-  embeddingStatus.className = "key-status " + (uiHasEmbedding ? "set" : "unset"); embeddingStatus.textContent = uiHasEmbedding ? "set" : "not set";
-  embeddingKey.placeholder = uiHasEmbedding ? "•••••• (blank = keep)" : "Voyage, OpenAI, etc.";
-  embeddingKey.value = "";
-}
-function applyConfig(m: any) {
-  uiHasKey = m.hasKey || {};
-  uiHasTavily = !!m.hasWebSearchKey;
-  uiHasEmbedding = !!m.hasEmbeddingKey;
-  setProviderUI(m.provider || "openai");
-  if (m.provider === "custom") {
-    modelCustom.value = m.model || "";
-    baseUrl.value = m.baseUrl || "";
-  } else if (m.model) {
-    modelSel.value = m.model;
-    if (!modelSel.value && m.model) {
-      const opt = document.createElement("option");
-      opt.value = m.model;
-      opt.textContent = m.model;
-      modelSel.appendChild(opt);
-      modelSel.value = m.model;
-    }
-  }
-  if (m.embeddingProvider || m.embeddingModel) {
-    embeddingMeta.textContent = "Current: " + (m.embeddingProvider || "—") + " · " + (m.embeddingModel || "—");
-  }
-  updateKeyStatus();
-}
 
 // --- history ---
 function renderHistory(sessions: any[], currentId: string) {
@@ -430,7 +380,8 @@ sendBtn.onclick = () => send();
 stopBtn.onclick = () => { post({ type: "cancel" }); setBusy(false); if (cur) finalize(); notice("Stopped"); };
 $("newBtn").onclick = () => post({ type: "newSession" });
 modelBadge.onclick = () => togglePanel(settingsPanel, () => post({ type: "getConfig" }));
-$("settingsBtn").onclick = () => togglePanel(settingsPanel, () => post({ type: "getConfig" }));
+$("settingsBtn").onclick = () => post({ type: "openSettings" });
+$("openFullSettings")?.addEventListener("click", () => post({ type: "openSettings" }));
 $("historyBtn").onclick = () => togglePanel(historyPanel, () => post({ type: "listHistory" }));
 $("accountBtn").onclick = () => togglePanel(accountPanel, renderAccount);
 planBadge.onclick = () => togglePanel(accountPanel, renderAccount);
@@ -438,21 +389,6 @@ $("settingsClose").onclick = () => (settingsPanel.hidden = true);
 $("settingsCancel").onclick = () => (settingsPanel.hidden = true);
 $("historyClose").onclick = () => (historyPanel.hidden = true);
 $("accountClose").onclick = () => (accountPanel.hidden = true);
-$("saveCfg").onclick = () => {
-  const isCustom = uiProvider === "custom";
-  const model = isCustom ? modelCustom.value.trim() : modelSel.value;
-  if (!model) { notice(isCustom ? "Enter a model ID" : "Select a model"); return; }
-  if (isCustom && !baseUrl.value.trim()) { notice("Enter a base URL for custom endpoints"); return; }
-  post({ type: "setLLMSelection", provider: uiProvider, model });
-  if (isCustom) post({ type: "setLLMBaseUrl", baseUrl: baseUrl.value.trim() });
-  if (apiKey.value) { post({ type: "saveLLMKey", provider: uiProvider, apiKey: apiKey.value }); apiKey.value = ""; }
-  if (embeddingKey.value) { post({ type: "saveEmbeddingKey", apiKey: embeddingKey.value }); embeddingKey.value = ""; }
-  if (tavilyKey.value) { post({ type: "setWebSearchKey", apiKey: tavilyKey.value }); tavilyKey.value = ""; }
-  notice("Saved " + uiProvider + " · " + model);
-  post({ type: "getConfig" });
-};
-settingsPanel.addEventListener("click", (e: any) => { const t = e.target.closest(".pill"); if (t && t.dataset.provider) setProviderUI(t.dataset.provider); });
-modelSel.addEventListener("change", () => { modelCustom.value = ""; });
 histList.addEventListener("click", (e: any) => {
   const del = e.target.closest("[data-del]");
   if (del) { post({ type: "deleteHistory", id: del.dataset.del }); e.stopPropagation(); return; }
@@ -487,7 +423,7 @@ window.addEventListener("message", (e: any) => {
     case "sources": renderSources(m.files || []); break;
     case "insertMention": if (m.path) insertAtCursor("@" + m.path + " "); break;
     case "config":
-      applyConfig(m); break;
+      modelKeysForm.applyConfig(m); break;
     case "search_start": removeWelcome(); break;
     case "search_result": renderSearchResults(m.results); break;
     case "history_list": renderHistory(m.sessions, m.currentId); break;
@@ -498,7 +434,6 @@ window.addEventListener("message", (e: any) => {
   }
 });
 
-rebuildModels();
 updateRepos();
 renderContext();
 post({ type: "ready" });

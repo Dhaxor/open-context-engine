@@ -89,7 +89,7 @@
       },
       {
         "command": "openContext.openSettings",
-        "title": "Open Settings",
+        "title": "Open Context Settings",
         "category": "Open Context",
         "icon": "$(gear)"
       },

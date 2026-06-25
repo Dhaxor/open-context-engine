@@ -6,6 +6,7 @@ import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
 import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
+import { SettingsPanel } from "./settings/SettingsPanel";
 import { EditReviewService } from "./services/EditReviewService";
 import { ensureNativeBinding } from "./services/NativeBindingSelector";
 import { SearchResult } from "../../src/core/types";
@@ -233,7 +234,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.openSettings", () => {
-            vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
+            SettingsPanel.show(context.extensionUri, "model-keys");
         }),
 
         vscode.commands.registerCommand("openContext.activateLicense", async () => {
