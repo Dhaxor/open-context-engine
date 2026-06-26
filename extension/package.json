@@ -396,7 +396,7 @@
         "openContext.agent.routing.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable \u2014 your configured `openContext.llm.model` is the standard tier."
+          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable — your configured `openContext.llm.model` is the standard tier."
         },
         "openContext.agent.routing.fastModel": {
           "type": "string",
@@ -472,7 +472,7 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
     "highlight.js": "^11.11.1",
     "ignore": "^6.0.0",
