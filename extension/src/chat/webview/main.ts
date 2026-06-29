@@ -27,6 +27,8 @@ const modelKeysForm = wireModelKeysForm({
 // --- state ---
 let cur: any = null, fullText = "", busy = false, mode: "agent" | "search" = "agent", renderTimer = 0;
 let tools: Record<string, any> = {}, edits: Record<string, any> = {};
+let activityEl: HTMLElement | null = null, currentStepEl: HTMLElement | null = null;
+let stepCards: Record<number, HTMLElement> = {}, stepCount = 0, toolCount = 0;
 let license: any = { plan: "free", valid: false }, multiOn = false;
 let lastUserText = "", contextInfo: any = { activeFile: "", hasSelection: false };
 const isTeam = () => !!license.valid && (license.plan === "team" || license.plan === "enterprise");
@@ -176,6 +178,52 @@ function sealBubble() {
 function showError(t: string) { if (cur) { cur.remove(); cur = null; } const d = document.createElement("div"); d.className = "notice err"; d.textContent = "Error: " + t; msgs.appendChild(d); setBusy(false); scroll(); }
 function notice(t: string, cls?: string) { const d = document.createElement("div"); d.className = "notice" + (cls ? " " + cls : ""); d.textContent = t; msgs.appendChild(d); scroll(); }
 
+// --- agent activity (per-turn grouping) ---
+function resetActivityState() {
+  activityEl = null; currentStepEl = null; stepCards = {}; stepCount = 0; toolCount = 0;
+}
+function activityBody(): HTMLElement {
+  return activityEl!.querySelector(".act-body") as HTMLElement;
+}
+function updateActivitySummary() {
+  if (!activityEl) return;
+  const s = activityEl.querySelector(".act-summary");
+  if (!s) return;
+  const parts: string[] = [];
+  if (stepCount) parts.push(stepCount + " step" + (stepCount === 1 ? "" : "s"));
+  if (toolCount) parts.push(toolCount + " action" + (toolCount === 1 ? "" : "s"));
+  s.textContent = parts.join(" · ");
+}
+function ensureActivity() {
+  if (activityEl) return;
+  sealBubble();
+  const card = document.createElement("div");
+  activityEl = card;
+  card.className = "card activity open";
+  card.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Agent activity</span><span class="act-summary"></span><span class="chev">${icon("chevron")}</span></div><div class="act-body"></div>`;
+  card.querySelector(".chead")!.addEventListener("click", (e) => { e.stopPropagation(); card.classList.toggle("open"); });
+  msgs.appendChild(card);
+  scroll();
+}
+function sealActivity() {
+  if (!activityEl) return;
+  activityEl.classList.remove("open");
+  const ic = activityEl.querySelector(".status-ic");
+  if (ic) ic.innerHTML = icon("check");
+  updateActivitySummary();
+  resetActivityState();
+}
+function wireCardToggle(card: HTMLElement) {
+  card.querySelector(".chead")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    card.classList.toggle("open");
+  });
+}
+function toolParent(): HTMLElement {
+  ensureActivity();
+  return currentStepEl || activityBody();
+}
+
 // --- agent cards ---
 // The one-line argument that makes a collapsed tool card self-describing:
 // which file, what query, which command. Without it every call reads as a
@@ -214,8 +262,9 @@ function toolUpdate(id: string, name: string, status: string, label: string, sum
     sealBubble();
     t = document.createElement("div"); t.className = "card tool running";
     t.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl"></span><span class="tdetail"></span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
-    msgs.appendChild(t); tools[id] = t;
-    t.querySelector(".chead").onclick = () => t.classList.toggle("open");
+    toolParent().appendChild(t); tools[id] = t;
+    toolCount++; updateActivitySummary();
+    wireCardToggle(t);
   }
   t.classList.remove("running", "complete", "error"); t.classList.add(status);
   t.querySelector(".ttl").textContent = label;
@@ -227,17 +276,34 @@ function toolUpdate(id: string, name: string, status: string, label: string, sum
 }
 function renderTaskPlan(plan: string[]) {
   sealBubble();
-  const el = document.createElement("div"); el.className = "card open";
+  ensureActivity();
+  const el = document.createElement("div"); el.className = "card plan";
   el.innerHTML = `<div class="chead">${icon("sparkle")}<span class="ttl">Agent plan</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"><ol style="margin-left:18px">${plan.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></div>`;
-  el?.querySelector?.(".chead")?.addEventListener("click", () => el.classList.toggle("open"));
-  msgs.appendChild(el); scroll();
+  wireCardToggle(el);
+  activityBody().appendChild(el); scroll();
 }
 function agentStep(step: number, status: string) {
-  const id = "agent-step-" + step; let el = $(id);
-  if (!el) { sealBubble(); el = document.createElement("div"); el.id = id; el.className = "row-line running"; el.innerHTML = `<span class="spin"></span><span class="txt"></span>`; msgs.appendChild(el); }
-  el.className = "row-line " + status;
-  el.querySelector(".txt").textContent = "Reasoning step " + (step + 1) + " " + (status === "running" ? "…" : "done");
-  if (status === "complete") { const sp = el.querySelector(".spin"); if (sp) sp.outerHTML = icon("check"); }
+  sealBubble();
+  ensureActivity();
+  let el = stepCards[step];
+  if (!el) {
+    stepCount++; updateActivitySummary();
+    el = document.createElement("div"); el.id = "agent-step-" + step; el.className = "card step";
+    el.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Reasoning step ${step + 1}</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
+    wireCardToggle(el);
+    activityBody().appendChild(el);
+    stepCards[step] = el;
+  }
+  el.classList.remove("running", "complete");
+  el.classList.add(status);
+  currentStepEl = el.querySelector(".cbody") as HTMLElement;
+  if (status === "running") {
+    el.classList.add("open");
+    el.querySelector(".status-ic")!.innerHTML = '<span class="spin"></span>';
+  } else {
+    el.classList.remove("open");
+    el.querySelector(".status-ic")!.innerHTML = icon("check");
+  }
   scroll();
 }
 function addEdit(e: any) {
@@ -301,7 +367,7 @@ function renderHistory(sessions: any[], currentId: string) {
   }).join("");
 }
 function replaySession(session: any) {
-  msgs.innerHTML = ""; cur = null; fullText = ""; setBusy(false); tools = {}; edits = {};
+  msgs.innerHTML = ""; cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; resetActivityState();
   if (!session.messages || !session.messages.length) { msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-title">${esc(session.title || "Chat")}</div><div class="w-sub">Empty conversation — send a message to continue.</div></div>`; return; }
   session.messages.forEach((m: any) => {
     if (m.role === "user") addUser(m.text);
@@ -377,7 +443,7 @@ msgs.addEventListener("click", (e: any) => {
   else if (t.classList.contains("chip") && d.prompt) send(d.prompt);
 });
 sendBtn.onclick = () => send();
-stopBtn.onclick = () => { post({ type: "cancel" }); setBusy(false); if (cur) finalize(); notice("Stopped"); };
+stopBtn.onclick = () => { post({ type: "cancel" }); setBusy(false); if (cur) finalize(); sealActivity(); notice("Stopped"); };
 $("newBtn").onclick = () => post({ type: "newSession" });
 modelBadge.onclick = () => togglePanel(settingsPanel, () => post({ type: "getConfig" }));
 $("settingsBtn").onclick = () => post({ type: "openSettings" });
@@ -405,8 +471,8 @@ window.addEventListener("message", (e: any) => {
   const m = e.data;
   switch (m.type) {
     case "chunk": chunk(m.text); break;
-    case "done": finalize(); tools = {}; break;
-    case "error": showError(m.text); break;
+    case "done": finalize(); sealActivity(); tools = {}; break;
+    case "error": showError(m.text); sealActivity(); break;
     case "tool_update": toolUpdate(m.id, m.name, m.status, m.label, m.summary, m.args); break;
     case "task_plan": renderTaskPlan(m.plan || []); break;
     case "agent_step": agentStep(m.step || 0, m.status || "running"); break;
@@ -430,7 +496,7 @@ window.addEventListener("message", (e: any) => {
     case "history_load": replaySession(m.session); historyPanel.hidden = true; break;
     case "clear":
       msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-logo">${icon("sparkle")}</div><div class="w-title">New chat</div><div class="w-sub">Ask a question, or switch to Search for raw snippet lookup.</div></div>`;
-      cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; break;
+      cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; resetActivityState(); break;
   }
 });
 

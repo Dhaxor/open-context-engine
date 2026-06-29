@@ -95,15 +95,31 @@ async function run() {
 
   send({ type: "addUserMessage", text: "How does hybrid retrieval work in this codebase?" });
   await sleep(60);
+  send({ type: "task_plan", plan: [
+    "Search for hybrid retrieval implementation",
+    "Read retriever rank function",
+    "Summarize for user",
+  ]});
+  await sleep(40);
+  send({ type: "agent_step", step: 0, status: "running" });
+  await sleep(40);
   // Real label shapes (from ChatView TOOL_LABELS) + real arg keys, so the
   // detail header is exercised exactly as production sends it.
   send({ type: "tool_update", id: "t1", name: "codebase-retrieval", status: "running", label: "Searching codebase", args: { information_request: "how hybrid retrieval fuses vector and BM25 results" } });
   await sleep(300);
   send({ type: "tool_update", id: "t1", name: "codebase-retrieval", status: "complete", label: "Searched codebase", args: { information_request: "how hybrid retrieval fuses vector and BM25 results" }, summary: "## src/core/retriever.ts\\n112: async rank(query) { ... reciprocalRankFusion([...]) }\\n## src/core/sqlite-store.ts\\n345: vectorSearch(queryVec, topK) { ... }" });
   await sleep(60);
+  send({ type: "agent_step", step: 0, status: "complete" });
+  send({ type: "agent_step", step: 1, status: "running" });
+  await sleep(40);
   send({ type: "tool_update", id: "t2", name: "find-symbol-definition", status: "complete", label: "Found definition", args: { symbol: "reciprocalRankFusion" }, summary: "function reciprocalRankFusion — src/core/retriever.ts:212-231" });
   await sleep(60);
   send({ type: "tool_update", id: "t3", name: "read-file", status: "complete", label: "Read file", args: { path: "src/core/retriever.ts", start_line: 112, end_line: 164 }, summary: "(53 lines)" });
+  await sleep(60);
+  send({ type: "agent_step", step: 1, status: "complete" });
+  send({ type: "agent_step", step: 2, status: "running" });
+  await sleep(40);
+  send({ type: "agent_step", step: 2, status: "complete" });
   await streamText(MD_ANSWER);
   send({ type: "sources", files: [
     { path: "src/core/retriever.ts", lines: "112-161" },

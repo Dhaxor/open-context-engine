@@ -221,15 +221,83 @@ body {
 .card .chead .tdetail:not(:empty)::before { content: ""; }
 .card .chead .chev { color: var(--vscode-descriptionForeground); transition: transform .15s; opacity: .7; flex-shrink: 0; }
 .card .chead .chev .ic { width: 13px; height: 13px; }
-.card.open .chead .chev { transform: rotate(90deg); }
+.card.open > .chead .chev { transform: rotate(90deg); }
 .card .cbody { display: none; padding: 8px 10px; border-top: 1px solid var(--oc-border); font-size: 11.5px; color: var(--vscode-descriptionForeground); }
-.card.open .cbody { display: block; }
+.card.open > .cbody { display: block; }
 .card .cbody .k { color: var(--vscode-descriptionForeground); opacity: .85; margin-right: 4px; }
 .card .cbody pre { background: var(--vscode-textCodeBlock-background, rgba(0,0,0,.25)); border-radius: 5px; padding: 6px 8px; margin-top: 5px; overflow: auto; max-height: 180px; white-space: pre-wrap; }
 .status-ic .ic { color: var(--vscode-descriptionForeground); width: 13px; height: 13px; }
 .card.running .status-ic .ic { color: var(--oc-accent); }
 .card.complete .status-ic .ic { color: var(--oc-green); }
 .card.error .status-ic .ic { color: var(--oc-red); }
+
+/* Activity container — groups plan, steps, and tools per agent turn */
+.card.activity {
+  border: none;
+  background: transparent;
+  overflow: visible;
+  border-radius: 0;
+}
+.card.activity > .chead {
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius-sm);
+  background: var(--oc-surface);
+}
+.card.activity .act-summary { flex: 1; min-width: 0; font-size: 10.5px; color: var(--vscode-descriptionForeground); }
+.card.activity .act-body {
+  display: none;
+  padding: 10px 0 4px;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(440px, 55vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.card.activity.open .act-body { display: flex; }
+
+/* Nested sections — light separators, no stacked box borders */
+.card.activity .act-body > .card {
+  margin: 0;
+  border: none;
+  background: transparent;
+  overflow: visible;
+  border-radius: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--oc-border) 70%, transparent);
+}
+.card.activity .act-body > .card:last-child { border-bottom: none; padding-bottom: 0; }
+.card.activity .act-body > .card > .chead { padding: 5px 4px; border-radius: var(--oc-radius-sm); }
+.card.activity .act-body > .card > .chead:hover { background: var(--oc-surface); }
+.card.activity .act-body > .card > .cbody { border-top: none; }
+
+/* Reasoning step cards nest tool calls */
+.card.step > .cbody { display: none; flex-direction: column; gap: 8px; }
+.card.step.open > .cbody { display: flex; }
+.card.activity .card.step .cbody { padding: 8px 4px 2px; }
+.card.activity .card.step .cbody > .card.tool {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--oc-border) 80%, transparent);
+  border-radius: var(--oc-radius-sm);
+  background: var(--oc-surface);
+  overflow: visible;
+}
+
+/* Collapsed tool headers show label only — no ellipsized detail text */
+.card.tool:not(.open) .chead .tdetail { display: none; }
+
+/* Expanded activity/step: full wrapped tool detail, no horizontal clip */
+.card.activity.open .card.tool.open .chead,
+.card.activity.open .card.step.open .card.tool.open .chead { flex-wrap: wrap; align-items: flex-start; }
+.card.activity.open .card.tool .chead .ttl,
+.card.activity.open .card.tool .chead .tdetail { white-space: normal; overflow: visible; text-overflow: unset; }
+
+/* Let tool args/results scroll inside each expanded tool card */
+.card.activity .card.tool.open > .cbody pre {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
 
 .kind { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
 .kind.str-replace { background: color-mix(in srgb, var(--oc-accent) 18%, transparent); color: var(--oc-accent); }
