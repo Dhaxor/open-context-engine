@@ -133,7 +133,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                     this.clearChat();
                     break;
                 case "openSettings":
-                    SettingsPanel.show(this._extensionUri, "model-keys");
+                    SettingsPanel.show(this._extensionUri, msg.section === "account" ? "account" : "model-keys");
                     break;
                 case "chooseIndexWorkspace":
                     await vscode.commands.executeCommand("openContext.selectIndexWorkspace");

@@ -1,6 +1,7 @@
 import "../../chat/webview/styles.css";
 import "./styles.css";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
+import { renderAccountSection, type LicenseStatus } from "../../shared/account-section";
 
 declare function acquireVsCodeApi(): { postMessage(m: unknown): void };
 const V = acquireVsCodeApi();
@@ -24,9 +25,15 @@ const form = wireModelKeysForm({
   showCancel: false,
 });
 
+let license: LicenseStatus = { plan: "free", valid: false };
+const accountBody = $("accountBody");
+function renderAccount() {
+  if (accountBody) renderAccountSection(accountBody, license, { $: (id) => $(id), post });
+}
+
 const sections: Record<string, HTMLElement | null> = {
   "model-keys": $("section-model-keys"),
-  general: $("section-general"),
+  account: $("section-account"),
   indexing: $("section-indexing"),
 };
 
@@ -37,6 +44,7 @@ function showSection(id: string) {
   Object.entries(sections).forEach(([key, el]) => {
     if (el) el.hidden = key !== id;
   });
+  if (id === "account") renderAccount();
 }
 
 document.querySelector(".settings-nav-list")?.addEventListener("click", (e) => {
@@ -51,6 +59,10 @@ window.addEventListener("message", (e) => {
   switch (m.type) {
     case "config":
       form.applyConfig(m);
+      break;
+    case "license":
+      license = m.status || { plan: "free", valid: false };
+      renderAccount();
       break;
     case "navigate":
       if (m.section) showSection(String(m.section));

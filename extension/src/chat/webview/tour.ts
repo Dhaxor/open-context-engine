@@ -79,7 +79,7 @@ export const CHAT_TOUR_STEPS: TourStep[] = [
   {
     target: "#accountBtn",
     title: "Account & license",
-    body: "View your plan, activate a Team license, and unlock multi-repo search across workspace folders.",
+    body: "Open Account & License settings to view your plan, activate a Team license, and unlock multi-repo search.",
     placement: "bottom",
   },
   {

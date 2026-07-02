@@ -7,7 +7,7 @@ export const settingsBody = `
     <div class="settings-brand">${icon("sparkle")}<span>Open Context</span></div>
     <nav class="settings-nav-list">
       <button type="button" class="nav-item active" data-section="model-keys">${icon("key")}<span>Model &amp; API keys</span></button>
-      <button type="button" class="nav-item soon" data-section="general" disabled>${icon("account")}<span>General</span><em class="soon-tag">Soon</em></button>
+      <button type="button" class="nav-item" data-section="account">${icon("account")}<span>Account &amp; License</span></button>
       <button type="button" class="nav-item soon" data-section="indexing" disabled>${icon("repos")}<span>Indexing</span><em class="soon-tag">Soon</em></button>
     </nav>
     <button type="button" class="nav-link" id="openVscodeSettings">${icon("open")}<span>Advanced (VS Code settings)</span></button>
@@ -20,12 +20,12 @@ export const settingsBody = `
       </header>
       ${modelKeysFormHtml()}
     </section>
-    <section id="section-general" class="settings-section" hidden>
+    <section id="section-account" class="settings-section" hidden>
       <header class="section-head">
-        <h1>General</h1>
-        <p class="section-desc">Workspace preferences and defaults — coming soon.</p>
+        <h1>Account &amp; License</h1>
+        <p class="section-desc">View your plan, activate a Team license, and unlock multi-repo search.</p>
       </header>
-      <div class="placeholder-card">More settings will appear here in a future update.</div>
+      <div id="accountBody" class="account-section"></div>
     </section>
     <section id="section-indexing" class="settings-section" hidden>
       <header class="section-head">

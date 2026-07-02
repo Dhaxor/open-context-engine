@@ -2,14 +2,13 @@ import "./styles.css";
 import { icon } from "./icons";
 import { esc, md, fmtDiff, relTime, shortPath } from "./render";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
+import { renderAccountSection, GET_TEAM_URL } from "../../shared/account-section";
 import { CHAT_TOUR_STEPS, chatTour } from "./tour";
 
 declare function acquireVsCodeApi(): { postMessage(m: any): void };
 const V = acquireVsCodeApi();
 const $ = (id: string) => document.getElementById(id) as any;
 const post = (m: any) => V.postMessage(m);
-
-const GET_TEAM_URL = "https://opencontext.dev/pricing";
 
 // --- element refs ---
 const msgs = $("messages"), q = $("q"), sendBtn = $("sendBtn"), stopBtn = $("stopBtn");
@@ -420,31 +419,7 @@ function replaySession(session: any) {
 
 // --- account / license ---
 function renderAccount() {
-  const lic = license || { plan: "free" };
-  if (lic.valid) {
-    const exp = lic.exp ? new Date(lic.exp * 1000).toISOString().slice(0, 10) : "perpetual";
-    accountBody.innerHTML =
-      `<div class="lic-status">` +
-      `<div class="lic-line"><span class="lic-k">Plan</span><b style="text-transform:capitalize">${esc(lic.plan)}</b></div>` +
-      (lic.org ? `<div class="lic-line"><span class="lic-k">Org</span>${esc(lic.org)}</div>` : "") +
-      (lic.seats ? `<div class="lic-line"><span class="lic-k">Seats</span>${esc(lic.seats)}</div>` : "") +
-      `<div class="lic-line"><span class="lic-k">Expires</span>${esc(exp)}</div>` +
-      (lic.inGrace ? `<div class="notice err" style="border:none;padding-left:0">In grace period — ${esc(lic.daysLeft)} day(s) left.</div>` : "") +
-      `</div><div class="actions"><button class="btn" id="deactivateBtn">Deactivate</button></div>`;
-    $("deactivateBtn").onclick = () => post({ type: "deactivateLicense" });
-  } else {
-    accountBody.innerHTML =
-      `<div class="upsell"><div class="up-title">${icon("sparkle")} Open Context Team</div><ul>` +
-      `<li>${icon("check")} Multi-repo search across all your repositories</li>` +
-      `<li>${icon("check")} Shared team index — index once, everyone benefits</li>` +
-      `<li>${icon("check")} Commercial-use license &amp; priority support</li></ul>` +
-      `<button class="btn primary block" id="getTeamBtn">Get Team</button>` +
-      `<div class="up-note">Your code stays on your machine — license keys verify offline.</div></div>` +
-      `<div class="sep"></div><div class="row"><input id="licKey" type="text" placeholder="Paste license key…" /></div>` +
-      `<div class="actions"><button class="btn primary" id="activateBtn">Activate</button></div>`;
-    $("getTeamBtn").onclick = () => post({ type: "openExternal", url: GET_TEAM_URL });
-    $("activateBtn").onclick = () => { const k = $("licKey").value.trim(); if (k) post({ type: "activateLicense", key: k }); };
-  }
+  renderAccountSection(accountBody, license, { $, post, getTeamUrl: GET_TEAM_URL });
 }
 function setLicense(lic: any) {
   license = lic || { plan: "free", valid: false };
@@ -491,8 +466,8 @@ modelBadge.onclick = () => togglePanel(settingsPanel, () => post({ type: "getCon
 $("settingsBtn").onclick = () => post({ type: "openSettings" });
 $("openFullSettings")?.addEventListener("click", () => post({ type: "openSettings" }));
 $("historyBtn").onclick = () => togglePanel(historyPanel, () => post({ type: "listHistory" }));
-$("accountBtn").onclick = () => togglePanel(accountPanel, renderAccount);
-planBadge.onclick = () => togglePanel(accountPanel, renderAccount);
+$("accountBtn").onclick = () => post({ type: "openSettings", section: "account" });
+planBadge.onclick = () => post({ type: "openSettings", section: "account" });
 $("settingsClose").onclick = () => (settingsPanel.hidden = true);
 $("settingsCancel").onclick = () => (settingsPanel.hidden = true);
 $("historyClose").onclick = () => (historyPanel.hidden = true);

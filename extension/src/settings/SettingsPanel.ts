@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import { settingsBody } from "./settings-html";
 import { buildConfigPayload, handleConfigMessage } from "../shared/open-context-config";
+import { ContextService } from "../services/ContextService";
 
 function getNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -13,6 +14,8 @@ function getNonce(): string {
 /** Full-page Open Context settings (sidebar nav + sections). */
 export class SettingsPanel {
   private static current?: SettingsPanel;
+  /** Called after license activate/deactivate so the chat webview can refresh. */
+  static onLicenseChanged?: () => void;
 
   private panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
@@ -54,9 +57,26 @@ export class SettingsPanel {
     switch (msg.type) {
       case "ready":
         await this.sendConfig();
+        this.sendLicense();
         break;
       case "openVscodeSettings":
         await vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
+        break;
+      case "activateLicense":
+        if (typeof msg.key === "string") {
+          const r = ContextService.getInstance().activateLicense(msg.key.trim());
+          if (r.ok) vscode.window.showInformationMessage(`Activated ${r.status.plan} license.`);
+          else vscode.window.showErrorMessage(`Activation failed: ${r.error}`);
+          this.notifyLicenseChanged();
+        }
+        break;
+      case "deactivateLicense":
+        ContextService.getInstance().deactivateLicense();
+        vscode.window.showInformationMessage("License removed — running as Community edition.");
+        this.notifyLicenseChanged();
+        break;
+      case "openExternal":
+        if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(String(msg.url)));
         break;
       default:
         await handleConfigMessage(msg, {
@@ -68,6 +88,15 @@ export class SettingsPanel {
 
   private async sendConfig(): Promise<void> {
     this.panel.webview.postMessage(await buildConfigPayload());
+  }
+
+  private sendLicense(): void {
+    this.panel.webview.postMessage({ type: "license", status: ContextService.getInstance().getLicenseStatus() });
+  }
+
+  private notifyLicenseChanged(): void {
+    this.sendLicense();
+    SettingsPanel.onLicenseChanged?.();
   }
 
   private getHtml(): string {

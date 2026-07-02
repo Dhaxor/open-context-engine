@@ -112,6 +112,18 @@ body {
 .model-keys-actions { margin-top: 4px; }
 .model-keys-actions .btn:first-child { display: none; }
 
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px;
+}
+.account-section .sep { margin: 0; }
+.account-section .upsell { margin: 0; }
+.account-section .lic-status { padding: 8px 0; }
+.account-section .actions { margin-top: 4px; }
+.account-section .row { margin-top: 0; }
+
 .settings-notice {
   position: fixed;
   bottom: 16px;

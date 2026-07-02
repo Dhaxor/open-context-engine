@@ -58,6 +58,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());
     context.subscriptions.push(reviewService);
     const chatView = new ChatView(context.extensionUri, context, reviewService);
+    SettingsPanel.onLicenseChanged = () => chatView.refreshLicense();
     const treeProvider = new IndexedFilesProvider(context);
 
     context.subscriptions.push(
