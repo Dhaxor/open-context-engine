@@ -16,6 +16,7 @@ import { SettingsPanel } from "../settings/SettingsPanel";
 type ChatMode = "agent" | "search";
 
 const ACTIVE_SESSION_KEY = "openContext.activeChatSession";
+const CHAT_TOUR_COMPLETED_KEY = "openContext.chatTourCompleted";
 
 function getNonce(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -91,6 +92,7 @@ export class ChatView implements vscode.WebviewViewProvider {
                     this._sendLicense();
                     this._sendContext();
                     this._restoreActiveSession();
+                    this._maybeStartTour();
                     break;
                 case "query":
                     if (msg.text?.trim()) {
@@ -202,6 +204,10 @@ export class ChatView implements vscode.WebviewViewProvider {
                 case "applyCode":
                     if (typeof msg.code === "string") await this._applyCode(msg.code, typeof msg.file === "string" ? msg.file : "");
                     break;
+                case "tour:complete":
+                case "tour:skip":
+                    await this._extCtx?.globalState.update(CHAT_TOUR_COMPLETED_KEY, true);
+                    break;
             }
         });
         webviewView.onDidChangeVisibility(() => { if (webviewView.visible) { this._sendModelInfo(); this._sendConfig(); this._sendLicense(); this._sendContext(); } });
@@ -214,6 +220,16 @@ export class ChatView implements vscode.WebviewViewProvider {
 
     public focus(): void {
         this._view?.show(true);
+    }
+
+    public startTour(force = false): void {
+        this._view?.show(true);
+        this._view?.webview.postMessage({ type: "tour:start", force });
+    }
+
+    private _maybeStartTour(): void {
+        if (this._extCtx?.globalState.get<boolean>(CHAT_TOUR_COMPLETED_KEY)) return;
+        setTimeout(() => this._view?.webview.postMessage({ type: "tour:start", force: false }), 120);
     }
 
     public addMessage(text: string): void {

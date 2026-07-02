@@ -3,7 +3,7 @@
 // conversation, so UI work can be screenshotted and iterated outside VS Code.
 //
 //   node dev/gen-harness.mjs && python3 -m http.server 8765 --directory dev
-//   open http://localhost:8765/harness.html?scene=convo   (also: welcome, stream)
+//   open http://localhost:8765/harness.html?scene=convo   (also: welcome, stream, tour)
 import { buildSync } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
@@ -92,6 +92,7 @@ async function run() {
   send({ type: "license", status: { plan: "free", valid: false } });
   send({ type: "context", activeFile: "src/core/retriever.ts", hasSelection: true });
   if (scene === "welcome") return;
+  if (scene === "tour") { send({ type: "tour:start", force: true }); return; }
 
   send({ type: "addUserMessage", text: "How does hybrid retrieval work in this codebase?" });
   await sleep(60);

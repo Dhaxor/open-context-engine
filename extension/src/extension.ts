@@ -210,6 +210,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("openContext.quickSearch", async () => SearchProvider.search()),
         vscode.commands.registerCommand("openContext.openChat", () => chatView.focus()),
         vscode.commands.registerCommand("openContext.clearChat", () => chatView.clearChat()),
+        vscode.commands.registerCommand("openContext.restartTour", () => chatView.startTour(true)),
         vscode.commands.registerCommand("openContext.showIndexHealth", () => IndexHealthPanel.show()),
         vscode.commands.registerCommand("openContext.debugRetrieval", () => RetrievalDebugPanel.show()),
         vscode.commands.registerCommand("openContext.openIndexedFile", async (relPath: string, line?: number) => {

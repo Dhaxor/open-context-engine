@@ -6,7 +6,7 @@ export const settingsBody = `
   <aside class="settings-nav">
     <div class="settings-brand">${icon("sparkle")}<span>Open Context</span></div>
     <nav class="settings-nav-list">
-      <button type="button" class="nav-item active" data-section="model-keys">${icon("gear")}<span>Model &amp; API keys</span></button>
+      <button type="button" class="nav-item active" data-section="model-keys">${icon("key")}<span>Model &amp; API keys</span></button>
       <button type="button" class="nav-item soon" data-section="general" disabled>${icon("account")}<span>General</span><em class="soon-tag">Soon</em></button>
       <button type="button" class="nav-item soon" data-section="indexing" disabled>${icon("repos")}<span>Indexing</span><em class="soon-tag">Soon</em></button>
     </nav>

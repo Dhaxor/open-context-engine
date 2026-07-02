@@ -2,6 +2,7 @@ import "./styles.css";
 import { icon } from "./icons";
 import { esc, md, fmtDiff, relTime, shortPath } from "./render";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
+import { CHAT_TOUR_STEPS, chatTour } from "./tour";
 
 declare function acquireVsCodeApi(): { postMessage(m: any): void };
 const V = acquireVsCodeApi();
@@ -45,7 +46,48 @@ msgs.addEventListener("scroll", () => { stickToBottom = isNearBottom(); refreshJ
 const scroll = () => { if (stickToBottom) msgs.scrollTop = msgs.scrollHeight; refreshJumpPill(); };
 const forceScroll = () => { stickToBottom = true; msgs.scrollTop = msgs.scrollHeight; refreshJumpPill(); };
 if (jumpBottom) jumpBottom.onclick = () => forceScroll();
-const removeWelcome = () => { const w = $("welcome"); if (w) w.remove(); };
+const dismissTour = (skipped = true) => {
+  if (!chatTour.isActive()) return;
+  if (skipped) chatTour.skip();
+  else chatTour.complete();
+};
+let tourWelcomeInjected = false;
+function ensureWelcomeForTour() {
+  if (document.querySelector("#welcome .chips, #tourWelcome .chips")) return;
+  const chips = [
+    { ic: "repos", label: "Explain this codebase", prompt: "Give me a high-level overview of this codebase." },
+    { ic: "search", label: "Find the auth flow", prompt: "Where is authentication handled and what are the key entry points?" },
+    { ic: "check", label: "Run the tests", prompt: "Run the test suite and summarize any failures." },
+    { ic: "trash", label: "Find dead code", prompt: "Find dead code and unused exports in this project." },
+  ];
+  const welcome = document.createElement("div");
+  welcome.id = "tourWelcome";
+  welcome.className = "welcome tour-welcome";
+  welcome.innerHTML =
+    `<div class="w-title">Quick-start prompts</div>` +
+    `<div class="w-sub muted">Suggested ways to explore your codebase.</div>` +
+    `<div class="chips">${chips.map((c) => `<button class="chip" data-prompt="${esc(c.prompt)}">${icon(c.ic)}<span>${esc(c.label)}</span></button>`).join("")}</div>`;
+  msgs.insertBefore(welcome, msgs.firstChild);
+  msgs.scrollTop = 0;
+  tourWelcomeInjected = true;
+}
+function cleanupTourArtifacts() {
+  if (tourWelcomeInjected) {
+    document.getElementById("tourWelcome")?.remove();
+    tourWelcomeInjected = false;
+  }
+  const bar = document.getElementById("tourChromeBar");
+  if (bar) bar.hidden = true;
+}
+const removeWelcome = () => { dismissTour(); const w = $("welcome"); if (w) w.remove(); };
+function startChatTour(_force = false) {
+  chatTour.start(CHAT_TOUR_STEPS, {
+    onComplete: () => { cleanupTourArtifacts(); post({ type: "tour:complete" }); },
+    onSkip: () => { cleanupTourArtifacts(); post({ type: "tour:skip" }); },
+    onPrepareStep: (step) => { if (step.ensureWelcome) ensureWelcomeForTour(); },
+    onCleanup: cleanupTourArtifacts,
+  });
+}
 function setBusy(b: boolean) { busy = b; sendBtn.style.display = b ? "none" : "flex"; stopBtn.hidden = !b; }
 
 /**
@@ -497,6 +539,9 @@ window.addEventListener("message", (e: any) => {
     case "clear":
       msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-logo">${icon("sparkle")}</div><div class="w-title">New chat</div><div class="w-sub">Ask a question, or switch to Search for raw snippet lookup.</div></div>`;
       cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; resetActivityState(); break;
+    case "tour:start":
+      startChatTour(!!m.force);
+      break;
   }
 });
 

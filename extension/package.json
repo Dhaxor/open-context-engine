@@ -140,6 +140,12 @@
         "title": "Activate License",
         "category": "Open Context",
         "icon": "$(key)"
+      },
+      {
+        "command": "openContext.restartTour",
+        "title": "Restart Product Tour",
+        "category": "Open Context",
+        "icon": "$(lightbulb)"
       }
     ],
     "keybindings": [
@@ -181,6 +187,55 @@
         "contents": "No files indexed yet. [Index Workspace](command:openContext.indexWorkspace) or [Select Folder to Index](command:openContext.selectIndexWorkspace)"
       }
     ],
+    "walkthroughs": [
+      {
+        "id": "gettingStarted",
+        "title": "Get Started with Open Context",
+        "description": "Index your codebase, configure API keys, and start chatting with context-aware AI.",
+        "steps": [
+          {
+            "id": "openChat",
+            "title": "Open the Chat panel",
+            "description": "Open the **Open Context** sidebar and select **Chat** to start a conversation grounded in your local code index.\n\n[Open Chat](command:openContext.openChat)",
+            "media": {
+              "image": "media/walkthrough/chat.svg",
+              "altText": "Open Context chat panel"
+            },
+            "completionEvents": ["onView:openContext.chat"]
+          },
+          {
+            "id": "indexWorkspace",
+            "title": "Index your workspace",
+            "description": "Build a local semantic index of your codebase. Indexing runs on your machine — your code never leaves your device.\n\n[Index Workspace](command:openContext.indexWorkspace)",
+            "media": {
+              "image": "media/walkthrough/index.svg",
+              "altText": "Index workspace command"
+            },
+            "completionEvents": ["onCommand:openContext.indexWorkspace"]
+          },
+          {
+            "id": "configureKeys",
+            "title": "Set up API keys",
+            "description": "Add your LLM and embedding API keys so search and chat can run. Keys are stored securely via VS Code SecretStorage.\n\n[Open Settings](command:openContext.openSettings)",
+            "media": {
+              "image": "media/walkthrough/settings.svg",
+              "altText": "Open Context settings"
+            },
+            "completionEvents": ["onCommand:openContext.openSettings"]
+          },
+          {
+            "id": "browseIndexedFiles",
+            "title": "Browse indexed files",
+            "description": "Expand **Indexed Files** in the Open Context sidebar to see what's in your index. Right-click a file to re-index or remove it.\n\n[Show Indexed Files](command:workbench.view.extension.openContext)",
+            "media": {
+              "image": "media/walkthrough/files.svg",
+              "altText": "Indexed files tree view"
+            },
+            "completionEvents": ["onView:indexedFiles"]
+          }
+        ]
+      }
+    ],
     "menus": {
       "editor/context": [
         {
@@ -208,39 +263,29 @@
       ],
       "view/title": [
         {
-          "command": "openContext.clearChat",
+          "command": "openContext.indexWorkspace",
           "when": "view == openContext.chat",
           "group": "navigation@1"
         },
         {
-          "command": "openContext.undoLastEdit",
-          "when": "view == openContext.chat",
-          "group": "1_edits@1"
-        },
-        {
-          "command": "openContext.indexWorkspace",
+          "command": "openContext.selectIndexWorkspace",
           "when": "view == openContext.chat",
           "group": "navigation@2"
         },
         {
-          "command": "openContext.selectIndexWorkspace",
+          "command": "openContext.showIndexHealth",
           "when": "view == openContext.chat",
           "group": "navigation@3"
         },
         {
-          "command": "openContext.showIndexHealth",
+          "command": "openContext.debugRetrieval",
           "when": "view == openContext.chat",
           "group": "navigation@4"
         },
         {
-          "command": "openContext.debugRetrieval",
-          "when": "view == openContext.chat",
-          "group": "navigation@5"
-        },
-        {
           "command": "openContext.openSettings",
           "when": "view == openContext.chat",
-          "group": "navigation@6"
+          "group": "navigation@5"
         },
         {
           "command": "openContext.indexWorkspace",
