@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Electron 42 (ABI 146) is now bundled.** VS Code 1.122+ / current Cursor builds that report the Electron ABI can load `better-sqlite3` again. Requires `better-sqlite3@^12.11.1` (V8 14 / Electron 42 compile fixes).
+
 - **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.35 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
 
 ## 0.2.0

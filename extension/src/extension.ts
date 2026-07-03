@@ -6,6 +6,7 @@ import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
 import { RetrievalDebugPanel } from "./health/RetrievalDebugPanel";
+import { SettingsPanel } from "./settings/SettingsPanel";
 import { EditReviewService } from "./services/EditReviewService";
 import { ensureNativeBinding } from "./services/NativeBindingSelector";
 import { SearchResult } from "../../src/core/types";
@@ -57,6 +58,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());
     context.subscriptions.push(reviewService);
     const chatView = new ChatView(context.extensionUri, context, reviewService);
+    SettingsPanel.onLicenseChanged = () => chatView.refreshLicense();
     const treeProvider = new IndexedFilesProvider(context);
 
     context.subscriptions.push(
@@ -209,6 +211,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand("openContext.quickSearch", async () => SearchProvider.search()),
         vscode.commands.registerCommand("openContext.openChat", () => chatView.focus()),
         vscode.commands.registerCommand("openContext.clearChat", () => chatView.clearChat()),
+        vscode.commands.registerCommand("openContext.restartTour", () => chatView.startTour(true)),
         vscode.commands.registerCommand("openContext.showIndexHealth", () => IndexHealthPanel.show()),
         vscode.commands.registerCommand("openContext.debugRetrieval", () => RetrievalDebugPanel.show()),
         vscode.commands.registerCommand("openContext.openIndexedFile", async (relPath: string, line?: number) => {
@@ -233,7 +236,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.openSettings", () => {
-            vscode.commands.executeCommand("workbench.action.openSettings", "openContext");
+            SettingsPanel.show(context.extensionUri, "model-keys");
         }),
 
         vscode.commands.registerCommand("openContext.activateLicense", async () => {

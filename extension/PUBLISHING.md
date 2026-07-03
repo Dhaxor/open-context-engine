@@ -33,9 +33,10 @@ version" — *that is the intended fail mode* until we ship binaries for them.
   which no Electron maps to — strong evidence VS Code's runtime reports the
   *bundled Node's* ABI. So we ship Node prebuilds (22 → ABI 127,
   24 → 137, official upstream binaries, no compile) *and* Electron rebuilds
-  (37 → 136, 39 → 140) for the classic convention. Electron 42 (ABI 146) is
-  excluded until better-sqlite3 supports its V8 API; VS Code 1.122+ builds
-  are covered by the Node-24 prebuild. At activation,
+  (37 → 136, 39 → 140, 42 → 146) for the classic convention. VS Code 1.122+
+  hosts that report the bundled Node ABI are covered by the Node-24 prebuild;
+  hosts that report the Electron ABI (common on current Cursor / VS Code
+  builds) use the Electron-42 prebuild. At activation,
   `NativeBindingSelector` copies the binding matching the running VS Code's
   `process.versions.modules` into better-sqlite3's load path; the copy is
   marker-guarded (`.abi` file) and atomic (temp + rename) so concurrent
@@ -76,8 +77,8 @@ code --install-extension ../oce-linux-x64-local.vsix
 ```
 
 `npm run rebuild` mirrors CI's `BINDING_TARGETS` loop locally. ALL targets
-are official upstream prebuild downloads first (v12.10 ships both
-conventions: electron 136/139/140/143/145 and node 127/137/141/147), so no
+are official upstream prebuild downloads first (v12.11 ships both
+conventions: electron 136/139/140/143/145/146 and node 127/137/141/147), so no
 C++ toolchain is needed; a source compile only happens as a fallback for a
 target upstream doesn't cover, and is skipped with a warning if no
 toolchain is available.

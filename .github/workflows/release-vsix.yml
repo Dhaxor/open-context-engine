@@ -51,12 +51,10 @@ env:
   # 42->146 per node-abi) — strong evidence VS Code's runtime reports the
   # BUNDLED NODE's ABI. Node prebuilds (22->127, 24->137) cover that world
   # with better-sqlite3's official binaries; Electron rebuilds (37->136,
-  # 39->140) cover the classic convention. Electron 42 (146) is EXCLUDED:
-  # better-sqlite3 <=12.10 cannot compile against its V8
-  # (SetNativeDataProperty overload ambiguity, External::Value removal) —
-  # re-add when upstream ships support. Order matters only for the default
-  # binary left in node_modules: keep node:24 last (most likely runtime).
-  BINDING_TARGETS: "electron:37.2.3 electron:39.8.8 node:22.16.0 node:24.15.0"
+  # 39->140, 42->146) cover the classic convention. Order matters only for
+  # the default binary left in node_modules: keep node:24 last (most likely
+  # runtime).
+  BINDING_TARGETS: "electron:37.2.3 electron:39.8.8 electron:42.3.0 node:22.16.0 node:24.15.0"
 
 jobs:
   build:
@@ -139,7 +137,7 @@ jobs:
             # iteration would defeat the ABI assertion below.
             rm -rf node_modules/better-sqlite3/build
             # Official upstream prebuilds exist for BOTH conventions (the
-            # v12.10 release ships electron ABIs 136/139/140/143/145 and node
+            # v12.11 release ships electron ABIs 136/139/140/143/145/146 and node
             # 127/137/141/147) — download first, compile only as fallback.
             # On the node-convention fallback, --target is load-bearing: a
             # bare build-release compiles against the RUNNER's Node and

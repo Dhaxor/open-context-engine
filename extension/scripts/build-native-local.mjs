@@ -4,7 +4,7 @@
 //
 // Keep TARGETS in sync with BINDING_TARGETS in
 // .github/workflows/release-vsix.yml (same dual-convention reasoning:
-// Node prebuilds cover ABIs 127/137, Electron rebuilds cover 136/140).
+// Node prebuilds cover ABIs 127/137, Electron rebuilds cover 136/140/146).
 //
 // Node targets use better-sqlite3's official prebuilds — no compiler
 // needed, always succeed. Electron targets need a local C++ toolchain;
@@ -22,6 +22,7 @@ const { getAbi } = require("node-abi");
 const TARGETS = [
   "electron:37.2.3",
   "electron:39.8.8",
+  "electron:42.3.0",
   "node:22.16.0",
   // node:24 last on purpose — its binary stays in build/Release as the
   // default for environments that bypass the runtime selector.
@@ -46,7 +47,7 @@ for (const target of TARGETS) {
   fs.rmSync(buildDir, { recursive: true, force: true });
   try {
     // Same order as CI for BOTH conventions: official upstream prebuild
-    // first (no toolchain needed — v12.10 ships electron 136/139/140/143/145
+    // first (no toolchain needed — v12.11 ships electron 136/139/140/143/145/146
     // and node 127/137/141/147), source build only as the fallback. On the
     // node fallback, --target is load-bearing: a bare build-release compiles
     // against the SHELL's Node and silently mislabels the ABI.

@@ -194,7 +194,7 @@ export class ContextAgent {
       // router, callers are created lazily per tier inside the router itself.
       const apiKey = config.apiKey ?? envKey(config.provider);
       if (!apiKey) throw new Error(`Missing API key for provider ${config.provider}`);
-      if (config.provider === "openai") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
+      if (config.provider === "openai" || config.provider === "custom") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
       else if (config.provider === "anthropic") this.caller = new AnthropicCaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
       else throw new Error(`Provider ${config.provider} not yet supported`);
     }

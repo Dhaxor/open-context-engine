@@ -1,31 +1,34 @@
 import "./styles.css";
 import { icon } from "./icons";
 import { esc, md, fmtDiff, relTime, shortPath } from "./render";
+import { wireModelKeysForm } from "../../shared/model-keys-form";
+import { renderAccountSection, GET_TEAM_URL } from "../../shared/account-section";
+import { CHAT_TOUR_STEPS, chatTour } from "./tour";
 
 declare function acquireVsCodeApi(): { postMessage(m: any): void };
 const V = acquireVsCodeApi();
 const $ = (id: string) => document.getElementById(id) as any;
 const post = (m: any) => V.postMessage(m);
 
-const GET_TEAM_URL = "https://opencontext.dev/pricing";
-const MODELS: Record<string, string[]> = {
-  openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-codex", "gpt-5.3-codex", "gpt-5.1-codex-max", "gpt-5", "gpt-4.1"],
-  anthropic: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-5"],
-  google: ["gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
-};
-
 // --- element refs ---
 const msgs = $("messages"), q = $("q"), sendBtn = $("sendBtn"), stopBtn = $("stopBtn");
 const modelBadge = $("modelBadge"), planBadge = $("planBadge"), modeSeg = $("modeSeg");
 const settingsPanel = $("settingsPanel"), historyPanel = $("historyPanel"), accountPanel = $("accountPanel");
-const modelSel = $("modelSel"), modelCustom = $("modelCustom"), apiKey = $("apiKey"), keyStatus = $("keyStatus");
-const tavilyKey = $("tavilyKey"), tavilyStatus = $("tavilyStatus");
 const histList = $("histList"), histEmpty = $("histEmpty"), accountBody = $("accountBody"), reposBtn = $("reposBtn"), contextBar = $("contextBar");
+
+const modelKeysForm = wireModelKeysForm({
+  $,
+  post,
+  notice,
+  root: settingsPanel,
+  showCancel: true,
+});
 
 // --- state ---
 let cur: any = null, fullText = "", busy = false, mode: "agent" | "search" = "agent", renderTimer = 0;
 let tools: Record<string, any> = {}, edits: Record<string, any> = {};
-let uiProvider = "openai", uiHasKey: Record<string, boolean> = {}, uiHasTavily = false;
+let activityEl: HTMLElement | null = null, currentStepEl: HTMLElement | null = null;
+let stepCards: Record<number, HTMLElement> = {}, stepCount = 0, toolCount = 0;
 let license: any = { plan: "free", valid: false }, multiOn = false;
 let lastUserText = "", contextInfo: any = { activeFile: "", hasSelection: false };
 const isTeam = () => !!license.valid && (license.plan === "team" || license.plan === "enterprise");
@@ -42,7 +45,48 @@ msgs.addEventListener("scroll", () => { stickToBottom = isNearBottom(); refreshJ
 const scroll = () => { if (stickToBottom) msgs.scrollTop = msgs.scrollHeight; refreshJumpPill(); };
 const forceScroll = () => { stickToBottom = true; msgs.scrollTop = msgs.scrollHeight; refreshJumpPill(); };
 if (jumpBottom) jumpBottom.onclick = () => forceScroll();
-const removeWelcome = () => { const w = $("welcome"); if (w) w.remove(); };
+const dismissTour = (skipped = true) => {
+  if (!chatTour.isActive()) return;
+  if (skipped) chatTour.skip();
+  else chatTour.complete();
+};
+let tourWelcomeInjected = false;
+function ensureWelcomeForTour() {
+  if (document.querySelector("#welcome .chips, #tourWelcome .chips")) return;
+  const chips = [
+    { ic: "repos", label: "Explain this codebase", prompt: "Give me a high-level overview of this codebase." },
+    { ic: "search", label: "Find the auth flow", prompt: "Where is authentication handled and what are the key entry points?" },
+    { ic: "check", label: "Run the tests", prompt: "Run the test suite and summarize any failures." },
+    { ic: "trash", label: "Find dead code", prompt: "Find dead code and unused exports in this project." },
+  ];
+  const welcome = document.createElement("div");
+  welcome.id = "tourWelcome";
+  welcome.className = "welcome tour-welcome";
+  welcome.innerHTML =
+    `<div class="w-title">Quick-start prompts</div>` +
+    `<div class="w-sub muted">Suggested ways to explore your codebase.</div>` +
+    `<div class="chips">${chips.map((c) => `<button class="chip" data-prompt="${esc(c.prompt)}">${icon(c.ic)}<span>${esc(c.label)}</span></button>`).join("")}</div>`;
+  msgs.insertBefore(welcome, msgs.firstChild);
+  msgs.scrollTop = 0;
+  tourWelcomeInjected = true;
+}
+function cleanupTourArtifacts() {
+  if (tourWelcomeInjected) {
+    document.getElementById("tourWelcome")?.remove();
+    tourWelcomeInjected = false;
+  }
+  const bar = document.getElementById("tourChromeBar");
+  if (bar) bar.hidden = true;
+}
+const removeWelcome = () => { dismissTour(); const w = $("welcome"); if (w) w.remove(); };
+function startChatTour(_force = false) {
+  chatTour.start(CHAT_TOUR_STEPS, {
+    onComplete: () => { cleanupTourArtifacts(); post({ type: "tour:complete" }); },
+    onSkip: () => { cleanupTourArtifacts(); post({ type: "tour:skip" }); },
+    onPrepareStep: (step) => { if (step.ensureWelcome) ensureWelcomeForTour(); },
+    onCleanup: cleanupTourArtifacts,
+  });
+}
 function setBusy(b: boolean) { busy = b; sendBtn.style.display = b ? "none" : "flex"; stopBtn.hidden = !b; }
 
 /**
@@ -113,7 +157,7 @@ function renderSources(files: any[]) {
   const el = document.createElement("div"); el.className = "card sources";
   el.innerHTML = `<div class="chead">${icon("repos")}<span class="ttl">${files.length} source${files.length === 1 ? "" : "s"}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody">${files.map((f) => `<div class="src-file" data-open="${esc(f.path)}" data-line="${esc((f.lines || "").split("-")[0] || "")}">${icon("open")} ${esc(f.path)}${f.lines ? ":" + esc(f.lines) : ""}</div>`).join("")}</div>`;
-  el.querySelector(".chead").onclick = () => el.classList.toggle("open");
+  el?.querySelector?.(".chead")?.addEventListener("click", () => el.classList.toggle("open"));
   msgs.appendChild(el); scroll();
 }
 /**
@@ -175,6 +219,52 @@ function sealBubble() {
 function showError(t: string) { if (cur) { cur.remove(); cur = null; } const d = document.createElement("div"); d.className = "notice err"; d.textContent = "Error: " + t; msgs.appendChild(d); setBusy(false); scroll(); }
 function notice(t: string, cls?: string) { const d = document.createElement("div"); d.className = "notice" + (cls ? " " + cls : ""); d.textContent = t; msgs.appendChild(d); scroll(); }
 
+// --- agent activity (per-turn grouping) ---
+function resetActivityState() {
+  activityEl = null; currentStepEl = null; stepCards = {}; stepCount = 0; toolCount = 0;
+}
+function activityBody(): HTMLElement {
+  return activityEl!.querySelector(".act-body") as HTMLElement;
+}
+function updateActivitySummary() {
+  if (!activityEl) return;
+  const s = activityEl.querySelector(".act-summary");
+  if (!s) return;
+  const parts: string[] = [];
+  if (stepCount) parts.push(stepCount + " step" + (stepCount === 1 ? "" : "s"));
+  if (toolCount) parts.push(toolCount + " action" + (toolCount === 1 ? "" : "s"));
+  s.textContent = parts.join(" · ");
+}
+function ensureActivity() {
+  if (activityEl) return;
+  sealBubble();
+  const card = document.createElement("div");
+  activityEl = card;
+  card.className = "card activity open";
+  card.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Agent activity</span><span class="act-summary"></span><span class="chev">${icon("chevron")}</span></div><div class="act-body"></div>`;
+  card.querySelector(".chead")!.addEventListener("click", (e) => { e.stopPropagation(); card.classList.toggle("open"); });
+  msgs.appendChild(card);
+  scroll();
+}
+function sealActivity() {
+  if (!activityEl) return;
+  activityEl.classList.remove("open");
+  const ic = activityEl.querySelector(".status-ic");
+  if (ic) ic.innerHTML = icon("check");
+  updateActivitySummary();
+  resetActivityState();
+}
+function wireCardToggle(card: HTMLElement) {
+  card.querySelector(".chead")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    card.classList.toggle("open");
+  });
+}
+function toolParent(): HTMLElement {
+  ensureActivity();
+  return currentStepEl || activityBody();
+}
+
 // --- agent cards ---
 // The one-line argument that makes a collapsed tool card self-describing:
 // which file, what query, which command. Without it every call reads as a
@@ -213,8 +303,9 @@ function toolUpdate(id: string, name: string, status: string, label: string, sum
     sealBubble();
     t = document.createElement("div"); t.className = "card tool running";
     t.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl"></span><span class="tdetail"></span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
-    msgs.appendChild(t); tools[id] = t;
-    t.querySelector(".chead").onclick = () => t.classList.toggle("open");
+    toolParent().appendChild(t); tools[id] = t;
+    toolCount++; updateActivitySummary();
+    wireCardToggle(t);
   }
   t.classList.remove("running", "complete", "error"); t.classList.add(status);
   t.querySelector(".ttl").textContent = label;
@@ -226,17 +317,34 @@ function toolUpdate(id: string, name: string, status: string, label: string, sum
 }
 function renderTaskPlan(plan: string[]) {
   sealBubble();
-  const el = document.createElement("div"); el.className = "card open";
+  ensureActivity();
+  const el = document.createElement("div"); el.className = "card plan";
   el.innerHTML = `<div class="chead">${icon("sparkle")}<span class="ttl">Agent plan</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"><ol style="margin-left:18px">${plan.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></div>`;
-  el.querySelector(".chead").onclick = () => el.classList.toggle("open");
-  msgs.appendChild(el); scroll();
+  wireCardToggle(el);
+  activityBody().appendChild(el); scroll();
 }
 function agentStep(step: number, status: string) {
-  const id = "agent-step-" + step; let el = $(id);
-  if (!el) { sealBubble(); el = document.createElement("div"); el.id = id; el.className = "row-line running"; el.innerHTML = `<span class="spin"></span><span class="txt"></span>`; msgs.appendChild(el); }
-  el.className = "row-line " + status;
-  el.querySelector(".txt").textContent = "Reasoning step " + (step + 1) + " " + (status === "running" ? "…" : "done");
-  if (status === "complete") { const sp = el.querySelector(".spin"); if (sp) sp.outerHTML = icon("check"); }
+  sealBubble();
+  ensureActivity();
+  let el = stepCards[step];
+  if (!el) {
+    stepCount++; updateActivitySummary();
+    el = document.createElement("div"); el.id = "agent-step-" + step; el.className = "card step";
+    el.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Reasoning step ${step + 1}</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
+    wireCardToggle(el);
+    activityBody().appendChild(el);
+    stepCards[step] = el;
+  }
+  el.classList.remove("running", "complete");
+  el.classList.add(status);
+  currentStepEl = el.querySelector(".cbody") as HTMLElement;
+  if (status === "running") {
+    el.classList.add("open");
+    el.querySelector(".status-ic")!.innerHTML = '<span class="spin"></span>';
+  } else {
+    el.classList.remove("open");
+    el.querySelector(".status-ic")!.innerHTML = icon("check");
+  }
   scroll();
 }
 function addEdit(e: any) {
@@ -249,7 +357,7 @@ function addEdit(e: any) {
   el.innerHTML = `<div class="chead"><span class="kind ${e.kind}">${e.kind === "str-replace" ? "edit" : e.kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody"><div class="diff">${fmtDiff(e.diff)}</div></div>` +
     `<div class="acts"><button class="mini" data-diff="${e.id}">${icon("diff")} Diff</button>${openBtn}<span class="spacer"></span><button class="mini undo" data-undo="${e.id}">${icon("undo")} Undo</button></div>`;
-  el.querySelector(".chead").onclick = () => el.classList.toggle("open");
+  el?.querySelector?.(".chead")?.addEventListener("click", () => el.classList.toggle("open"));
   edits[e.id] = el; msgs.appendChild(el); scroll();
 }
 function setEditStatus(id: string, status: string) {
@@ -266,7 +374,7 @@ function showEditSummary(ids: string[]) {
   if (!ids || !ids.length) return;
   const bar = document.createElement("div"); bar.className = "summary";
   bar.innerHTML = `${icon("check")}<span>${ids.length} file${ids.length === 1 ? "" : "s"} changed this turn</span><span class="spacer"></span><button class="btn">${icon("undo")} Undo all</button>`;
-  bar.querySelector("button").onclick = function (this: any) { post({ type: "undoEdits", ids }); this.textContent = "Reverted"; this.disabled = true; };
+  bar?.querySelector?.("button")?.addEventListener("click", function (this: any) { post({ type: "undoEdits", ids }); this.textContent = "Reverted"; this.disabled = true; });
   msgs.appendChild(bar); scroll();
 }
 
@@ -279,7 +387,7 @@ function renderSearchResults(results: any[]) {
     const repo = r.repo ? `<span class="repo">${esc(r.repo)}</span>` : "";
     const lines = (r.contents || "").split("\n").map((l: string, i: number) => String(r.startLine + i).padStart(5) + " │ " + l).join("\n");
     el.innerHTML = `<div class="chead">${repo}<span class="path">${loc}</span><span class="score">${(r.score * 100).toFixed(0)}%</span><span class="chev">${icon("chevron")}</span></div><pre>${esc(lines)}</pre>`;
-    el.querySelector(".chead").onclick = (ev: any) => { if (ev.target.classList.contains("path")) { post({ type: "openFile", path: r.path, line: r.startLine }); return; } el.classList.toggle("open"); };
+    el?.querySelector?.(".chead")?.addEventListener("click", (ev: any) => { if (ev.target.classList.contains("path")) { post({ type: "openFile", path: r.path, line: r.startLine }); return; } el.classList.toggle("open"); });
     msgs.appendChild(el);
   });
   scroll();
@@ -288,19 +396,6 @@ function renderSearchResults(results: any[]) {
 // --- panels ---
 function closePanels(except?: any) { [settingsPanel, historyPanel, accountPanel].forEach((p) => { if (p !== except) p.hidden = true; }); }
 function togglePanel(p: any, onOpen?: () => void) { const show = p.hidden; closePanels(show ? p : null); p.hidden = !show; if (show && onOpen) onOpen(); }
-function rebuildModels() { modelSel.innerHTML = (MODELS[uiProvider] || []).map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join(""); }
-function setProviderUI(p: string) {
-  uiProvider = p;
-  settingsPanel.querySelectorAll(".pill").forEach((b: any) => b.classList.toggle("active", b.dataset.provider === p));
-  rebuildModels(); updateKeyStatus();
-}
-function updateKeyStatus() {
-  const has = !!uiHasKey[uiProvider];
-  keyStatus.className = "key-status " + (has ? "set" : "unset"); keyStatus.textContent = has ? "set" : "not set";
-  apiKey.placeholder = has ? "•••••• (blank = keep)" : "sk-… (stored securely)"; apiKey.value = "";
-  tavilyStatus.className = "key-status " + (uiHasTavily ? "set" : "unset"); tavilyStatus.textContent = uiHasTavily ? "set" : "not set";
-  tavilyKey.placeholder = uiHasTavily ? "•••••• (blank = keep)" : "tvly-… (web search)"; tavilyKey.value = "";
-}
 
 // --- history ---
 function renderHistory(sessions: any[], currentId: string) {
@@ -313,7 +408,7 @@ function renderHistory(sessions: any[], currentId: string) {
   }).join("");
 }
 function replaySession(session: any) {
-  msgs.innerHTML = ""; cur = null; fullText = ""; setBusy(false); tools = {}; edits = {};
+  msgs.innerHTML = ""; cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; resetActivityState();
   if (!session.messages || !session.messages.length) { msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-title">${esc(session.title || "Chat")}</div><div class="w-sub">Empty conversation — send a message to continue.</div></div>`; return; }
   session.messages.forEach((m: any) => {
     if (m.role === "user") addUser(m.text);
@@ -324,31 +419,7 @@ function replaySession(session: any) {
 
 // --- account / license ---
 function renderAccount() {
-  const lic = license || { plan: "free" };
-  if (lic.valid) {
-    const exp = lic.exp ? new Date(lic.exp * 1000).toISOString().slice(0, 10) : "perpetual";
-    accountBody.innerHTML =
-      `<div class="lic-status">` +
-      `<div class="lic-line"><span class="lic-k">Plan</span><b style="text-transform:capitalize">${esc(lic.plan)}</b></div>` +
-      (lic.org ? `<div class="lic-line"><span class="lic-k">Org</span>${esc(lic.org)}</div>` : "") +
-      (lic.seats ? `<div class="lic-line"><span class="lic-k">Seats</span>${esc(lic.seats)}</div>` : "") +
-      `<div class="lic-line"><span class="lic-k">Expires</span>${esc(exp)}</div>` +
-      (lic.inGrace ? `<div class="notice err" style="border:none;padding-left:0">In grace period — ${esc(lic.daysLeft)} day(s) left.</div>` : "") +
-      `</div><div class="actions"><button class="btn" id="deactivateBtn">Deactivate</button></div>`;
-    $("deactivateBtn").onclick = () => post({ type: "deactivateLicense" });
-  } else {
-    accountBody.innerHTML =
-      `<div class="upsell"><div class="up-title">${icon("sparkle")} Open Context Team</div><ul>` +
-      `<li>${icon("check")} Multi-repo search across all your repositories</li>` +
-      `<li>${icon("check")} Shared team index — index once, everyone benefits</li>` +
-      `<li>${icon("check")} Commercial-use license &amp; priority support</li></ul>` +
-      `<button class="btn primary block" id="getTeamBtn">Get Team</button>` +
-      `<div class="up-note">Your code stays on your machine — license keys verify offline.</div></div>` +
-      `<div class="sep"></div><div class="row"><input id="licKey" type="text" placeholder="Paste license key…" /></div>` +
-      `<div class="actions"><button class="btn primary" id="activateBtn">Activate</button></div>`;
-    $("getTeamBtn").onclick = () => post({ type: "openExternal", url: GET_TEAM_URL });
-    $("activateBtn").onclick = () => { const k = $("licKey").value.trim(); if (k) post({ type: "activateLicense", key: k }); };
-  }
+  renderAccountSection(accountBody, license, { $, post, getTeamUrl: GET_TEAM_URL });
 }
 function setLicense(lic: any) {
   license = lic || { plan: "free", valid: false };
@@ -389,27 +460,18 @@ msgs.addEventListener("click", (e: any) => {
   else if (t.classList.contains("chip") && d.prompt) send(d.prompt);
 });
 sendBtn.onclick = () => send();
-stopBtn.onclick = () => { post({ type: "cancel" }); setBusy(false); if (cur) finalize(); notice("Stopped"); };
+stopBtn.onclick = () => { post({ type: "cancel" }); setBusy(false); if (cur) finalize(); sealActivity(); notice("Stopped"); };
 $("newBtn").onclick = () => post({ type: "newSession" });
 modelBadge.onclick = () => togglePanel(settingsPanel, () => post({ type: "getConfig" }));
-$("settingsBtn").onclick = () => togglePanel(settingsPanel, () => post({ type: "getConfig" }));
+$("settingsBtn").onclick = () => post({ type: "openSettings" });
+$("openFullSettings")?.addEventListener("click", () => post({ type: "openSettings" }));
 $("historyBtn").onclick = () => togglePanel(historyPanel, () => post({ type: "listHistory" }));
-$("accountBtn").onclick = () => togglePanel(accountPanel, renderAccount);
-planBadge.onclick = () => togglePanel(accountPanel, renderAccount);
+$("accountBtn").onclick = () => post({ type: "openSettings", section: "account" });
+planBadge.onclick = () => post({ type: "openSettings", section: "account" });
 $("settingsClose").onclick = () => (settingsPanel.hidden = true);
 $("settingsCancel").onclick = () => (settingsPanel.hidden = true);
 $("historyClose").onclick = () => (historyPanel.hidden = true);
 $("accountClose").onclick = () => (accountPanel.hidden = true);
-$("saveCfg").onclick = () => {
-  const model = modelCustom.value.trim() || modelSel.value;
-  if (!model) { notice("Select or enter a model"); return; }
-  post({ type: "setLLMSelection", provider: uiProvider, model });
-  if (apiKey.value) { post({ type: "saveLLMKey", provider: uiProvider, apiKey: apiKey.value }); apiKey.value = ""; }
-  if (tavilyKey.value) { post({ type: "setWebSearchKey", apiKey: tavilyKey.value }); tavilyKey.value = ""; }
-  notice("Saved " + uiProvider + " · " + model); settingsPanel.hidden = true;
-};
-settingsPanel.addEventListener("click", (e: any) => { const t = e.target.closest(".pill"); if (t && t.dataset.provider) setProviderUI(t.dataset.provider); });
-modelSel.addEventListener("change", () => (modelCustom.value = ""));
 histList.addEventListener("click", (e: any) => {
   const del = e.target.closest("[data-del]");
   if (del) { post({ type: "deleteHistory", id: del.dataset.del }); e.stopPropagation(); return; }
@@ -426,8 +488,8 @@ window.addEventListener("message", (e: any) => {
   const m = e.data;
   switch (m.type) {
     case "chunk": chunk(m.text); break;
-    case "done": finalize(); tools = {}; break;
-    case "error": showError(m.text); break;
+    case "done": finalize(); sealActivity(); tools = {}; break;
+    case "error": showError(m.text); sealActivity(); break;
     case "tool_update": toolUpdate(m.id, m.name, m.status, m.label, m.summary, m.args); break;
     case "task_plan": renderTaskPlan(m.plan || []); break;
     case "agent_step": agentStep(m.step || 0, m.status || "running"); break;
@@ -444,19 +506,20 @@ window.addEventListener("message", (e: any) => {
     case "sources": renderSources(m.files || []); break;
     case "insertMention": if (m.path) insertAtCursor("@" + m.path + " "); break;
     case "config":
-      uiHasKey = m.hasKey || {}; uiHasTavily = !!m.hasWebSearchKey; setProviderUI(m.provider || "openai");
-      if (m.model) modelSel.value = m.model; break;
+      modelKeysForm.applyConfig(m); break;
     case "search_start": removeWelcome(); break;
     case "search_result": renderSearchResults(m.results); break;
     case "history_list": renderHistory(m.sessions, m.currentId); break;
     case "history_load": replaySession(m.session); historyPanel.hidden = true; break;
     case "clear":
       msgs.innerHTML = `<div class="welcome" id="welcome"><div class="w-logo">${icon("sparkle")}</div><div class="w-title">New chat</div><div class="w-sub">Ask a question, or switch to Search for raw snippet lookup.</div></div>`;
-      cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; break;
+      cur = null; fullText = ""; setBusy(false); tools = {}; edits = {}; resetActivityState(); break;
+    case "tour:start":
+      startChatTour(!!m.force);
+      break;
   }
 });
 
-rebuildModels();
 updateRepos();
 renderContext();
 post({ type: "ready" });

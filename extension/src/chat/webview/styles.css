@@ -92,6 +92,38 @@ body {
 .key-status.unset { background: color-mix(in srgb, var(--oc-red) 20%, transparent); color: var(--oc-red); }
 .sep { height: 1px; background: var(--oc-border); opacity: .7; margin: 2px 0; }
 
+.panel-section {
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-section-hdr {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.panel-section-hdr .ic { width: 12px; height: 12px; color: var(--oc-accent); }
+.embedding-card {
+  border-color: color-mix(in srgb, var(--oc-accent) 35%, var(--oc-border));
+  background: color-mix(in srgb, var(--oc-accent) 6%, transparent);
+}
+.embedding-card .emb-blurb { font-size: 11.5px; color: var(--vscode-descriptionForeground); line-height: 1.45; }
+.embedding-card .emb-meta { font-size: 10.5px; }
+.emb-hint { font-size: 10.5px; color: var(--vscode-descriptionForeground); padding-left: 72px; margin-top: -4px; }
+.full-settings-link {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 0;
+  border: none; background: none; color: var(--vscode-textLink-foreground); font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.full-settings-link:hover { text-decoration: underline; }
+.full-settings-link .ic { width: 12px; height: 12px; }
+.model-keys-form { display: flex; flex-direction: column; gap: 10px; }
+
 /* ---------- Account / upgrade ---------- */
 .lic-status { display: flex; flex-direction: column; gap: 4px; font-size: 12px; padding: 4px 0; }
 .lic-status .lic-line { display: flex; gap: 8px; }
@@ -189,15 +221,83 @@ body {
 .card .chead .tdetail:not(:empty)::before { content: ""; }
 .card .chead .chev { color: var(--vscode-descriptionForeground); transition: transform .15s; opacity: .7; flex-shrink: 0; }
 .card .chead .chev .ic { width: 13px; height: 13px; }
-.card.open .chead .chev { transform: rotate(90deg); }
+.card.open > .chead .chev { transform: rotate(90deg); }
 .card .cbody { display: none; padding: 8px 10px; border-top: 1px solid var(--oc-border); font-size: 11.5px; color: var(--vscode-descriptionForeground); }
-.card.open .cbody { display: block; }
+.card.open > .cbody { display: block; }
 .card .cbody .k { color: var(--vscode-descriptionForeground); opacity: .85; margin-right: 4px; }
 .card .cbody pre { background: var(--vscode-textCodeBlock-background, rgba(0,0,0,.25)); border-radius: 5px; padding: 6px 8px; margin-top: 5px; overflow: auto; max-height: 180px; white-space: pre-wrap; }
 .status-ic .ic { color: var(--vscode-descriptionForeground); width: 13px; height: 13px; }
 .card.running .status-ic .ic { color: var(--oc-accent); }
 .card.complete .status-ic .ic { color: var(--oc-green); }
 .card.error .status-ic .ic { color: var(--oc-red); }
+
+/* Activity container — groups plan, steps, and tools per agent turn */
+.card.activity {
+  border: none;
+  background: transparent;
+  overflow: visible;
+  border-radius: 0;
+}
+.card.activity > .chead {
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius-sm);
+  background: var(--oc-surface);
+}
+.card.activity .act-summary { flex: 1; min-width: 0; font-size: 10.5px; color: var(--vscode-descriptionForeground); }
+.card.activity .act-body {
+  display: none;
+  padding: 10px 0 4px;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(440px, 55vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.card.activity.open .act-body { display: flex; }
+
+/* Nested sections — light separators, no stacked box borders */
+.card.activity .act-body > .card {
+  margin: 0;
+  border: none;
+  background: transparent;
+  overflow: visible;
+  border-radius: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--oc-border) 70%, transparent);
+}
+.card.activity .act-body > .card:last-child { border-bottom: none; padding-bottom: 0; }
+.card.activity .act-body > .card > .chead { padding: 5px 4px; border-radius: var(--oc-radius-sm); }
+.card.activity .act-body > .card > .chead:hover { background: var(--oc-surface); }
+.card.activity .act-body > .card > .cbody { border-top: none; }
+
+/* Reasoning step cards nest tool calls */
+.card.step > .cbody { display: none; flex-direction: column; gap: 8px; }
+.card.step.open > .cbody { display: flex; }
+.card.activity .card.step .cbody { padding: 8px 4px 2px; }
+.card.activity .card.step .cbody > .card.tool {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--oc-border) 80%, transparent);
+  border-radius: var(--oc-radius-sm);
+  background: var(--oc-surface);
+  overflow: visible;
+}
+
+/* Collapsed tool headers show label only — no ellipsized detail text */
+.card.tool:not(.open) .chead .tdetail { display: none; }
+
+/* Expanded activity/step: full wrapped tool detail, no horizontal clip */
+.card.activity.open .card.tool.open .chead,
+.card.activity.open .card.step.open .card.tool.open .chead { flex-wrap: wrap; align-items: flex-start; }
+.card.activity.open .card.tool .chead .ttl,
+.card.activity.open .card.tool .chead .tdetail { white-space: normal; overflow: visible; text-overflow: unset; }
+
+/* Let tool args/results scroll inside each expanded tool card */
+.card.activity .card.tool.open > .cbody pre {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
 
 .kind { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
 .kind.str-replace { background: color-mix(in srgb, var(--oc-accent) 18%, transparent); color: var(--oc-accent); }
@@ -320,3 +420,75 @@ body {
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Mirror of the VS Code "CHAT" view-title toolbar — shown only during tour steps. */
+.tour-chrome-bar {
+  flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; border-bottom: 1px dashed var(--oc-accent);
+  background: color-mix(in srgb, var(--oc-accent) 8%, var(--vscode-sideBar-background));
+}
+.tour-chrome-bar[hidden] { display: none !important; }
+.tour-chrome-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--oc-accent); }
+.tour-chrome-hint { font-size: 10px; flex: 1; min-width: 0; }
+.tour-chrome-hint b { color: var(--vscode-foreground); font-weight: 600; }
+.tour-chrome-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.tour-chrome-btn {
+  width: 26px; height: 24px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--vscode-icon-foreground, var(--vscode-descriptionForeground));
+  background: var(--oc-surface); border: 1px solid var(--oc-border);
+}
+.tour-chrome-btn .ic { width: 14px; height: 14px; }
+.tour-welcome { margin-top: 0 !important; border: 1px dashed var(--oc-border); border-radius: var(--oc-radius); background: var(--oc-surface); }
+
+/* ---------- Product tour (spotlight onboarding) ---------- */
+.tour-root { position: fixed; inset: 0; z-index: 10000; pointer-events: none; }
+.tour-overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: auto; }
+.tour-dim { fill: rgba(0, 0, 0, 0.55); }
+.tour-ring {
+  position: fixed; pointer-events: none; z-index: 10001;
+  border: 2px solid var(--oc-accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--oc-accent) 35%, transparent);
+  animation: tourPulse .9s ease-out;
+}
+.tour-popover {
+  position: fixed; z-index: 10002; pointer-events: auto;
+  width: min(300px, calc(100vw - 24px));
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--oc-radius);
+  padding: 14px 14px 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  animation: rise .18s ease-out;
+}
+.tour-popover::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  border: 7px solid transparent;
+}
+.tour-popover-below::after { top: -14px; border-bottom-color: var(--vscode-sideBar-background); }
+.tour-popover-above::after { bottom: -14px; border-top-color: var(--vscode-sideBar-background); }
+.tour-close {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px;
+  font-size: 16px; line-height: 1; color: var(--vscode-descriptionForeground);
+}
+.tour-title { font-size: 13px; font-weight: 600; margin: 0 20px 6px 0; }
+.tour-body { font-size: 12px; color: var(--vscode-descriptionForeground); line-height: 1.45; margin-bottom: 12px; }
+.tour-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tour-progress { font-size: 10.5px; }
+.tour-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tour-skip.linkish {
+  background: none; border: none; color: var(--vscode-descriptionForeground);
+  font-size: 11px; cursor: pointer; padding: 4px 6px; font-family: inherit;
+}
+.tour-skip.linkish:hover { color: var(--vscode-foreground); }
+.tour-foot .btn.ghost {
+  background: transparent; border: 1px solid var(--oc-border); color: var(--vscode-foreground);
+  padding: 5px 10px; border-radius: var(--oc-radius-sm); font-size: 11.5px; cursor: pointer; font-family: inherit;
+}
+.tour-foot .btn.ghost:hover { background: var(--oc-surface-2); }
+.tour-foot .btn.primary {
+  background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+  border: none; padding: 5px 12px; border-radius: var(--oc-radius-sm); font-size: 11.5px; cursor: pointer; font-family: inherit; font-weight: 600;
+}
+.tour-foot .btn.primary:hover { background: var(--vscode-button-hoverBackground); }
+@keyframes tourPulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--oc-accent) 45%, transparent); } to { box-shadow: 0 0 0 1px color-mix(in srgb, var(--oc-accent) 35%, transparent); } }
