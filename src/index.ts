@@ -18,10 +18,10 @@ export { ContextAgent, defaultCodebaseTools, defaultAgentTools, FsEditApplier, e
 export type { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./agent/types";
 export type { EditApplier } from "./agent/edit-tools";
 export { unifiedDiff } from "./core/diff";
-export { createMCPServer, runMCPServer } from "./mcp/server";
-export type { RunMCPServerOptions } from "./mcp/server";
+export { createMCPServer, runMCPServer, startHttpServer } from "./mcp/server";
+export type { RunMCPServerOptions, CreateMCPServerOptions, HttpTransportOptions } from "./mcp/server";
 export type { File, Chunk, SearchResult, IndexingResult, OpenContextState, OpenContextConfig, EmbeddingConfig, SearchConfig, RerankerConfig, FreshnessReport, GitState, IndexMetadata } from "./core/types";
-export { OpenAIEmbeddingProvider, VoyageEmbeddingProvider, OllamaEmbeddingProvider, createEmbeddingProvider, isAuthError } from "./core/embedder";
+export { OpenAIEmbeddingProvider, VoyageEmbeddingProvider, OllamaEmbeddingProvider, LocalEmbeddingProvider, createEmbeddingProvider, isAuthError, localModelCacheDir } from "./core/embedder";
 export type { EmbeddingProvider, EmbeddingInputType } from "./core/embedder";
 export { getFileRecencyScores, applyRecencyBoost } from "./core/git-recency";
 export type { RecencyScores } from "./core/git-recency";
@@ -47,6 +47,24 @@ export type { MemoryEntry, MemoryKind } from "./agent/session-memory";
 export {
   getLicense, verifyLicenseToken, isEntitled, requireFeature, loadEnterpriseEdition,
   saveLicenseToken, loadLicenseToken, clearLicense, licenseConfigPath, licenseConfigDir,
-  serializeLicensePayload, DEFAULT_GRACE_DAYS,
+  serializeLicensePayload, DEFAULT_GRACE_DAYS, checkOrgDomainBinding,
 } from "./core/license";
-export type { Plan, Feature, LicensePayload, LicenseStatus, LicenseReason, VerifyOptions } from "./core/license";
+export type { Plan, Feature, LicensePayload, LicenseStatus, LicenseReason, VerifyOptions, OrgDomainCheck } from "./core/license";
+export {
+  loadPolicy, mergePolicies, emptyPolicy, verifySignedPolicy, describePolicy,
+  policyAllowsEdits, policyAllowsShell, policyAllowsWebSearch, policyShellAllowlist,
+  checkEmbeddingPolicy, policyRequiresAudit, LOCAL_EMBEDDING_PROVIDERS,
+} from "./core/policy";
+export type { PolicyRules, EffectivePolicy, SignedPolicyPayload, LoadPolicyOptions, VerifySignedPolicyOptions } from "./core/policy";
+export { AuditLogger, readAuditEvents, verifyAuditChain, hashEvent, defaultAuditDir } from "./core/audit";
+export type { AuditEvent, AuditLoggerOptions, ReadAuditOptions, AuditVerification } from "./core/audit";
+export { ChunkWorkerPool, defaultPoolSize } from "./core/chunk-pool";
+export type { ChunkedFile, ChunkPoolOptions } from "./core/chunk-pool";
+export { readArtifactManifest, packArtifact, installArtifact, pushArtifact, pullArtifact, ARTIFACT_MANIFEST_KEY } from "./core/index-artifact";
+export type { IndexArtifactManifest, TransportOptions } from "./core/index-artifact";
+export { EmbedCache, defaultEmbedCachePath, contentHash } from "./core/embed-cache";
+export type { EmbedCacheStats } from "./core/embed-cache";
+export {
+  verifyRevocationToken, loadCachedRevocations, saveRevocationToken, refreshRevocations, revocationCachePath,
+} from "./core/license";
+export type { RevocationList } from "./core/license";

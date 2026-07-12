@@ -1,13 +1,15 @@
 import { OpenContext } from "../core/context";
 import { RetrieveOptions } from "../core/retriever";
-import { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolDefinition } from "./types";
+import { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, RunStats, TokenUsage, ToolCall, ToolDefinition } from "./types";
 import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
 import { compactHistory, truncateToolResult, withRetry } from "./utils";
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";
 import { shellTool, webSearchTool, ShellToolOptions, WebSearchOptions } from "./extra-tools";
 import { StepBudget } from "./step-budget";
+import { EffectivePolicy, policyAllowsEdits, policyAllowsShell, policyAllowsWebSearch, policyShellAllowlist } from "../core/policy";
+import { AuditLogger } from "../core/audit";
 
-export { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./types";
+export { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, PreToolCallDecision, RunStats, TokenUsage, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./types";
 export { EditApplier, FsEditApplier, editTools } from "./edit-tools";
 export { shellTool, webSearchTool } from "./extra-tools";
 
@@ -109,7 +111,8 @@ export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () 
 
 const SNIPPET_MAX_LINES = 40;
 
-function renderDefinition(c: import("../core/types").Chunk): string {
+// Exported for the MCP server, which surfaces the same symbol tools.
+export function renderDefinition(c: import("../core/types").Chunk): string {
   const kind = c.symbolKind ? `${c.symbolKind} ` : "";
   const parent = c.parentSymbol ? ` (in ${c.parentSymbol})` : "";
   const lines = c.contents.split("\n");
@@ -119,7 +122,7 @@ function renderDefinition(c: import("../core/types").Chunk): string {
   return `${kind}${c.symbolName ?? "?"}${parent} — ${c.path}:${c.startLine}-${c.endLine}\n\`\`\`${c.language ?? ""}\n${body}\n\`\`\``;
 }
 
-function renderReference(c: import("../core/types").Chunk, symbol: string): string {
+export function renderReference(c: import("../core/types").Chunk, symbol: string): string {
   // Show the exact matching lines with absolute line numbers, not the whole
   // chunk — references are about WHERE, the agent can read-file for context.
   const re = new RegExp(`(^|[^A-Za-z0-9_])${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9_]|$)`);
@@ -143,23 +146,51 @@ export interface DefaultToolsOptions {
   shell?: Omit<ShellToolOptions, "workspaceRoot"> | boolean;
   webSearch?: WebSearchOptions | false;
   retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>;
+  /** Policy to enforce. Default: the policy the OpenContext loaded for the
+   *  workspace. Pass `false` to skip (tests / embedders that enforce upstream). */
+  policy?: EffectivePolicy | false;
+  /** When set, records which capabilities the policy stripped (for surfacing to the user). */
+  onPolicyBlock?: (capability: "edits" | "shell" | "web-search", reason: string) => void;
 }
 
 // Read-only by default: codebase retrieval + read tools only. File edits and
 // shell execution are powerful and must be opted into explicitly, so embedding
 // `defaultAgentTools({ context })` never silently grants write/exec access.
+// A workspace/org policy is enforced on top: it can strip edits/shell/web
+// search and pin the shell allowlist, and opts cannot loosen it.
 export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
+  // `getPolicy?.` — embedders (and tests) may pass a duck-typed context.
+  const policy = opts.policy === false ? undefined : opts.policy ?? opts.context.getPolicy?.() ?? undefined;
   let tools: ToolDefinition[] = defaultCodebaseTools(opts.context, opts.retrieveOptions);
   if (opts.includeEdits) {
-    const applier = opts.applier ?? new FsEditApplier(opts.context.getWorkspaceRoot());
-    tools = tools.concat(editTools({ context: opts.context, applier, onEdit: opts.onEdit }));
+    if (!policyAllowsEdits(policy)) {
+      opts.onPolicyBlock?.("edits", "file-editing tools are disabled by policy");
+    } else {
+      const applier = opts.applier ?? new FsEditApplier(opts.context.getWorkspaceRoot());
+      tools = tools.concat(editTools({ context: opts.context, applier, onEdit: opts.onEdit }));
+    }
   }
   if (opts.shell) {
-    const shellOpts = opts.shell === true ? {} : opts.shell;
-    tools.push(shellTool({ ...shellOpts, workspaceRoot: opts.context.getWorkspaceRoot() }));
+    if (!policyAllowsShell(policy)) {
+      opts.onPolicyBlock?.("shell", "the run-command tool is disabled by policy");
+    } else {
+      const shellOpts = opts.shell === true ? {} : { ...opts.shell };
+      const allowlist = policyShellAllowlist(policy, shellOpts.allowlist ?? []);
+      const maxTimeout = policy?.agent?.shell?.maxTimeoutMs;
+      tools.push(shellTool({
+        ...shellOpts,
+        ...(allowlist.length || policy?.agent?.shell?.allowlist ? { allowlist } : {}),
+        ...(maxTimeout ? { timeoutMs: Math.min(shellOpts.timeoutMs ?? maxTimeout, maxTimeout) } : {}),
+        workspaceRoot: opts.context.getWorkspaceRoot(),
+      }));
+    }
   }
   if (opts.webSearch) {
-    tools.push(webSearchTool(opts.webSearch));
+    if (!policyAllowsWebSearch(policy)) {
+      opts.onPolicyBlock?.("web-search", "the web-search tool is disabled by policy");
+    } else {
+      tools.push(webSearchTool(opts.webSearch));
+    }
   }
   return tools;
 }
@@ -177,6 +208,11 @@ export class ContextAgent {
   private router?: import("./model-router").ModelRouter;
   private memory?: import("./session-memory").SessionMemory;
   private memorySource: string;
+  private audit?: AuditLogger;
+  private hooks?: AgentHooks;
+  private maxParallelTools: number;
+  private lastRunStats: RunStats | null = null;
+  private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
 
   constructor(config: AgentConfig) {
     for (const t of config.tools) this.tools.set(t.name, t);
@@ -185,10 +221,13 @@ export class ContextAgent {
     this.historyTokenBudget = config.historyTokenBudget ?? 120_000;
     this.maxToolResultChars = config.maxToolResultChars ?? 24_000;
     this.maxRetries = config.maxRetries ?? 3;
+    this.maxParallelTools = Math.max(1, config.maxParallelTools ?? 4);
     this.guidelinesProvider = config.guidelinesProvider;
+    this.hooks = config.hooks;
     this.router = config.router;
     this.memory = config.memory;
     this.memorySource = config.memorySource ?? "agent";
+    this.audit = config.audit;
     if (!this.router) {
       // No router: a single fixed caller is built up front, as before. With a
       // router, callers are created lazily per tier inside the router itself.
@@ -205,6 +244,26 @@ export class ContextAgent {
   addUserMessage(content: string): void { this.messages.push({ role: "user", content }); }
   loadMessages(messages: AgentMessage[]): void { this.messages = [...messages]; }
 
+  /** Stats for the most recent run() (null before the first run). */
+  getLastRunStats(): RunStats | null { return this.lastRunStats; }
+  /** Token usage accumulated across every run of this agent instance. */
+  getTotalUsage(): TokenUsage { return { ...this.totalUsage }; }
+
+  /** Serialize the conversation (and usage totals) for persistence. */
+  exportSession(): string {
+    return JSON.stringify({ version: 1, messages: this.messages, totalUsage: this.totalUsage });
+  }
+
+  /** Restore a session produced by exportSession(). Throws on malformed input. */
+  importSession(serialized: string): void {
+    const parsed = JSON.parse(serialized);
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.messages)) {
+      throw new Error("Unrecognized session format (expected exportSession() output, version 1).");
+    }
+    this.messages = parsed.messages;
+    if (parsed.totalUsage) this.totalUsage = { inputTokens: parsed.totalUsage.inputTokens ?? 0, outputTokens: parsed.totalUsage.outputTokens ?? 0 };
+  }
+
   async run(query: string, options: AgentRunOptions = {}): Promise<string> {
     // Pick the caller once per run: routed by query complexity when a router
     // is configured, the fixed caller otherwise. Routing happens BEFORE the
@@ -218,24 +277,45 @@ export class ContextAgent {
       caller = this.caller!;
     }
     this.messages.push({ role: "user", content: query });
+    this.audit?.log("run-start", { query });
     const budget = new StepBudget(query, {
       baseSimple: this.maxSteps,
       baseComplex: Math.min(this.maxSteps * 2, 25),
       maxBudget: 25,
     });
+    const startedAt = Date.now();
+    const stats: RunStats = { steps: 0, llmCalls: 0, toolCalls: 0, toolErrors: 0, usage: { inputTokens: 0, outputTokens: 0 }, durationMs: 0 };
+    const finishRun = (answer: string, exhausted = false): string => {
+      stats.durationMs = Date.now() - startedAt;
+      this.lastRunStats = stats;
+      this.totalUsage.inputTokens += stats.usage.inputTokens;
+      this.totalUsage.outputTokens += stats.usage.outputTokens;
+      this.audit?.log("run-end", { steps: stats.steps, toolCalls: stats.toolCalls, inputTokens: stats.usage.inputTokens, outputTokens: stats.usage.outputTokens, ...(exhausted ? { exhaustedBudget: true } : { answerChars: answer.length }) });
+      options.onStream?.({ type: "run_end", stats });
+      return answer;
+    };
     let step = 0;
     while (budget.shouldContinue()) {
       options.onStream?.({ type: "step_start", step });
       this.compactIfNeeded(options);
       const systemWithGuidelines = this.buildSystemPrompt(query);
       const resp = await withRetry(
-        () => caller.call(this.messages, [...this.tools.values()], systemWithGuidelines, options.onStream, options.signal),
+        () => {
+          stats.llmCalls++;
+          return caller.call(this.messages, [...this.tools.values()], systemWithGuidelines, options.onStream, options.signal);
+        },
         {
           maxRetries: this.maxRetries,
           signal: options.signal,
           onRetry: (attempt, delayMs, reason) => options.onStream?.({ type: "retry", retryAttempt: attempt, retryDelayMs: delayMs, retryReason: reason }),
         },
       );
+      if (resp.usage) {
+        stats.usage.inputTokens += resp.usage.inputTokens;
+        stats.usage.outputTokens += resp.usage.outputTokens;
+        options.onStream?.({ type: "usage", usage: resp.usage });
+      }
+      stats.steps = step + 1;
       this.messages.push({
         role: "assistant",
         content: resp.text,
@@ -247,32 +327,13 @@ export class ContextAgent {
         if (this.memory && resp.text) {
           try { this.memory.extractFacts(resp.text, this.memorySource); } catch {}
         }
-        return resp.text;
+        return finishRun(resp.text);
       }
+      const outcomes = await this.executeToolCalls(resp.toolCalls, budget, options, stats);
       let lastResultLength = 0;
-      for (const tc of resp.toolCalls) {
-        if (options.signal?.aborted) throw new Error("Aborted");
-        if (budget.isLooping(tc.name, tc.arguments)) {
-          const stored = "Loop detected: same tool called with identical arguments. Please try a different approach.";
-          this.messages.push({ role: "tool", content: stored, toolCallId: tc.id, toolName: tc.name });
-          options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: true } });
-          continue;
-        }
-        options.onStream?.({ type: "tool_call", toolCall: tc });
-        const tool = this.tools.get(tc.name);
-        let result: string;
-        let isError = false;
-        try {
-          if (!tool) { result = `Error: unknown tool '${tc.name}'`; isError = true; }
-          else result = await tool.handler(tc.arguments);
-        } catch (err: any) {
-          result = `Error: ${err?.message ?? String(err)}`;
-          isError = true;
-        }
-        const stored = truncateToolResult(result, this.maxToolResultChars);
-        lastResultLength = Math.max(lastResultLength, stored.length);
-        this.messages.push({ role: "tool", content: stored, toolCallId: tc.id, toolName: tc.name });
-        options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: isError } });
+      for (const o of outcomes) {
+        lastResultLength = Math.max(lastResultLength, o.result.length);
+        this.messages.push({ role: "tool", content: o.result, toolCallId: o.call.id, toolName: o.call.name });
       }
       if (budget.getRemaining() <= 1 && lastResultLength > 200) {
         budget.requestExtension(lastResultLength);
@@ -281,7 +342,88 @@ export class ContextAgent {
       step++;
     }
     const tail = this.messages[this.messages.length - 1];
-    return tail?.role === "assistant" ? tail.content : "Agent exceeded step budget without a final answer.";
+    return finishRun(tail?.role === "assistant" ? tail.content : "Agent exceeded step budget without a final answer.", true);
+  }
+
+  /**
+   * Execute one assistant turn's tool calls. Results come back in call order.
+   * A batch that is entirely read-only (no `mutates` tool) fans out with
+   * bounded concurrency; any mutating call forces the WHOLE batch sequential —
+   * a read issued after an edit in the same turn must see the edit.
+   */
+  private async executeToolCalls(
+    toolCalls: ToolCall[],
+    budget: StepBudget,
+    options: AgentRunOptions,
+    stats: RunStats,
+  ): Promise<{ call: ToolCall; result: string; isError: boolean }[]> {
+    const outcomes: { call: ToolCall; result: string; isError: boolean }[] = new Array(toolCalls.length);
+    const runnable: number[] = [];
+    for (let i = 0; i < toolCalls.length; i++) {
+      const tc = toolCalls[i];
+      // Loop detection stays sequential-order-sensitive: record every call.
+      if (budget.isLooping(tc.name, tc.arguments)) {
+        const stored = "Loop detected: same tool called with identical arguments. Please try a different approach.";
+        outcomes[i] = { call: tc, result: stored, isError: true };
+        options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: true } });
+        continue;
+      }
+      runnable.push(i);
+    }
+    const anyMutates = runnable.some(i => this.tools.get(toolCalls[i].name)?.mutates);
+    if (anyMutates || runnable.length <= 1) {
+      for (const i of runnable) {
+        if (options.signal?.aborted) throw new Error("Aborted");
+        outcomes[i] = await this.invokeTool(toolCalls[i], options, stats);
+      }
+    } else {
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(this.maxParallelTools, runnable.length) }, async () => {
+        while (cursor < runnable.length) {
+          if (options.signal?.aborted) throw new Error("Aborted");
+          const i = runnable[cursor++];
+          outcomes[i] = await this.invokeTool(toolCalls[i], options, stats);
+        }
+      });
+      await Promise.all(workers);
+    }
+    return outcomes;
+  }
+
+  private async invokeTool(tc: ToolCall, options: AgentRunOptions, stats: RunStats): Promise<{ call: ToolCall; result: string; isError: boolean }> {
+    options.onStream?.({ type: "tool_call", toolCall: tc });
+    stats.toolCalls++;
+    const tool = this.tools.get(tc.name);
+    let result: string;
+    let isError = false;
+    let args = tc.arguments;
+    try {
+      if (!tool) {
+        result = `Error: unknown tool '${tc.name}'`;
+        isError = true;
+      } else {
+        const decision = await this.hooks?.preToolCall?.(tc);
+        if (decision?.behavior === "deny") {
+          result = `Denied by hook: ${decision.reason}`;
+          isError = true;
+        } else {
+          if (decision?.behavior === "allow" && decision.arguments) args = decision.arguments;
+          result = await tool.handler(args, options.signal);
+        }
+      }
+    } catch (err: any) {
+      result = `Error: ${err?.message ?? String(err)}`;
+      isError = true;
+    }
+    try {
+      const replaced = await this.hooks?.postToolCall?.(tc, result, isError);
+      if (typeof replaced === "string") result = replaced;
+    } catch {}
+    if (isError) stats.toolErrors++;
+    const stored = truncateToolResult(result, this.maxToolResultChars);
+    this.audit?.log("tool-call", { name: tc.name, arguments: JSON.stringify(args), resultChars: stored.length, ...(isError ? { error: true } : {}) });
+    options.onStream?.({ type: "tool_result", toolResult: { id: tc.id, name: tc.name, result: stored, error: isError } });
+    return { call: tc, result: stored, isError };
   }
 
   private buildSystemPrompt(query: string): string {

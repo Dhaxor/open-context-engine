@@ -88,6 +88,12 @@ const SPECS: Record<string, LanguageGraphSpec> = {
   rust: rustSpec(),
   java: javaSpec(),
   c_sharp: csharpSpec(),
+  c: cLikeSpec(),
+  cpp: cLikeSpec(),
+  ruby: rubySpec(),
+  php: phpSpec(),
+  kotlin: kotlinSpec(),
+  swift: swiftSpec(),
 };
 
 /** Synchronous: callers already have a parsed tree. */
@@ -201,14 +207,21 @@ function fieldText(node: TsNode, field: string): string | undefined {
 
 /** Read the textual content of a `string` node, stripping the surrounding quotes. */
 function stringNodeText(node: TsNode): string | null {
-  if (node.type !== "string" && node.type !== "interpreted_string_literal" && node.type !== "raw_string_literal") return null;
+  if (node.type !== "string" && node.type !== "interpreted_string_literal" && node.type !== "raw_string_literal"
+      && node.type !== "string_literal" && node.type !== "encapsed_string") return null;
   // tree-sitter exposes a `string_fragment` child for JS/TS strings; for
   // others the raw .text includes the quotes. Strip them in either case.
-  const frag = node.namedChildren.find((c) => c && (c.type === "string_fragment" || c.type === "raw_str_part" || c.type === "interpreted_string_literal_content"));
+  const frag = node.namedChildren.find((c) => c && (c.type === "string_fragment" || c.type === "raw_str_part" || c.type === "interpreted_string_literal_content" || c.type === "string_content"));
   if (frag) return frag.text;
   const t = node.text;
   if (t.length >= 2 && (t.startsWith("\"") || t.startsWith("'") || t.startsWith("`"))) return t.slice(1, -1);
   return t;
+}
+
+/** Join a bare relative specifier (C includes, require_relative) against the
+ *  importing file's directory — these are relative even without a leading dot. */
+function joinRelative(fromPath: string, specifier: string): string {
+  return path.posix.normalize(path.posix.join(path.posix.dirname(fromPath), specifier));
 }
 
 // ─── TypeScript / JavaScript ─────────────────────────────────────────────────
@@ -865,4 +878,286 @@ function visitCsCall(node: TsNode, ctx: Ctx): void {
   if (!calleeName) return;
   const target = ctx.importAliases.get(calleeName);
   if (target) pushCall(ctx, target);
+}
+
+// ─── C / C++ ─────────────────────────────────────────────────────────────────
+// Includes are file-level imports; there is no symbol binding to feed a call
+// table, so calls are intentionally not extracted (they'd all be guesses).
+
+function cLikeSpec(): LanguageGraphSpec {
+  return {
+    visit(node, ctx) {
+      switch (node.type) {
+        case "preproc_include": {
+          const pathNode = node.childForFieldName("path");
+          if (!pathNode) return;
+          if (pathNode.type === "system_lib_string") return; // <stdio.h> — not a project file
+          const spec = stringNodeText(pathNode);
+          if (spec) pushImport(ctx, joinRelative(ctx.filePath, spec), { confidence: 0.95 });
+          return;
+        }
+        case "function_definition": {
+          const isStatic = node.namedChildren.some((c) => c && c.type === "storage_class_specifier" && c.text === "static");
+          if (isStatic) return;
+          const name = cDeclaratorIdentifier(node);
+          if (name) pushExport(ctx, name);
+          return;
+        }
+        case "class_specifier":
+        case "struct_specifier":
+        case "enum_specifier": {
+          const name = fieldText(node, "name");
+          // Forward declarations (`struct Foo;`) have no body — skip them.
+          if (name && node.childForFieldName("body")) pushExport(ctx, name);
+          if (node.type === "class_specifier" || node.type === "struct_specifier") {
+            const name2 = fieldText(node, "name");
+            const bases = findChild(node, "base_class_clause");
+            if (name2 && bases) {
+              for (const b of bases.namedChildren) {
+                if (b && (b.type === "type_identifier" || b.type === "qualified_identifier")) pushHeritage(ctx, "extends", name2, b.text, 0.85);
+              }
+            }
+          }
+          return;
+        }
+        case "type_definition": {
+          const d = node.childForFieldName("declarator");
+          if (d?.type === "type_identifier") pushExport(ctx, d.text);
+          return;
+        }
+      }
+    },
+  };
+}
+
+function cDeclaratorIdentifier(node: TsNode): string | undefined {
+  let d = node.childForFieldName("declarator");
+  while (d) {
+    if (d.type === "identifier" || d.type === "field_identifier" || d.type === "qualified_identifier") return d.text;
+    d = d.childForFieldName("declarator");
+  }
+  return undefined;
+}
+
+// ─── Ruby ────────────────────────────────────────────────────────────────────
+
+function rubySpec(): LanguageGraphSpec {
+  return {
+    visit(node, ctx) {
+      switch (node.type) {
+        case "call": {
+          // require "x" / require_relative "./x" are ordinary method calls.
+          const method = node.namedChildren.find((c) => c && c.type === "identifier");
+          if (!method || (method.text !== "require" && method.text !== "require_relative")) return;
+          const args = node.namedChildren.find((c) => c && c.type === "argument_list");
+          const str = args?.namedChildren.find((c) => c && c.type === "string");
+          const spec = str ? stringNodeText(str) : null;
+          if (!spec) return;
+          if (method.text === "require_relative") pushImport(ctx, joinRelative(ctx.filePath, spec), { confidence: 0.95 });
+          // bare `require "json"` targets a gem, not a project file — dropped
+          // to match the TS handling of bare imports.
+          return;
+        }
+        case "module":
+        case "class": {
+          const name = fieldText(node, "name");
+          if (name) pushExport(ctx, name);
+          if (node.type === "class" && name) {
+            const sup = node.childForFieldName("superclass");
+            const target = sup?.namedChildren.find((c) => c && (c.type === "constant" || c.type === "scope_resolution"));
+            if (target) pushHeritage(ctx, "extends", name, target.text, 0.9);
+          }
+          return;
+        }
+        case "method":
+        case "singleton_method": {
+          // Top-level methods only — instance methods belong to their class chunk.
+          if (topLevelIn(node, "program")) {
+            const name = fieldText(node, "name");
+            if (name) pushExport(ctx, name);
+          }
+          return;
+        }
+      }
+    },
+  };
+}
+
+/** True when the node's nearest interesting ancestor is the file root. */
+function topLevelIn(node: TsNode, rootType: string): boolean {
+  let p: TsNode | null = node.parent;
+  while (p) {
+    if (p.type === rootType) return true;
+    if (p.type === "class" || p.type === "module" || p.type === "class_declaration" || p.type === "object_declaration") return false;
+    p = p.parent;
+  }
+  return false;
+}
+
+// ─── PHP ─────────────────────────────────────────────────────────────────────
+
+function phpSpec(): LanguageGraphSpec {
+  return {
+    visit(node, ctx) {
+      switch (node.type) {
+        case "namespace_use_declaration": {
+          for (const clause of node.namedChildren) {
+            if (!clause || clause.type !== "namespace_use_clause") continue;
+            const qn = clause.namedChildren.find((c) => c && (c.type === "qualified_name" || c.type === "name"));
+            if (!qn) continue;
+            const fqn = qn.text.replace(/^\\/, "");
+            const parts = fqn.split("\\");
+            const last = parts[parts.length - 1];
+            const aliasNode = clause.namedChildren.find((c) => c && c.type === "namespace_aliasing_clause");
+            const alias = aliasNode?.namedChildren.find((c) => c && c.type === "name")?.text;
+            pushImport(ctx, parts.join("/"), { sourceSymbol: alias ?? last, targetSymbol: last, confidence: 0.9 });
+          }
+          return;
+        }
+        case "require_expression":
+        case "require_once_expression":
+        case "include_expression":
+        case "include_once_expression": {
+          const str = node.namedChildren.find((c) => c && (c.type === "encapsed_string" || c.type === "string"));
+          const spec = str ? stringNodeText(str) : null;
+          if (spec) pushImport(ctx, joinRelative(ctx.filePath, spec), { confidence: 0.85 });
+          return;
+        }
+        case "class_declaration":
+        case "interface_declaration":
+        case "trait_declaration":
+        case "enum_declaration": {
+          const name = fieldText(node, "name");
+          if (name) pushExport(ctx, name);
+          if (!name) return;
+          const base = findChild(node, "base_clause");
+          if (base) for (const b of base.namedChildren) {
+            if (b && (b.type === "name" || b.type === "qualified_name")) pushHeritage(ctx, "extends", name, b.text.split("\\").pop()!, 0.9);
+          }
+          const impl = findChild(node, "class_interface_clause");
+          if (impl) for (const b of impl.namedChildren) {
+            if (b && (b.type === "name" || b.type === "qualified_name")) pushHeritage(ctx, "implements", name, b.text.split("\\").pop()!, 0.9);
+          }
+          return;
+        }
+        case "function_definition": {
+          const name = fieldText(node, "name");
+          if (name) pushExport(ctx, name);
+          return;
+        }
+        case "object_creation_expression":
+        case "scoped_call_expression": {
+          if (!ctx.anyImports) return;
+          const nameNode = node.namedChildren.find((c) => c && (c.type === "name" || c.type === "qualified_name"));
+          if (!nameNode) return;
+          const target = ctx.importAliases.get(nameNode.text.split("\\").pop()!);
+          if (target) pushCall(ctx, target);
+          return;
+        }
+      }
+    },
+  };
+}
+
+// ─── Kotlin ──────────────────────────────────────────────────────────────────
+
+function kotlinSpec(): LanguageGraphSpec {
+  return {
+    visit(node, ctx) {
+      switch (node.type) {
+        case "import_header": {
+          const id = node.namedChildren.find((c) => c && c.type === "identifier");
+          if (!id) return;
+          const fqn = id.text;
+          const parts = fqn.split(".");
+          const last = parts[parts.length - 1];
+          const wildcard = node.namedChildren.some((c) => c && c.type === "wildcard_import");
+          pushImport(ctx, parts.join("/"), {
+            sourceSymbol: wildcard ? undefined : last,
+            targetSymbol: wildcard ? undefined : last,
+            confidence: 0.9,
+          });
+          return;
+        }
+        case "class_declaration":
+        case "object_declaration": {
+          const name = node.namedChildren.find((c) => c && c.type === "type_identifier")?.text;
+          if (name && topLevelIn(node, "source_file")) pushExport(ctx, name);
+          if (!name) return;
+          for (const spec of node.namedChildren) {
+            if (!spec || spec.type !== "delegation_specifier") continue;
+            const ctor = spec.namedChildren.find((c) => c && c.type === "constructor_invocation");
+            if (ctor) {
+              const t = ctor.namedChildren.find((c) => c && c.type === "user_type");
+              if (t) pushHeritage(ctx, "extends", name, t.text.split("<")[0], 0.85);
+            } else {
+              const t = spec.namedChildren.find((c) => c && c.type === "user_type");
+              if (t) pushHeritage(ctx, "implements", name, t.text.split("<")[0], 0.8);
+            }
+          }
+          return;
+        }
+        case "function_declaration": {
+          if (!topLevelIn(node, "source_file")) return;
+          const name = node.namedChildren.find((c) => c && c.type === "simple_identifier")?.text;
+          if (name) pushExport(ctx, name);
+          return;
+        }
+        case "call_expression": {
+          if (!ctx.anyImports) return;
+          const head = node.namedChildren[0];
+          let calleeName: string | undefined;
+          if (head?.type === "simple_identifier") calleeName = head.text;
+          else if (head?.type === "navigation_expression") {
+            const obj = head.namedChildren[0];
+            if (obj?.type === "simple_identifier") calleeName = obj.text;
+          }
+          if (!calleeName) return;
+          const target = ctx.importAliases.get(calleeName);
+          if (target) pushCall(ctx, target);
+          return;
+        }
+      }
+    },
+  };
+}
+
+// ─── Swift ───────────────────────────────────────────────────────────────────
+
+function swiftSpec(): LanguageGraphSpec {
+  return {
+    visit(node, ctx) {
+      switch (node.type) {
+        case "import_declaration": {
+          const id = node.namedChildren.find((c) => c && c.type === "identifier");
+          if (!id) return;
+          pushImport(ctx, id.text.replace(/\./g, "/"), { confidence: 0.85 });
+          return;
+        }
+        case "class_declaration": {
+          // Covers classes, structs, enums, and extensions in this grammar.
+          const name = fieldText(node, "name")?.split("<")[0];
+          if (name && topLevelIn(node, "source_file")) pushExport(ctx, name);
+          if (!name) return;
+          for (const spec of node.namedChildren) {
+            if (!spec || spec.type !== "inheritance_specifier") continue;
+            const t = spec.namedChildren.find((c) => c && c.type === "user_type");
+            if (t) pushHeritage(ctx, "extends", name, t.text.split("<")[0], 0.8);
+          }
+          return;
+        }
+        case "protocol_declaration": {
+          const name = fieldText(node, "name");
+          if (name) pushExport(ctx, name);
+          return;
+        }
+        case "function_declaration": {
+          if (!topLevelIn(node, "source_file")) return;
+          const name = node.namedChildren.find((c) => c && c.type === "simple_identifier")?.text;
+          if (name) pushExport(ctx, name);
+          return;
+        }
+      }
+    },
+  };
 }

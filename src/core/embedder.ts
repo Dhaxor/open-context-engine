@@ -1,3 +1,5 @@
+import * as os from "os";
+import * as path from "path";
 import OpenAI from "openai";
 import { EmbeddingConfig } from "./types";
 
@@ -192,11 +194,85 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   getModel(): string { return this.model; }
 }
 
+// --- Fully-local, in-process embeddings (zero API key, zero server) ---
+
+/** Loader seam so tests can stub the optional dependency. */
+let transformersLoader: () => Promise<any> = () => import("@huggingface/transformers" as string);
+export function __setTransformersLoaderForTests(loader: (() => Promise<any>) | null): void {
+  transformersLoader = loader ?? (() => import("@huggingface/transformers" as string));
+}
+
+/** Where downloaded ONNX models live. Override with OCE_MODEL_DIR. */
+export function localModelCacheDir(): string {
+  return process.env.OCE_MODEL_DIR || path.join(os.homedir(), ".open-context", "models");
+}
+
+/**
+ * In-process embeddings via @huggingface/transformers (ONNX Runtime).
+ * The model downloads once into localModelCacheDir() and runs offline after
+ * that — "no code leaves your machine" with no Ollama install required.
+ *
+ * The dependency is an optional peer (~ tens of MB with onnxruntime), so it is
+ * imported lazily and a missing install produces one actionable error instead
+ * of a resolve crash at require time.
+ */
+export class LocalEmbeddingProvider implements EmbeddingProvider {
+  private pipePromise: Promise<any> | null = null;
+  private model: string;
+  private dimension: number;
+  private batchSize: number;
+
+  constructor(config: EmbeddingConfig) {
+    this.model = config.model || "Xenova/all-MiniLM-L6-v2";
+    this.dimension = config.dimension || 384;
+    this.batchSize = config.batchSize || 16;
+  }
+
+  private getPipe(): Promise<any> {
+    if (!this.pipePromise) {
+      this.pipePromise = (async () => {
+        let transformers: any;
+        try {
+          transformers = await transformersLoader();
+        } catch {
+          throw new Error(
+            "Local embeddings need the optional dependency '@huggingface/transformers'. " +
+            "Install it with: npm install @huggingface/transformers " +
+            "(first run downloads the model to " + localModelCacheDir() + ", offline afterwards).",
+          );
+        }
+        if (transformers.env) transformers.env.cacheDir = localModelCacheDir();
+        // q8 quantization: ~4x smaller download, near-identical retrieval quality.
+        return transformers.pipeline("feature-extraction", this.model, { dtype: "q8" });
+      })();
+      // A failed load must be retryable (e.g. user installs the package mid-session).
+      this.pipePromise.catch(() => { this.pipePromise = null; });
+    }
+    return this.pipePromise;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const pipe = await this.getPipe();
+    const out: number[][] = [];
+    for (let i = 0; i < texts.length; i += this.batchSize) {
+      const batch = texts.slice(i, i + this.batchSize);
+      const res = await pipe(batch, { pooling: "mean", normalize: true });
+      const vectors: number[][] = typeof res.tolist === "function" ? res.tolist() : res;
+      out.push(...vectors);
+    }
+    return out;
+  }
+
+  getDimension(): number { return this.dimension; }
+  getModel(): string { return this.model; }
+}
+
 export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvider {
   switch (config.provider) {
     case "openai": return new OpenAIEmbeddingProvider(config);
     case "voyage": return new VoyageEmbeddingProvider(config);
     case "ollama": return new OllamaEmbeddingProvider(config);
+    case "local": return new LocalEmbeddingProvider(config);
     default: throw new Error(`Unknown embedding provider: ${(config as any).provider}`);
   }
 }

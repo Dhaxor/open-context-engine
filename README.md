@@ -22,15 +22,20 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 
 | Feature | Description |
 |---------|-------------|
-| 🧠 **AST-Aware Chunking** | Uses Tree-sitter to split code along semantic boundaries (functions, classes, methods) rather than naive line counts. Understands TypeScript, JavaScript, Python, Go, Rust, Java, and C#. |
+| 🧠 **AST-Aware Chunking** | Uses Tree-sitter to split code along semantic boundaries (functions, classes, methods) rather than naive line counts. Understands TypeScript, JavaScript, Python, Go, Rust, Java, C#, C, C++, Ruby, PHP, Kotlin, and Swift. |
 | 🔍 **Hybrid Search** | Fuses **dense vector similarity** (cosine) with **BM25 keyword search** via Reciprocal Rank Fusion for results that are both semantically relevant and lexically precise. |
 | ⚡ **Local SQLite + Vectors** | Stores everything in a local SQLite database with `sqlite-vec`—no external vector DB, no network latency, no subscription fees. |
+| 🏠 **Fully-Local Embeddings** | Optional in-process ONNX embeddings (`--provider local`) — zero API keys, zero servers, models cached on disk. Ollama also supported. |
 | 🔗 **Symbol Expansion** | Automatically resolves identifiers in search results, pulling in definitions of functions, classes, and types referenced in snippets. |
 | 🎯 **Optional Re-ranking** | Plug in Voyage or Cohere re-rankers to boost result quality for complex queries. |
 | 🕸️ **Code Graph** | A tree-sitter AST pass extracts import/call/definition edges into a queryable graph; top search results are graph-expanded so callers and callees ride along. |
-| 🤖 **Built-in Agent** | Includes a full tool-use agent with codebase retrieval, file editing, shell execution, and web search—plus opt-in model routing (cost-appropriate tier per query) and cross-session memory. |
-| 🔌 **MCP Native** | Exposes all retrieval tools through the Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP-compatible client. |
+| 🤖 **Agent Harness** | A full tool-use agent with codebase retrieval, file editing, shell execution, and web search — plus parallel read-only tool execution, pre/post tool-call hooks, token-usage accounting, session export/import, model routing, and cross-session memory. |
+| 🔌 **MCP Native** | Exposes retrieval, file, and symbol tools through the Model Context Protocol over stdio or **Streamable HTTP** (shared endpoint with bearer auth). Works with Claude Desktop, Cursor, and any MCP-compatible client. |
 | 🧰 **VS Code Extension** | Sidebar chat grounded in the index, agent edits with per-file diff/undo/redo, live re-indexing on save, and an index-health panel. Ships per-platform with multi-ABI native bindings. |
+| 🛡️ **Policy Controls** | Pin what the engine may do per workspace or org: disable shell/edits/web-search, pin command allowlists, force local-only embeddings, exclude paths. Org-signed policy locks cannot be loosened locally. |
+| 🧾 **Tamper-Evident Audit Log** | Hash-chained JSONL of every agent run, tool call, and MCP invocation. `oce audit --verify` detects any alteration, deletion, or reordering. |
+| 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
+| 🚀 **Parallel Indexing** | Worker-thread parse/chunk pool kicks in automatically on large repos; `oce bench` measures throughput on yours. |
 | 🛟 **Degrades, Never Dies** | No sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
 | 📏 **Measured, Not Guessed** | Retrieval quality is scored against a committed 44-case gold set: **recall@10 0.977 · nDCG@10 0.812 · ctx-recall 0.943** on this repo. Ranking changes ship with before/after deltas. |
 
@@ -55,6 +60,10 @@ export OPENAI_API_KEY="your-key"
 
 # Or run entirely local with Ollama
 export OLLAMA_BASE_URL="http://localhost:11434"
+
+# Or fully local, in-process — no key, no server (models cached in ~/.open-context/models)
+npm install @huggingface/transformers   # optional dep, one time
+oce index --provider local
 ```
 
 ### 3. Index your codebase
@@ -83,18 +92,26 @@ oce agent --workspace ./my-project --allow-edits
 
 The agent is **read-only by default** (codebase retrieval + file reads). Grant write/exec access explicitly: `--allow-edits` enables the file-editing tools and `--allow-shell` enables the `run-command` tool. The same applies to the programmatic API — `defaultAgentTools({ context })` returns read-only tools unless you pass `includeEdits: true` and/or `shell: true`.
 
-Two optional smarts:
+Optional smarts:
 
 - `--route` sends each query to a cost-appropriate model tier — quick lookups to a fast model, multi-file/analytical work to the strongest, everything else to your `--llm-model`.
 - `--memory` makes the agent remember codebase insights across sessions (stored locally in `.open-context/memories.json`) and inject the relevant ones per query.
+- `--audit` appends every run and tool call to the tamper-evident audit log (see below).
+
+Each turn ends with a stats line — steps, tool calls, provider-reported token usage, wall time. Read-only tool calls within a turn execute in parallel; any turn containing an edit or shell call runs strictly in order.
 
 ### 6. Connect to Claude / Cursor via MCP
 
 ```bash
 oce mcp --workspace ./my-project
+
+# Or serve a shared HTTP endpoint (e.g. one index for the whole team):
+oce mcp --workspace ./my-project --http --port 8940 --auth-token "$TOKEN"
 ```
 
 The MCP server indexes the workspace on startup and then **watches for changes**, so the index stays live without a manual re-index. Pass `--no-watch` to disable the watcher. (The MCP handshake is established before indexing begins, so the first index of a large repo won't block your client from connecting.)
+
+In HTTP mode the server speaks MCP's Streamable HTTP transport, binds to loopback by default, answers `GET /health`, and — when `--auth-token` (or `OCE_MCP_AUTH_TOKEN`) is set — requires `Authorization: Bearer <token>` on every request.
 
 Then add to your MCP config:
 
@@ -138,13 +155,20 @@ Commands:
   index <workspace>      Index a codebase
   search <query>         Search the indexed codebase
   watch                  Index, then keep the index live as files change
-  mcp                    Start MCP server (indexes + watches by default)
+  mcp                    Start MCP server (stdio, or --http for a shared endpoint)
   agent                  Start interactive agent (auto-indexes on startup)
   eval                   Score retrieval quality against a labeled query set
+  push-index <dest>      Publish the index as a team artifact (Team)
+  pull-index <src>       Install a team index, re-embed only local changes (Team)
+  bench                  Benchmark parse/chunk throughput on this workspace
+  policy                 Show the effective policy (user + workspace + org lock)
+  audit                  Inspect / verify the tamper-evident audit log
+  activate <key>         Activate a Team/Enterprise license
+  license / deactivate   Show or remove the active license
 
 Options:
   -w, --workspace <path>   Project root (default: cwd)
-  -p, --provider <name>    Embedding provider: voyage | openai | ollama
+  -p, --provider <name>    Embedding provider: voyage | openai | ollama | local
   -m, --model <model>      Embedding model name
   --api-key <key>          API key (falls back to env vars)
   --store-path <path>      Custom store directory (default: .open-context/)
@@ -182,10 +206,20 @@ const agent = new ContextAgent({
   model: "gpt-4o",
   apiKey: process.env.OPENAI_API_KEY,
   tools: defaultAgentTools({ context: ctx, includeEdits: true }),
+  // Optional harness features:
+  maxParallelTools: 4,                       // read-only tool calls fan out concurrently
+  hooks: {
+    preToolCall: (tc) => tc.name === "remove-file"
+      ? { behavior: "deny", reason: "deletions are reviewed manually" }
+      : { behavior: "allow" },
+    postToolCall: (_tc, result) => result.replaceAll(process.env.HOME!, "~"),
+  },
 });
 
 const answer = await agent.run("How does the auth middleware work?");
 console.log(answer);
+console.log(agent.getLastRunStats());        // steps, tool calls, token usage, duration
+const saved = agent.exportSession();          // persist; importSession(saved) restores
 
 // 4. Cleanup
 ctx.close();
@@ -206,6 +240,9 @@ Exposed MCP tools:
 - `codebase-retrieval` — Natural language search over code
 - `list-files` — Browse indexed files with filters
 - `read-file` — Read file contents with optional line ranges
+- `find-symbol-definition` — Exact-name lookup of where a function/class/type is defined
+- `find-symbol-references` — Every indexed usage site of an identifier
+- `index-status` — Chunk count, file count, search mode, embedding model
 
 ## 🏗️ Architecture
 
@@ -249,7 +286,11 @@ Exposed MCP tools:
 | **Voyage** | `voyage-code-3` | 1024 | ⭐ Code retrieval (recommended) |
 | OpenAI | `text-embedding-3-large` | 3072 | General purpose |
 | OpenAI | `text-embedding-3-small` | 1536 | Speed + cost |
-| Ollama | `nomic-embed-text` | 768 | 100% local, free |
+| Ollama | `nomic-embed-text` | 768 | 100% local via an Ollama server |
+| Local | `jina-embeddings-v2-base-code` | 768 | 100% local, in-process, code-tuned — no key, no server |
+| Local | `all-MiniLM-L6-v2` | 384 | 100% local, in-process, smallest/fastest |
+
+The `local` provider needs the optional `@huggingface/transformers` package; models download once into `~/.open-context/models` (override with `OCE_MODEL_DIR`) and run offline afterwards.
 
 ### Search Configuration
 
@@ -280,6 +321,57 @@ Exposed MCP tools:
 }
 ```
 
+## 👥 Team Index Sync (Team)
+
+Index once — in CI or on a lead's machine — and let the whole team pull the result instead of each paying to embed the same monorepo:
+
+```bash
+# CI / lead machine: refresh the index and publish it (any file path or
+# HTTP(S) PUT endpoint — S3/GCS presigned URLs work as-is)
+oce push-index https://artifacts.example.com/oce/main.db.gz --token "$TOKEN"
+
+# Each teammate: install it, then only their local diff gets embedded
+oce pull-index https://artifacts.example.com/oce/main.db.gz --token "$TOKEN"
+# → Installed team index: 12,481 chunks, 1,904 files, built ... at commit ab12cd34
+# → Reconciled: 3 file(s) re-embedded locally, 1,901 reused from the artifact
+```
+
+The artifact is the store itself (vectors + FTS + code graph + file hashes) gzipped, so reconciliation is a plain incremental index: only files whose hashes differ from the artifact re-embed. No OCE cloud service is involved — artifacts go to storage **you** control.
+
+On top of that, a machine-wide **embedding cache** (`~/.open-context/embed-cache.db`, on by default in the CLI and extension) keys vectors by content hash: identical code never embeds twice, across repos, branches, and store rebuilds. Disable with `--no-embed-cache` or `openContext.embedding.cache.enabled`.
+
+## 🛡️ Policy Controls
+
+Commit a policy file and every OCE surface (CLI, extension, library) enforces it — a `--allow-shell` flag can't override it, and the merge is always most-restrictive-wins:
+
+```jsonc
+// <workspace>/.open-context/policy.json (or ~/.open-context/policy.json for user-wide)
+{
+  "agent": {
+    "shell": { "enabled": false },                  // or pin: { "allowlist": ["git", "npm"] }
+    "edits": { "enabled": true },
+    "webSearch": { "enabled": false }
+  },
+  "embedding": { "localOnly": true },               // only ollama/local providers may run
+  "ignore": ["secrets/**", "*.pem"],                // never indexed, on top of .contextignore
+  "audit": { "required": true }                     // force audit logging on
+}
+```
+
+`oce policy` prints the effective merge and where each rule came from. Orgs on a Team+ plan can additionally ship an **Ed25519-signed `policy.lock`** (issued with `scripts/license-tool.mjs sign-policy`) that developers cannot loosen or delete their way out of.
+
+## 🧾 Audit Log
+
+`oce agent --audit` (or the `openContext.agent.audit.enabled` setting) appends every run, tool call, and MCP invocation to `.open-context/audit/audit.jsonl`. Each record is SHA-256 hash-chained to the previous one, so edits, deletions, and reordering are detectable:
+
+```bash
+oce audit                 # recent events
+oce audit --type tool-call --since 2026-07-01
+oce audit --verify        # ✓ chain intact — or exactly where it was tampered
+```
+
+Audit logging is an Enterprise feature; a workspace/org policy with `"audit": { "required": true }` also switches it on.
+
 ## 🛠️ Development
 
 ```bash
@@ -305,6 +397,10 @@ src/
 │   ├── code-graph.ts       # Import/call/definition edge queries
 │   ├── ast-graph-extractor.ts # Single-DFS AST edge extraction
 │   ├── graph-expander.ts   # Graph-aware result expansion
+│   ├── chunk-pool.ts       # Worker-thread parse/chunk pool (auto on big repos)
+│   ├── policy.ts           # Workspace/org policy loading + enforcement
+│   ├── audit.ts            # Tamper-evident (hash-chained) audit log
+│   ├── license.ts          # Offline Ed25519 license gate
 │   ├── search.ts           # Output formatting
 │   ├── file-filter.ts      # Gitignore-aware file collection
 │   └── file-watcher.ts     # Watch for changes
@@ -374,7 +470,7 @@ Keep your eval sets out of the index by listing their directory in `.contextigno
 ## 📦 Requirements
 
 - Node.js 18+
-- For local embeddings: [Ollama](https://ollama.com) running locally
+- For fully-local embeddings: the optional `@huggingface/transformers` package (`--provider local`), or [Ollama](https://ollama.com) running locally
 - For cloud embeddings: API key for Voyage or OpenAI
 - Platforms without a [sqlite-vec](https://github.com/asg017/sqlite-vec) build (e.g. win32-arm64, Alpine) run keyword-only — no API key needed at all in that mode
 

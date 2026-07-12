@@ -317,12 +317,14 @@
           "enum": [
             "openai",
             "voyage",
-            "ollama"
+            "ollama",
+            "local"
           ],
           "enumDescriptions": [
             "OpenAI embeddings",
             "Voyage AI embeddings (recommended for code, supports voyage-code-3)",
-            "Ollama local embeddings"
+            "Ollama local embeddings (requires a running Ollama server)",
+            "In-process local embeddings (ONNX — no API key, no server; needs the optional @huggingface/transformers package)"
           ],
           "default": "voyage",
           "description": "Embedding provider (voyage-code-3 recommended for code)",
@@ -334,17 +336,27 @@
             "voyage-code-3",
             "text-embedding-3-large",
             "text-embedding-3-small",
-            "nomic-embed-text"
+            "nomic-embed-text",
+            "jina-embeddings-v2-base-code",
+            "all-MiniLM-L6-v2"
           ],
           "enumDescriptions": [
             "Voyage code-3 (recommended, 32K context, best for code)",
             "OpenAI text-embedding-3-large (3072 dim)",
             "OpenAI text-embedding-3-small (1536 dim)",
-            "Nomic embed text via Ollama (768 dim)"
+            "Nomic embed text via Ollama (768 dim)",
+            "Jina embeddings v2 base code — in-process local, code-tuned (768 dim)",
+            "all-MiniLM-L6-v2 — in-process local, small and fast (384 dim)"
           ],
           "default": "voyage-code-3",
           "description": "Embedding model name",
           "order": 2
+        },
+        "openContext.embedding.cache.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Cache embeddings by content hash in `~/.open-context/embed-cache.db`, shared across repos and branches on this machine — identical code never embeds (or bills) twice.",
+          "order": 3
         },
         "openContext.embedding.apiKey": {
           "type": "string",
@@ -422,8 +434,8 @@
         },
         "openContext.agent.shell.enabled": {
           "type": "boolean",
-          "default": true,
-          "description": "Give the agent a run-command tool to execute non-interactive shell commands in the workspace root"
+          "default": false,
+          "markdownDescription": "Give the agent a `run-command` tool to execute non-interactive shell commands in the workspace root. **Off by default** — enabling it lets the model run arbitrary commands on your machine unless you also set `#openContext.agent.shell.allowlist#`."
         },
         "openContext.agent.shell.allowlist": {
           "type": "array",
@@ -437,6 +449,11 @@
           "type": "number",
           "default": 60000,
           "description": "Default timeout for each shell command in milliseconds (1000..300000)"
+        },
+        "openContext.agent.audit.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Append every agent run and tool call to a tamper-evident local audit log (`.open-context/audit/audit.jsonl`, hash-chained). Requires an Enterprise license; a workspace policy can also force it on. Inspect with `oce audit` / `oce audit --verify`."
         },
         "openContext.agent.routing.enabled": {
           "type": "boolean",

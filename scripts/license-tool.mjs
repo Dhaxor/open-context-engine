@@ -12,6 +12,8 @@
  * Usage:
  *   node scripts/license-tool.mjs generate-keys [--out business/keys]
  *   node scripts/license-tool.mjs sign --org "Acme Inc" --plan team --seats 10 --days 365 [--email a@b.co] [--features multi-repo,team-index]
+ *   node scripts/license-tool.mjs sign-policy --org "Acme Inc" --policy path/to/policy.json [--days 365]
+ *       → emits a policy.lock token (drop it at <ws>/.open-context/policy.lock; see src/core/policy.ts)
  *   node scripts/license-tool.mjs verify --token <token> [--pub business/keys/license-public.pem]
  */
 import * as crypto from "crypto";
@@ -70,6 +72,7 @@ function cmdSign(args) {
     id: typeof args.id === "string" ? args.id : crypto.randomUUID(),
     org: typeof args.org === "string" ? args.org : "Unknown Org",
     email: typeof args.email === "string" ? args.email : undefined,
+    orgDomain: typeof args["org-domain"] === "string" ? args["org-domain"] : undefined,
     plan: typeof args.plan === "string" ? args.plan : "team",
     seats: args.seats !== undefined ? Number(args.seats) : 1,
     features,
@@ -98,12 +101,59 @@ function cmdVerify(args) {
   else process.exit(1);
 }
 
+function cmdSignPolicy(args) {
+  const keyPath = typeof args.key === "string" ? args.key : "business/keys/license-private.pem";
+  if (!fs.existsSync(keyPath)) {
+    console.error(`Private key not found at ${keyPath}. Run 'generate-keys' first or pass --key.`);
+    process.exit(1);
+  }
+  const policyPath = typeof args.policy === "string" ? args.policy : "";
+  if (!policyPath || !fs.existsSync(policyPath)) {
+    console.error("Pass --policy <file.json> with the PolicyRules to lock (see src/core/policy.ts).");
+    process.exit(1);
+  }
+  const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  const priv = crypto.createPrivateKey(fs.readFileSync(keyPath));
+  const now = Math.floor(Date.now() / 1000);
+  const days = args.days !== undefined ? Number(args.days) : 365;
+  const payload = {
+    org: typeof args.org === "string" ? args.org : "Unknown Org",
+    iat: now,
+    exp: days > 0 ? now + days * 86400 : 0,
+    policy,
+  };
+  const seg = encodePayload(payload);
+  const sig = crypto.sign(null, Buffer.from(seg), priv).toString("base64url");
+  console.error(`Issued policy lock for "${payload.org}" ` +
+    `(${payload.exp ? "expires " + new Date(payload.exp * 1000).toISOString().slice(0, 10) : "no expiry"}). ` +
+    `Ship it to <workspace>/.open-context/policy.lock:`);
+  console.log(`${seg}.${sig}`);
+}
+
+function cmdSignRevocations(args) {
+  const keyPath = typeof args.key === "string" ? args.key : "business/keys/license-private.pem";
+  if (!fs.existsSync(keyPath)) {
+    console.error(`Private key not found at ${keyPath}. Run 'generate-keys' first or pass --key.`);
+    process.exit(1);
+  }
+  const ids = typeof args.ids === "string" ? args.ids.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const priv = crypto.createPrivateKey(fs.readFileSync(keyPath));
+  const payload = { revoked: ids, updatedAt: Math.floor(Date.now() / 1000) };
+  const seg = encodePayload(payload);
+  const sig = crypto.sign(null, Buffer.from(seg), priv).toString("base64url");
+  console.error(`Signed revocation list with ${ids.length} entr${ids.length === 1 ? "y" : "ies"}. ` +
+    `Host it at a URL and point clients at it with OCE_REVOCATION_URL:`);
+  console.log(`${seg}.${sig}`);
+}
+
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];
 if (cmd === "generate-keys") cmdGenerateKeys(args);
 else if (cmd === "sign") cmdSign(args);
+else if (cmd === "sign-policy") cmdSignPolicy(args);
+else if (cmd === "sign-revocations") cmdSignRevocations(args);
 else if (cmd === "verify") cmdVerify(args);
 else {
-  console.error("Usage: node scripts/license-tool.mjs <generate-keys|sign|verify> [options]");
+  console.error("Usage: node scripts/license-tool.mjs <generate-keys|sign|sign-policy|sign-revocations|verify> [options]");
   process.exit(1);
 }

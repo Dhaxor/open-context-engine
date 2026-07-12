@@ -6,6 +6,7 @@ import * as path from "path";
 import {
   serializeLicensePayload, verifyLicenseToken, isEntitled, requireFeature,
   saveLicenseToken, loadLicenseToken, clearLicense, getLicense, licenseConfigPath,
+  checkOrgDomainBinding, verifyRevocationToken, saveRevocationToken, revocationCachePath,
   LicensePayload,
 } from "./license";
 
@@ -137,5 +138,93 @@ describe("persistence", () => {
     saveLicenseToken(mint(payload({ org: "Saved" })));
     process.env.OCE_LICENSE_KEY = mint(payload({ org: "FromEnv" }));
     expect(getLicense({ publicKey: PUB, now: NOW }).payload?.org).toBe("FromEnv");
+  });
+});
+
+describe("revocation list", () => {
+  let tmp: string;
+  const savedDir = process.env.OCE_CONFIG_DIR;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oce-revoke-"));
+    process.env.OCE_CONFIG_DIR = tmp;
+    delete process.env.OCE_LICENSE_KEY;
+  });
+
+  afterEach(() => {
+    if (savedDir === undefined) delete process.env.OCE_CONFIG_DIR; else process.env.OCE_CONFIG_DIR = savedDir;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  function mintRevocations(ids: string[]): string {
+    const seg = Buffer.from(JSON.stringify({ revoked: ids, updatedAt: NOW })).toString("base64url");
+    const sig = crypto.sign(null, Buffer.from(seg), privateKey).toString("base64url");
+    return `${seg}.${sig}`;
+  }
+
+  it("verifies a signed list and rejects tampered ones", () => {
+    const token = mintRevocations(["lic_1", "lic_2"]);
+    expect(verifyRevocationToken(token, { publicKey: PUB })?.revoked).toEqual(["lic_1", "lic_2"]);
+    const [seg] = token.split(".");
+    const forged = JSON.parse(Buffer.from(seg, "base64url").toString());
+    forged.revoked = [];
+    const tampered = `${Buffer.from(JSON.stringify(forged)).toString("base64url")}.${token.split(".")[1]}`;
+    expect(verifyRevocationToken(tampered, { publicKey: PUB })).toBeNull();
+    expect(verifyRevocationToken("garbage", { publicKey: PUB })).toBeNull();
+  });
+
+  it("getLicense reports a cached-revoked license as community/revoked", () => {
+    saveLicenseToken(mint(payload({ id: "lic_bad" })));
+    saveRevocationToken(mintRevocations(["lic_bad"]));
+    const s = getLicense({ publicKey: PUB, now: NOW });
+    expect(s.valid).toBe(false);
+    expect(s.reason).toBe("revoked");
+    expect(s.plan).toBe("community");
+  });
+
+  it("does not revoke ids that are not on the list, and fails open with no cache", () => {
+    saveLicenseToken(mint(payload({ id: "lic_ok" })));
+    expect(getLicense({ publicKey: PUB, now: NOW }).valid).toBe(true);
+    saveRevocationToken(mintRevocations(["some_other"]));
+    expect(getLicense({ publicKey: PUB, now: NOW }).valid).toBe(true);
+  });
+
+  it("ignores a tampered cache file (re-verified on every read)", () => {
+    saveLicenseToken(mint(payload({ id: "lic_x" })));
+    saveRevocationToken(mintRevocations(["lic_x"]));
+    expect(getLicense({ publicKey: PUB, now: NOW }).reason).toBe("revoked");
+    // Attacker edits the cached list to un-revoke themselves → signature dies
+    // → list is discarded → fail-open (bounded by license expiry).
+    fs.writeFileSync(revocationCachePath(), mintRevocations(["lic_x"]).replace(/.$/, "0"));
+    expect(getLicense({ publicKey: PUB, now: NOW }).valid).toBe(true);
+  });
+
+  it("revocations: null skips the check explicitly", () => {
+    saveLicenseToken(mint(payload({ id: "lic_bad" })));
+    saveRevocationToken(mintRevocations(["lic_bad"]));
+    expect(getLicense({ publicKey: PUB, now: NOW, revocations: null }).valid).toBe(true);
+  });
+});
+
+describe("checkOrgDomainBinding (SSO-lite)", () => {
+  it("is ok when the license has no domain binding", () => {
+    expect(checkOrgDomainBinding(payload(), "anyone@anywhere.io")).toBe("ok");
+    expect(checkOrgDomainBinding(payload(), null)).toBe("ok");
+    expect(checkOrgDomainBinding(undefined, "a@b.co")).toBe("ok");
+  });
+
+  it("matches exact domain and subdomains, case-insensitively", () => {
+    const bound = payload({ orgDomain: "Acme.com" });
+    expect(checkOrgDomainBinding(bound, "dev@acme.com")).toBe("ok");
+    expect(checkOrgDomainBinding(bound, "dev@EU.ACME.COM")).toBe("ok");
+    expect(checkOrgDomainBinding(bound, "dev@notacme.com")).toBe("mismatch");
+    expect(checkOrgDomainBinding(bound, "dev@acme.com.evil.io")).toBe("mismatch");
+  });
+
+  it("is unverifiable without a usable email", () => {
+    const bound = payload({ orgDomain: "acme.com" });
+    expect(checkOrgDomainBinding(bound, null)).toBe("unverifiable");
+    expect(checkOrgDomainBinding(bound, "")).toBe("unverifiable");
+    expect(checkOrgDomainBinding(bound, "not-an-email")).toBe("unverifiable");
   });
 });
