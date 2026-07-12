@@ -51,6 +51,7 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
   return [
     {
       name: "str-replace",
+      mutates: true,
       description: "Replace an exact substring in a file. old_str must uniquely match existing file contents. Use for surgical edits.",
       parameters: {
         type: "object",
@@ -83,6 +84,7 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
     },
     {
       name: "create-file",
+      mutates: true,
       description: "Create a new file with the given contents. Fails if the file already exists.",
       parameters: {
         type: "object",
@@ -106,6 +108,7 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
     },
     {
       name: "remove-file",
+      mutates: true,
       description: "Delete a file from the workspace.",
       parameters: {
         type: "object",

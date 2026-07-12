@@ -35,7 +35,7 @@ function nativeBindingError(err: unknown): NativeBindingError {
  * treat the whole module as the constructor function. Callers immediately
  * `new Database(...)` so the looseness is contained.
  */
-async function loadBetterSqlite3(): Promise<typeof import("better-sqlite3")> {
+export async function loadBetterSqlite3(): Promise<typeof import("better-sqlite3")> {
   try {
     const mod = await import("better-sqlite3");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -351,6 +351,19 @@ export class SqliteStore {
 
   private setMeta(key: string, value: string): void {
     this.db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+  }
+
+  /** Public meta access for index-artifact manifests (namespaced keys only). */
+  getMetaValue(key: string): string | null { return this.getMeta(key); }
+  setMetaValue(key: string, value: string): void { this.setMeta(key, value); }
+
+  getDbPath(): string { return this.dbPath; }
+
+  /** Snapshot the live database (WAL-safe) into destFile via SQLite's online
+   *  backup API — the file is a complete, consistent, openable database. */
+  async backupTo(destFile: string): Promise<void> {
+    await fs.promises.mkdir(path.dirname(destFile), { recursive: true });
+    await this.db.backup(destFile);
   }
 
   getExpectedDimension(): number { return this.expectedDim; }

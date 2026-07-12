@@ -45,6 +45,7 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
     openai: "text-embedding-3-small",
     voyage: "voyage-code-3",
     ollama: "nomic-embed-text",
+    local: "jina-embeddings-v2-base-code",
 };
 
 export class ContextService implements vscode.Disposable {
@@ -343,7 +344,7 @@ export class ContextService implements vscode.Disposable {
         if (activeFile && !activeFile.indexed) notes.push(activeFile.reason ?? "Active editor file is not indexed.");
         return {
             generatedAt: new Date().toISOString(), workspaceRoot, selectedWorkspaceRoot, vscodeWorkspaceRoot, contextReady, initializationError, lastIndexError: this._lastIndexError,
-            embedding: { provider, model: config?.embedding.model ?? "", apiKeyRequired: provider !== "ollama", apiKeyPresent: embeddingKeyPresent, dimension: config?.embedding.dimension ?? 0, batchSize: config?.embedding.batchSize ?? 0 },
+            embedding: { provider, model: config?.embedding.model ?? "", apiKeyRequired: provider !== "ollama" && provider !== "local", apiKeyPresent: embeddingKeyPresent, dimension: config?.embedding.dimension ?? 0, batchSize: config?.embedding.batchSize ?? 0 },
             index: { storeDir, dbPath, storeExists: this.pathExists(storeDir), dbExists: this.pathExists(dbPath), dbSizeBytes: dbStat?.size, indexedFiles, totalChunks, potentiallyStale },
             fileScan, freshness, activeFile, notes,
         };
@@ -365,9 +366,11 @@ export class ContextService implements vscode.Disposable {
 
     private async getConfigForPath(workspaceRoot: string): Promise<OpenContextConfig> {
         const cfg = vscode.workspace.getConfiguration("openContext");
-        const provider = cfg.get<"openai" | "voyage" | "ollama">("embedding.provider", "voyage");
-        const model = cfg.get<string>("embedding.model", DEFAULT_MODEL_BY_PROVIDER[provider] ?? "voyage-code-3");
-        const modelInfo = EMBEDDING_MODELS[model];
+        const provider = cfg.get<"openai" | "voyage" | "ollama" | "local">("embedding.provider", "voyage");
+        const modelKey = cfg.get<string>("embedding.model", DEFAULT_MODEL_BY_PROVIDER[provider] ?? "voyage-code-3");
+        const modelInfo = EMBEDDING_MODELS[modelKey];
+        // Registry keys may map to fully-qualified model ids (local ONNX models do).
+        const model = modelInfo?.model ?? modelKey;
         const dimension = modelInfo?.dimension ?? (provider === "openai" ? 1536 : provider === "voyage" ? 1024 : 768);
         const batchSize = modelInfo?.batchSize ?? (provider === "voyage" ? 32 : 100);
         const apiKey = await this.getEmbeddingApiKey();
@@ -381,6 +384,7 @@ export class ContextService implements vscode.Disposable {
                 dimension,
                 batchSize,
             } as EmbeddingConfig,
+            embedCache: cfg.get<boolean>("embedding.cache.enabled", true),
             search: {
                 topK: cfg.get<number>("search.topK", 20),
                 minScore: cfg.get<number>("search.minScore", 0.15),

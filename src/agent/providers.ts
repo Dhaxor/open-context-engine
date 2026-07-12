@@ -1,9 +1,11 @@
-import { AgentMessage, StreamEvent, ToolCall, ToolDefinition } from "./types";
+import { AgentMessage, StreamEvent, TokenUsage, ToolCall, ToolDefinition } from "./types";
 
 export interface LLMResponse {
   text: string;
   toolCalls: ToolCall[];
   stopReason: "stop" | "tool_use" | "length" | "error";
+  /** Provider-reported token usage for this call, when available. */
+  usage?: TokenUsage;
 }
 
 export interface LLMCaller {
@@ -32,14 +34,16 @@ export class OpenAICaller implements LLMCaller {
         oaiMessages.push({ role: "tool", tool_call_id: m.toolCallId!, content: m.content });
       }
     }
-    const req: any = { model: this.model, messages: oaiMessages, tools: toolDefs.length ? toolDefs : undefined, stream: true };
+    const req: any = { model: this.model, messages: oaiMessages, tools: toolDefs.length ? toolDefs : undefined, stream: true, stream_options: { include_usage: true } };
     if (usesMaxCompletionTokens(this.model)) req.max_completion_tokens = this.maxTokens;
     else req.max_tokens = this.maxTokens;
     const stream = (await client.chat.completions.create(req, { signal })) as unknown as AsyncIterable<any>;
     let text = "";
     const toolAccum: Record<number, { id: string; name: string; args: string }> = {};
     let stopReason: LLMResponse["stopReason"] = "stop";
+    let usage: TokenUsage | undefined;
     for await (const chunk of stream) {
+      if (chunk.usage) usage = { inputTokens: chunk.usage.prompt_tokens ?? 0, outputTokens: chunk.usage.completion_tokens ?? 0 };
       const delta = chunk.choices[0]?.delta;
       if (delta?.content) { text += delta.content; onStream?.({ type: "text", text: delta.content }); }
       if (delta?.tool_calls) {
@@ -57,7 +61,7 @@ export class OpenAICaller implements LLMCaller {
       else if (finish === "stop") stopReason = "stop";
     }
     const toolCalls: ToolCall[] = Object.values(toolAccum).map(a => ({ id: a.id || genId(), name: a.name, arguments: safeJson(a.args) }));
-    return { text, toolCalls, stopReason };
+    return { text, toolCalls, stopReason, usage };
   }
 }
 
@@ -104,6 +108,8 @@ export class AnthropicCaller implements LLMCaller {
     const toolCalls: ToolCall[] = [];
     const activeTool: Record<number, { id: string; name: string; input: string }> = {};
     let stopReason: LLMResponse["stopReason"] = "stop";
+    let inputTokens = 0;
+    let outputTokens = 0;
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
@@ -119,7 +125,10 @@ export class AnthropicCaller implements LLMCaller {
         if (!data || data === "[DONE]") continue;
         let evt: any;
         try { evt = JSON.parse(data); } catch { continue; }
-        if (evt.type === "content_block_start" && evt.content_block?.type === "tool_use") {
+        if (evt.type === "message_start" && evt.message?.usage) {
+          inputTokens = evt.message.usage.input_tokens ?? 0;
+          outputTokens = evt.message.usage.output_tokens ?? 0;
+        } else if (evt.type === "content_block_start" && evt.content_block?.type === "tool_use") {
           activeTool[evt.index] = { id: evt.content_block.id, name: evt.content_block.name, input: "" };
         } else if (evt.type === "content_block_delta") {
           if (evt.delta?.type === "text_delta") { text += evt.delta.text; onStream?.({ type: "text", text: evt.delta.text }); }
@@ -130,13 +139,17 @@ export class AnthropicCaller implements LLMCaller {
           const a = activeTool[evt.index];
           toolCalls.push({ id: a.id, name: a.name, arguments: safeJson(a.input) });
           delete activeTool[evt.index];
-        } else if (evt.type === "message_delta" && evt.delta?.stop_reason) {
-          const sr = evt.delta.stop_reason;
-          stopReason = sr === "tool_use" ? "tool_use" : sr === "max_tokens" ? "length" : "stop";
+        } else if (evt.type === "message_delta") {
+          if (evt.delta?.stop_reason) {
+            const sr = evt.delta.stop_reason;
+            stopReason = sr === "tool_use" ? "tool_use" : sr === "max_tokens" ? "length" : "stop";
+          }
+          if (evt.usage?.output_tokens != null) outputTokens = evt.usage.output_tokens;
         }
       }
     }
-    return { text, toolCalls, stopReason };
+    const usage: TokenUsage | undefined = inputTokens || outputTokens ? { inputTokens, outputTokens } : undefined;
+    return { text, toolCalls, stopReason, usage };
   }
 }
 

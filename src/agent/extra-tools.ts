@@ -27,6 +27,7 @@ export function shellTool(opts: ShellToolOptions): ToolDefinition {
   const maxOutput = opts.maxOutputChars ?? DEFAULT_SHELL_OUTPUT;
   return {
     name: "run-command",
+    mutates: true,
     description:
       "Run a non-interactive shell command in the workspace root. Use for build/test/lint/git commands, reading runtime state, or running scripts. Commands run with stdin closed and a hard timeout; interactive prompts hang. Prefer single-line pipelines. Output is truncated to " +
       maxOutput +

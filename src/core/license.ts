@@ -45,6 +45,11 @@ export interface LicensePayload {
   /** Organization the license is issued to. */
   org: string;
   email?: string;
+  /** SSO-lite: bind activation to an email domain (e.g. "acme.com"). Activation
+   *  surfaces verify the activating user's email (git config user.email or
+   *  $OCE_ACTIVATION_EMAIL) ends with @<orgDomain>. Enforcement is best-effort
+   *  and offline-friendly — see checkOrgDomainBinding. */
+  orgDomain?: string;
   plan: Exclude<Plan, "community">;
   /** Seats purchased. Offline enforcement is honor-based; the control plane can audit. */
   seats: number;
@@ -56,7 +61,7 @@ export interface LicensePayload {
   exp: number;
 }
 
-export type LicenseReason = "missing" | "malformed" | "bad-signature" | "expired" | "ok";
+export type LicenseReason = "missing" | "malformed" | "bad-signature" | "expired" | "revoked" | "ok";
 
 export interface LicenseStatus {
   /** Present, correctly signed, and within the grace window. */
@@ -78,6 +83,9 @@ export interface VerifyOptions {
   now?: number;
   /** Grace window in days. Defaults to DEFAULT_GRACE_DAYS. */
   graceDays?: number;
+  /** Revocation list to check against. undefined = load the local cache;
+   *  null = skip the revocation check entirely. */
+  revocations?: RevocationList | null;
 }
 
 const community = (reason: LicenseReason, payload?: LicensePayload, daysLeft?: number): LicenseStatus =>
@@ -131,6 +139,27 @@ export function verifyLicenseToken(token: string | null | undefined, opts: Verif
     return { valid: true, reason: "ok", plan: payload.plan, payload, inGrace: now > payload.exp, daysLeft };
   }
   return { valid: true, reason: "ok", plan: payload.plan, payload, inGrace: false };
+}
+
+export type OrgDomainCheck = "ok" | "mismatch" | "unverifiable";
+
+/**
+ * SSO-lite: check an activating user's email against the license's orgDomain.
+ * - "ok"           — no binding on the license, or the email's domain matches.
+ * - "mismatch"     — an email is known and its domain does NOT match; refuse activation.
+ * - "unverifiable" — the license is bound but no email could be determined;
+ *                     callers should warn and proceed (air-gapped machines have
+ *                     no identity source, and blocking them would break the
+ *                     offline-first promise).
+ * Subdomains match (dev@eu.acme.com satisfies acme.com).
+ */
+export function checkOrgDomainBinding(payload: LicensePayload | undefined, email: string | null | undefined): OrgDomainCheck {
+  const domain = payload?.orgDomain?.trim().toLowerCase();
+  if (!domain) return "ok";
+  const addr = email?.trim().toLowerCase();
+  if (!addr || !addr.includes("@")) return "unverifiable";
+  const emailDomain = addr.split("@").pop()!;
+  return emailDomain === domain || emailDomain.endsWith("." + domain) ? "ok" : "mismatch";
 }
 
 /** Whether a license entitles the holder to a feature. */
@@ -188,9 +217,99 @@ export function clearLicense(): boolean {
   return false;
 }
 
-/** Load + verify the active license in one call. Never throws. */
+/** Load + verify the active license in one call, including a revocation
+ *  check against the locally cached (signed) revocation list. Never throws. */
 export function getLicense(opts: VerifyOptions = {}): LicenseStatus {
-  return verifyLicenseToken(loadLicenseToken(), opts);
+  const status = verifyLicenseToken(loadLicenseToken(), opts);
+  if (!status.valid || !status.payload?.id) return status;
+  const list = opts.revocations !== undefined ? opts.revocations : loadCachedRevocations(opts);
+  if (list?.revoked.includes(status.payload.id)) {
+    return { valid: false, reason: "revoked", plan: "community", payload: status.payload, inGrace: false };
+  }
+  return status;
+}
+
+// --- Revocation list (signed CRL; offline-first, fail-open) ---
+//
+// A revocation list is a token in the same `payload.signature` format as
+// licenses, signed with the SAME vendor key: `{ revoked: [licenseId…],
+// updatedAt }`. It is only ever FETCHED when the deployment opts in (the
+// OCE_REVOCATION_URL env var or an explicit `oce license --refresh <url>`) —
+// the engine never phones home on its own; that's a privacy commitment, not
+// an oversight. Once fetched, the raw token is cached locally and re-verified
+// on every read, so a tampered cache file simply stops counting. Offline and
+// air-gapped installs keep working: no cache = no revocations = fail-open,
+// bounded by the ≤1-year license expiries.
+
+export interface RevocationList {
+  revoked: string[];
+  /** Unix seconds when the list was issued. */
+  updatedAt: number;
+}
+
+export function revocationCachePath(): string {
+  return path.join(licenseConfigDir(), "revocations");
+}
+
+/** Verify a signed revocation token. Returns null on any failure. */
+export function verifyRevocationToken(token: string | null | undefined, opts: VerifyOptions = {}): RevocationList | null {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.trim().split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const [seg, sigB64] = parts;
+  let payload: RevocationList;
+  try {
+    payload = JSON.parse(Buffer.from(seg, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (!payload || !Array.isArray(payload.revoked)) return null;
+  try {
+    const key = publicKeyObject(opts.publicKey ?? EMBEDDED_PUBLIC_KEY_B64);
+    if (!crypto.verify(null, Buffer.from(seg), key, Buffer.from(sigB64, "base64url"))) return null;
+  } catch {
+    return null;
+  }
+  return { revoked: payload.revoked.map(String), updatedAt: Number(payload.updatedAt) || 0 };
+}
+
+/** Persist a verified revocation token to the local cache. */
+export function saveRevocationToken(token: string): string {
+  fs.mkdirSync(licenseConfigDir(), { recursive: true });
+  const p = revocationCachePath();
+  fs.writeFileSync(p, token.trim() + "\n", { mode: 0o600 });
+  return p;
+}
+
+/** Read + re-verify the cached revocation list. Null when absent/invalid. */
+export function loadCachedRevocations(opts: VerifyOptions = {}): RevocationList | null {
+  try {
+    const p = revocationCachePath();
+    if (!fs.existsSync(p)) return null;
+    return verifyRevocationToken(fs.readFileSync(p, "utf8"), opts);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch, verify, and cache the revocation list. Resolution order for the URL:
+ * explicit argument, then OCE_REVOCATION_URL. Returns the verified list, or
+ * null when no URL is configured or anything fails (fail-open by design).
+ */
+export async function refreshRevocations(url?: string, opts: VerifyOptions & { timeoutMs?: number } = {}): Promise<RevocationList | null> {
+  const target = url || process.env.OCE_REVOCATION_URL;
+  if (!target) return null;
+  try {
+    const resp = await fetch(target, { signal: AbortSignal.timeout(opts.timeoutMs ?? 5_000) });
+    if (!resp.ok) return null;
+    const token = (await resp.text()).trim();
+    const list = verifyRevocationToken(token, opts);
+    if (list) saveRevocationToken(token);
+    return list;
+  } catch {
+    return null;
+  }
 }
 
 /** Private package holding the commercial edition (absent in open-source installs).

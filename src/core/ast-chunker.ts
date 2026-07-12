@@ -15,6 +15,9 @@ interface LanguageSpec {
   atomic: Map<string, SymbolKind>;
   containers: Set<string>;
   nameFields: string[];
+  /** Custom name resolution, checked before nameFields — for grammars with
+   *  declarator chains (C/C++) or no name fields at all (Kotlin). */
+  resolveName?: (node: TsNode) => string | undefined;
 }
 
 const SPECS: Record<string, LanguageSpec> = {
@@ -26,6 +29,12 @@ const SPECS: Record<string, LanguageSpec> = {
   rust: rustSpec(),
   java: javaSpec(),
   c_sharp: csharpSpec(),
+  c: cSpec(),
+  cpp: cppSpec(),
+  ruby: rubySpec(),
+  php: phpSpec(),
+  kotlin: kotlinSpec(),
+  swift: swiftSpec(),
 };
 
 export class AstChunker {
@@ -124,6 +133,8 @@ export class AstChunker {
   }
 
   private containerName(node: TsNode, spec: LanguageSpec): string | null {
+    const custom = spec.resolveName?.(node);
+    if (custom) return custom;
     for (const f of spec.nameFields) {
       const n = node.childForFieldName(f);
       if (n?.text) return n.text;
@@ -132,6 +143,8 @@ export class AstChunker {
   }
 
   private nameOf(node: TsNode, spec: LanguageSpec): string | undefined {
+    const custom = spec.resolveName?.(node);
+    if (custom) return custom;
     for (const f of spec.nameFields) {
       const n = node.childForFieldName(f);
       if (n?.text) return n.text;
@@ -241,6 +254,118 @@ function javaSpec(): LanguageSpec {
       ["annotation_type_declaration", "type"],
     ]),
     containers: new Set(["program", "class_declaration", "class_body", "record_declaration", "enum_body"]),
+    nameFields: ["name"],
+  };
+}
+
+/** C/C++: the symbol name hides at the bottom of a declarator chain
+ *  (`function_declarator → identifier`), possibly behind pointers. */
+function declaratorChainName(node: TsNode): string | undefined {
+  const direct = node.childForFieldName("name");
+  if (direct?.text) return direct.text;
+  let d = node.childForFieldName("declarator");
+  while (d) {
+    if (d.type === "identifier" || d.type === "type_identifier" || d.type === "field_identifier" || d.type === "qualified_identifier" || d.type === "operator_name" || d.type === "destructor_name") {
+      return d.text;
+    }
+    d = d.childForFieldName("declarator");
+  }
+  return undefined;
+}
+
+function cSpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["function_definition", "function"],
+      ["type_definition", "type"],
+      ["struct_specifier", "struct"],
+      ["enum_specifier", "enum"],
+      ["union_specifier", "struct"],
+    ]),
+    containers: new Set(["translation_unit", "preproc_ifdef", "preproc_if", "preproc_else", "linkage_specification"]),
+    nameFields: ["name"],
+    resolveName: declaratorChainName,
+  };
+}
+
+function cppSpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["function_definition", "function"],
+      ["type_definition", "type"],
+      ["alias_declaration", "type"],
+      ["enum_specifier", "enum"],
+      ["union_specifier", "struct"],
+    ]),
+    containers: new Set([
+      "translation_unit", "namespace_definition", "declaration_list",
+      // classes/structs are containers so their methods chunk individually.
+      "class_specifier", "struct_specifier", "field_declaration_list",
+      "template_declaration", "linkage_specification",
+      "preproc_ifdef", "preproc_if", "preproc_else",
+    ]),
+    nameFields: ["name"],
+    resolveName: declaratorChainName,
+  };
+}
+
+function rubySpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["method", "method"],
+      ["singleton_method", "method"],
+    ]),
+    containers: new Set(["program", "module", "class", "singleton_class", "body_statement"]),
+    nameFields: ["name"],
+  };
+}
+
+function phpSpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["function_definition", "function"],
+      ["method_declaration", "method"],
+      ["interface_declaration", "interface"],
+      ["enum_declaration", "enum"],
+    ]),
+    containers: new Set(["program", "namespace_definition", "class_declaration", "trait_declaration", "declaration_list"]),
+    nameFields: ["name"],
+  };
+}
+
+/** Kotlin's grammar exposes almost no named fields — names are direct
+ *  `type_identifier` (classes/objects) or `simple_identifier` (functions) children. */
+function kotlinName(node: TsNode): string | undefined {
+  for (const child of node.namedChildren) {
+    if (!child) continue;
+    if (child.type === "type_identifier" || child.type === "simple_identifier") return child.text;
+  }
+  return undefined;
+}
+
+function kotlinSpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["function_declaration", "function"],
+      ["secondary_constructor", "method"],
+    ]),
+    containers: new Set(["source_file", "class_declaration", "object_declaration", "companion_object", "class_body"]),
+    nameFields: ["name"],
+    resolveName: kotlinName,
+  };
+}
+
+function swiftSpec(): LanguageSpec {
+  return {
+    atomic: new Map<string, SymbolKind>([
+      ["function_declaration", "function"],
+      ["protocol_declaration", "interface"],
+      ["init_declaration", "method"],
+      ["deinit_declaration", "method"],
+      ["subscript_declaration", "method"],
+    ]),
+    // class_declaration covers Swift classes, structs, enums, AND extensions.
+    containers: new Set(["source_file", "class_declaration", "class_body", "enum_class_body"]),
     nameFields: ["name"],
   };
 }

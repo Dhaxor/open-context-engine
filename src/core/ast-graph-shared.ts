@@ -34,6 +34,15 @@ const EXTENSION_MAP: Record<string, string> = {
   ".rs": "rust",
   ".java": "java",
   ".cs": "c_sharp",
+  ".c": "c",
+  // .h goes to the C++ grammar: it parses plain C headers fine AND handles
+  // C++ classes, while the C grammar chokes on the latter.
+  ".h": "cpp",
+  ".cpp": "cpp", ".cc": "cpp", ".cxx": "cpp", ".hpp": "cpp", ".hh": "cpp", ".hxx": "cpp", ".ipp": "cpp",
+  ".rb": "ruby",
+  ".php": "php",
+  ".kt": "kotlin", ".kts": "kotlin",
+  ".swift": "swift",
 };
 
 export function languageForPath(filePath: string): string | null {

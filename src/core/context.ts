@@ -17,6 +17,11 @@ import { loadGuidelines, Guidelines, getRelevantGuidelines } from "./guidelines"
 import { CodeGraph } from "./code-graph";
 import { extractEdges } from "./graph-extractor";
 import { GraphExpander } from "./graph-expander";
+import { loadPolicy, checkEmbeddingPolicy, EffectivePolicy } from "./policy";
+import { ChunkWorkerPool, defaultPoolSize } from "./chunk-pool";
+import { ARTIFACT_MANIFEST_KEY, IndexArtifactManifest, packArtifact } from "./index-artifact";
+import { EmbedCache, contentHash } from "./embed-cache";
+import * as os from "os";
 
 const CONCURRENT_EMBED_BATCHES = 2;
 
@@ -34,6 +39,11 @@ export class OpenContext {
   private codeGraph!: CodeGraph;
   private graphExpander!: GraphExpander;
   private workspaceRoot: string = "";
+  private policy: EffectivePolicy | null = null;
+  private chunkPool: ChunkWorkerPool | null = null;
+  private embedCache: EmbedCache | null = null;
+  private parallelism: number | false | undefined;
+  private chunkCfg!: { maxChunkChars: number; chunkSize?: number; chunkOverlap?: number };
   private _indexingMutex: Promise<void> = Promise.resolve();
 
   private constructor() {}
@@ -41,14 +51,25 @@ export class OpenContext {
   static async create(config: OpenContextConfig): Promise<OpenContext> {
     const ctx = new OpenContext();
     ctx.workspaceRoot = config.workspaceRoot;
+    // Policy: load from the standard files unless injected or disabled. The
+    // embedding check runs BEFORE the provider is constructed so a policy
+    // violation fails fast with a clear message instead of after a long index.
+    ctx.policy = config.policy === false ? null : config.policy ?? loadPolicy(config.workspaceRoot);
     ctx.embeddingConfig = { ...DEFAULT_EMBEDDING_CONFIG, ...config.embedding };
     ctx.searchConfig = { ...DEFAULT_SEARCH_CONFIG, ...config.search };
+    if (ctx.policy && !config.embedder) {
+      const violation = checkEmbeddingPolicy(ctx.policy, ctx.embeddingConfig.provider);
+      if (violation) throw new Error(violation);
+    }
     ctx.embedder = config.embedder ?? createEmbeddingProvider(ctx.embeddingConfig);
     ctx.reranker = createReranker(config.reranker);
     const maxChunkChars = ctx.getMaxChunkChars();
     const fallback = new CodeChunker(config.chunkSize, config.chunkOverlap, maxChunkChars);
     ctx.chunker = new AstChunker({ maxChunkChars, fallback });
-    ctx.fileFilter = new FileFilter(config.maxFileSize);
+    ctx.parallelism = config.parallelism;
+    ctx.chunkCfg = { maxChunkChars, chunkSize: config.chunkSize, chunkOverlap: config.chunkOverlap };
+    ctx.embedCache = config.embedCache ? new EmbedCache(typeof config.embedCache === "string" ? config.embedCache : undefined) : null;
+    ctx.fileFilter = new FileFilter(config.maxFileSize, ctx.policy?.ignore);
     const storePath = config.storePath || defaultStorePath(config.workspaceRoot);
     ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension(), {
       ...(config.resolveVecPath ? { resolveVecPath: config.resolveVecPath } : {}),
@@ -75,6 +96,11 @@ export class OpenContext {
 
   getGuidelines(): Guidelines | null {
     return this.guidelines;
+  }
+
+  /** The effective policy loaded for this workspace (null when disabled via config). */
+  getPolicy(): EffectivePolicy | null {
+    return this.policy;
   }
 
   getGuidelinesText(context?: { paths?: string[]; query?: string }): string {
@@ -204,30 +230,24 @@ export class OpenContext {
     const failed: string[] = [];
     let failedReason: string | undefined;
     let consecutiveFailures = 0;
+    // Workers only pay off past a few hundred files: each worker loads its
+    // own WASM grammars, which dominates small runs (measured 0.88x on a
+    // 186-file repo, so auto mode keeps those inline). An explicit numeric
+    // `parallelism` always uses the pool.
+    const AUTO_POOL_MIN_FILES = 500;
+    const usePool = this.parallelism !== false
+      && (typeof this.parallelism === "number" ? this.parallelism > 0
+          : files.length >= AUTO_POOL_MIN_FILES && os.cpus().length >= 4);
+    const pool = usePool ? this.ensureChunkPool() : null;
     onProgress?.("indexing", 0, files.length);
     for (let fb = 0; fb < files.length; fb += FILE_BATCH) {
       const fileBatch = files.slice(fb, fb + FILE_BATCH);
       const chunks: Chunk[] = [];
-      for (const file of fileBatch) {
-        // Parse once per file; chunker + graph extractor share the tree, then
-        // we dispose IN THIS ITERATION so we never hold FILE_BATCH live trees.
-        // Trees live in WASM linear memory at 2-10x source size.
-        const parsed = await this.chunker.parseFile(file);
-        try {
-          const fileChunks = await this.chunker.chunkFile(file, { parsed });
-          for (const c of fileChunks) chunks.push(c);
-          const language = parsed?.language ?? AstChunker.languageFor(file.path);
-          if (language) {
-            try {
-              const { edges } = extractEdges(file, language, parsed?.tree ?? null);
-              if (edges.length) {
-                this.store.removeGraphEdgesByPath(file.path);
-                this.store.addGraphEdges(edges);
-              }
-            } catch {}
-          }
-        } finally {
-          parsed?.dispose();
+      for (const pf of await this.chunkFileBatch(fileBatch, pool)) {
+        for (const c of pf.chunks) chunks.push(c);
+        if (pf.edges.length) {
+          this.store.removeGraphEdgesByPath(pf.path);
+          this.store.addGraphEdges(pf.edges);
         }
       }
       // Keyword-only mode (sqlite-vec unavailable): no embedding round-trips
@@ -279,16 +299,83 @@ export class OpenContext {
     return { failed, failedReason };
   }
 
+  /** Lazily spawn the worker pool (first big run pays the startup, later
+   *  runs reuse it). Returns null when workers are unavailable or fail. */
+  private ensureChunkPool(): ChunkWorkerPool | null {
+    if (this.chunkPool) return this.chunkPool;
+    if (!ChunkWorkerPool.isAvailable()) return null;
+    try {
+      this.chunkPool = new ChunkWorkerPool({
+        ...this.chunkCfg,
+        size: typeof this.parallelism === "number" ? this.parallelism : defaultPoolSize(),
+      });
+    } catch {
+      this.chunkPool = null; // worker spawn failure must never block indexing
+    }
+    return this.chunkPool;
+  }
+
+  /** CPU-bound half of indexing (parse + chunk + graph extraction) for one
+   *  window of files. Fans out across the worker pool when one exists; a pool
+   *  failure quietly retries inline — results are identical either way. */
+  private async chunkFileBatch(fileBatch: File[], pool: ChunkWorkerPool | null): Promise<{ path: string; chunks: Chunk[]; edges: import("./code-graph").GraphEdge[] }[]> {
+    if (pool) {
+      try {
+        return await pool.run(fileBatch);
+      } catch {
+        // Fall through to inline — e.g. a worker died mid-batch.
+      }
+    }
+    const out: { path: string; chunks: Chunk[]; edges: import("./code-graph").GraphEdge[] }[] = [];
+    for (const file of fileBatch) {
+      // Parse once per file; chunker + graph extractor share the tree, then
+      // we dispose IN THIS ITERATION so we never hold FILE_BATCH live trees.
+      // Trees live in WASM linear memory at 2-10x source size.
+      const parsed = await this.chunker.parseFile(file);
+      try {
+        const fileChunks = await this.chunker.chunkFile(file, { parsed });
+        const language = parsed?.language ?? AstChunker.languageFor(file.path);
+        let edges: import("./code-graph").GraphEdge[] = [];
+        if (language) {
+          try { edges = extractEdges(file, language, parsed?.tree ?? null).edges; } catch {}
+        }
+        out.push({ path: file.path, chunks: fileChunks, edges });
+      } finally {
+        parsed?.dispose();
+      }
+    }
+    return out;
+  }
+
   private async embedAndStoreChunks(chunks: Chunk[]): Promise<void> {
     if (!chunks.length) return;
     const batchSize = Math.max(8, this.embeddingConfig.batchSize ?? 32);
     const expectedDim = this.embedder.getDimension();
-    for (let offset = 0; offset < chunks.length; offset += batchSize * CONCURRENT_EMBED_BATCHES) {
+    const model = this.embedder.getModel();
+    // Cache pass: identical content embedded before (any repo, any branch on
+    // this machine — or shipped inside a team index) never hits the provider
+    // again. Failures inside the cache silently degrade to a full embed.
+    let toEmbed = chunks;
+    if (this.embedCache) {
+      const hashes = chunks.map(c => contentHash(c.contents));
+      const cached = await this.embedCache.get(model, expectedDim, hashes);
+      if (cached.size) {
+        const hits: Chunk[] = [];
+        toEmbed = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const v = cached.get(hashes[i]);
+          if (v) { chunks[i].vector = v; hits.push(chunks[i]); }
+          else toEmbed.push(chunks[i]);
+        }
+        if (hits.length) this.store.addBatch(hits);
+      }
+    }
+    for (let offset = 0; offset < toEmbed.length; offset += batchSize * CONCURRENT_EMBED_BATCHES) {
       const groups: Chunk[][] = [];
       for (let k = 0; k < CONCURRENT_EMBED_BATCHES; k++) {
         const s = offset + k * batchSize;
-        if (s >= chunks.length) break;
-        groups.push(chunks.slice(s, Math.min(s + batchSize, chunks.length)));
+        if (s >= toEmbed.length) break;
+        groups.push(toEmbed.slice(s, Math.min(s + batchSize, toEmbed.length)));
       }
       const results = await Promise.all(groups.map(g => this.embedder.embed(g.map(c => c.contents), "document")));
       for (let gi = 0; gi < groups.length; gi++) {
@@ -299,6 +386,7 @@ export class OpenContext {
           g[i].vector = vs[i];
         }
         this.store.addBatch(g);
+        void this.embedCache?.put(model, expectedDim, g.map((c, i) => ({ hash: contentHash(c.contents), vector: vs[i] })));
       }
     }
   }
@@ -389,8 +477,50 @@ export class OpenContext {
     );
   }
 
+  /**
+   * Export the current index as a shareable artifact (gzipped snapshot of the
+   * store with a manifest). Teammates install it with `oce pull-index` and
+   * reconcile their local diff with a normal incremental index — the file-hash
+   * table travels inside the artifact, so only changed files re-embed.
+   */
+  async exportIndex(destFile: string): Promise<IndexArtifactManifest> {
+    return this.withLock(async () => {
+      let git: IndexArtifactManifest["git"];
+      try {
+        const g = await getGitState(this.workspaceRoot);
+        if (g.available) git = { branch: g.branch, commit: g.commit };
+      } catch {}
+      const manifest: IndexArtifactManifest = {
+        formatVersion: 1,
+        createdAt: new Date().toISOString(),
+        embeddingProvider: this.embeddingConfig.provider,
+        embeddingModel: this.embeddingConfig.model,
+        dimension: this.embedder.getDimension(),
+        chunkCount: this.getChunkCount(),
+        fileCount: this.store.getIndexedPaths().length,
+        ...(git ? { git } : {}),
+      };
+      this.store.setMetaValue(ARTIFACT_MANIFEST_KEY, JSON.stringify(manifest));
+      const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-export-"));
+      try {
+        const snapshot = path.join(tmp, "context.db");
+        await this.store.backupTo(snapshot);
+        await packArtifact(snapshot, destFile);
+      } finally {
+        await fs.promises.rm(tmp, { recursive: true, force: true });
+      }
+      return manifest;
+    });
+  }
+
   close(): void {
     try { this.chunker?.dispose(); } catch {}
+    // Workers are unref'd so this never blocks exit; terminate is async
+    // cleanup we intentionally do not await in a sync close.
+    try { void this.chunkPool?.destroy(); } catch {}
+    this.chunkPool = null;
+    try { this.embedCache?.close(); } catch {}
+    this.embedCache = null;
     this.store?.close();
   }
 

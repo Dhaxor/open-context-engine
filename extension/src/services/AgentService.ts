@@ -5,6 +5,9 @@ import { ContextAgent, defaultAgentTools } from "../../../src/agent/agent";
 import { ModelRouter, defaultRoutingConfig } from "../../../src/agent/model-router";
 import { SessionMemory } from "../../../src/agent/session-memory";
 import { EditProposal, LLMProvider, StreamEvent, ToolCall } from "../../../src/agent/types";
+import { AuditLogger, defaultAuditDir } from "../../../src/core/audit";
+import { policyRequiresAudit } from "../../../src/core/policy";
+import { getLicense, isEntitled } from "../../../src/core/license";
 import { VSCodeEditApplier } from "./VSCodeEditApplier";
 
 export interface ToolCallInfo {
@@ -116,7 +119,7 @@ export class AgentService {
             throw new Error(buildMissingKeyMessage(provider));
         }
         const includeEdits = cfg.get<boolean>("agent.allowEdits", true);
-        const shellEnabled = cfg.get<boolean>("agent.shell.enabled", true);
+        const shellEnabled = cfg.get<boolean>("agent.shell.enabled", false);
         const shellAllowlist = cfg.get<string[]>("agent.shell.allowlist", []) ?? [];
         const shellTimeoutMs = cfg.get<number>("agent.shell.timeoutMs", 60000);
         const webSearchEnabled = cfg.get<boolean>("agent.webSearch.enabled", true);
@@ -127,8 +130,17 @@ export class AgentService {
         const memoryEnabled = cfg.get<boolean>("agent.memory.enabled", true);
         const maxTokens = cfg.get<number>("agent.maxTokens", 4096);
         const ctx = await svc.getContext();
+        // Audit: on when the user enabled it (and is entitled), or unconditionally
+        // when the workspace/org policy requires it — the policy is the authority.
+        const auditSetting = cfg.get<boolean>("agent.audit.enabled", false);
+        const auditRequired = policyRequiresAudit(ctx.getPolicy() ?? undefined);
+        let auditOn = auditRequired;
+        if (auditSetting && !auditRequired) {
+            if (isEntitled(getLicense(), "audit-log")) auditOn = true;
+            else this.warnOnce("openContext.agent.audit.enabled needs an Enterprise license — audit logging stays off. Run 'oce license' to check.");
+        }
         const key = `${provider}|${model}|${baseUrl ?? ""}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
-        const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}`;
+        const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}|audit=${auditOn}`;
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
@@ -162,6 +174,7 @@ export class AgentService {
             router,
             memory,
             memorySource: "vscode-agent",
+            audit: auditOn ? new AuditLogger({ dir: defaultAuditDir(ctx.getWorkspaceRoot()) }) : undefined,
             tools: defaultAgentTools({
                 context: ctx,
                 applier,
@@ -170,6 +183,7 @@ export class AgentService {
                 shell: shellEnabled ? { enabled: true, allowlist: shellAllowlist, timeoutMs: shellTimeoutMs } : false,
                 webSearch: webSearchEnabled ? { enabled: true, apiKey: webSearchKey } : false,
                 retrieveOptions: () => svc.getIdeRetrieveOptionsForCurrentContext(),
+                onPolicyBlock: (cap, reason) => this.warnOnce(`Workspace policy: ${reason}.`),
             }),
         });
         this.currentProviderKey = cacheKey;
@@ -177,6 +191,14 @@ export class AgentService {
     }
 
     private editForwarder?: (edit: EditProposal) => void;
+    private warned = new Set<string>();
+
+    /** Show each distinct policy/licensing warning once per session, not per turn. */
+    private warnOnce(message: string): void {
+        if (this.warned.has(message)) return;
+        this.warned.add(message);
+        void vscode.window.showWarningMessage(message);
+    }
 }
 
 function summarize(text: string): string {

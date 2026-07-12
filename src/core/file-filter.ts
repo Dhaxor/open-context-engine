@@ -18,13 +18,17 @@ export interface FilterStats {
 
 export class FileFilter {
   private contextignore: Ignore | null = null;
+  private policyIgnore: Ignore | null = null;
   private maxFileSize: number;
   private root = "";
   // Per-directory .gitignore matchers, keyed by directory path relative to root
   // ("" = root, which also folds in .git/info/exclude). Loaded lazily, cached.
   private gitMatchers = new Map<string, Ignore | null>();
 
-  constructor(maxFileSize: number = MAX_FILE_SIZE) { this.maxFileSize = maxFileSize; }
+  constructor(maxFileSize: number = MAX_FILE_SIZE, policyIgnorePatterns?: string[]) {
+    this.maxFileSize = maxFileSize;
+    if (policyIgnorePatterns?.length) this.policyIgnore = ignore().add(policyIgnorePatterns.join("\n"));
+  }
 
   async loadIgnorePatterns(rootDir: string): Promise<void> {
     this.root = rootDir;
@@ -79,6 +83,7 @@ export class FileFilter {
 
   shouldIncludePath(filePath: string): FilterDecision {
     if (filePath.includes("..")) return { include: false, reason: "path_traversal" };
+    if (this.policyIgnore?.test(filePath).ignored) return { include: false, reason: "policy" };
     if (this.contextignore?.test(filePath).ignored) return { include: false, reason: "contextignore" };
     if (isKeyishPath(filePath)) return { include: false, reason: "keyish" };
     if (this.gitIgnored(filePath)) return { include: false, reason: "gitignore" };
@@ -88,6 +93,7 @@ export class FileFilter {
   /** Whether to descend into a directory (so ignored subtrees are pruned, not walked). */
   shouldIncludeDir(dirRel: string): boolean {
     if (!dirRel || dirRel.includes("..")) return !dirRel ? true : false;
+    if (this.policyIgnore?.test(dirRel).ignored) return false;
     if (this.contextignore?.test(dirRel).ignored) return false;
     return !this.gitIgnored(dirRel);
   }
