@@ -196,10 +196,15 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 
 // --- Fully-local, in-process embeddings (zero API key, zero server) ---
 
+/** Built via `.join` so bundlers (esbuild in the extension) treat it as a
+ *  dynamic, unresolved specifier — the dependency is optional and absent in
+ *  most installs, and a literal string fails the bundle at build time. */
+const TRANSFORMERS_PKG = ["@huggingface", "transformers"].join("/");
+
 /** Loader seam so tests can stub the optional dependency. */
-let transformersLoader: () => Promise<any> = () => import("@huggingface/transformers" as string);
+let transformersLoader: () => Promise<any> = () => import(TRANSFORMERS_PKG);
 export function __setTransformersLoaderForTests(loader: (() => Promise<any>) | null): void {
-  transformersLoader = loader ?? (() => import("@huggingface/transformers" as string));
+  transformersLoader = loader ?? (() => import(TRANSFORMERS_PKG));
 }
 
 /** Where downloaded ONNX models live. Override with OCE_MODEL_DIR. */
