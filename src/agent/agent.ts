@@ -2,12 +2,14 @@ import { OpenContext } from "../core/context";
 import { RetrieveOptions } from "../core/retriever";
 import { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, RunStats, TokenUsage, ToolCall, ToolDefinition } from "./types";
 import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
-import { compactHistory, truncateToolResult, withRetry } from "./utils";
+import { compactHistory, renderTranscript, splitForCompaction, totalTokens, truncateToolResult, withRetry } from "./utils";
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";
 import { shellTool, webSearchTool, ShellToolOptions, WebSearchOptions } from "./extra-tools";
 import { StepBudget } from "./step-budget";
 import { EffectivePolicy, policyAllowsEdits, policyAllowsShell, policyAllowsWebSearch, policyShellAllowlist } from "../core/policy";
 import { AuditLogger } from "../core/audit";
+import { AgentPlan, planTool } from "./plan";
+import { DelegateToolOptions, delegateTool } from "./delegate";
 
 export { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, PreToolCallDecision, RunStats, TokenUsage, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./types";
 export { EditApplier, FsEditApplier, editTools } from "./edit-tools";
@@ -23,6 +25,8 @@ const DEFAULT_SYSTEM_PROMPT = `You are an expert coding assistant with tools to 
 - When making edits, use str-replace with enough surrounding context so the old_str is unique. Use create-file for new files and remove-file to delete.
 - Cite file paths and line ranges when you reference code.
 - When your answer is about specific code, SHOW it: include the relevant excerpt as a fenced code block tagged with the language AND the file path (e.g. \`\`\`ts src/core/retriever.ts), not just a prose description. The reader sees tool results collapsed, so quote the lines that matter directly in your answer. Keep excerpts focused — the lines under discussion, not whole files.
+- If an update-plan tool is available: on any multi-step task, write the plan first, keep exactly ONE step in_progress at a time, and update statuses as you go. Skip it for trivial requests.
+- If a delegate tool is available, hand off broad explorations ("map how X works across the codebase") to it instead of flooding your own context with search results.
 - Do not fabricate file paths or symbols — verify them with the tools first.`;
 
 export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>): ToolDefinition[] {
@@ -151,6 +155,10 @@ export interface DefaultToolsOptions {
   policy?: EffectivePolicy | false;
   /** When set, records which capabilities the policy stripped (for surfacing to the user). */
   onPolicyBlock?: (capability: "edits" | "shell" | "web-search", reason: string) => void;
+  /** Give the agent an update-plan tool bound to this plan (UIs render it live). */
+  plan?: AgentPlan;
+  /** Give the agent a read-only sub-agent via the delegate tool. */
+  delegate?: DelegateToolOptions;
 }
 
 // Read-only by default: codebase retrieval + read tools only. File edits and
@@ -192,6 +200,8 @@ export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
       tools.push(webSearchTool(opts.webSearch));
     }
   }
+  if (opts.plan) tools.push(planTool(opts.plan));
+  if (opts.delegate) tools.push(delegateTool(opts.delegate));
   return tools;
 }
 
@@ -211,6 +221,8 @@ export class ContextAgent {
   private audit?: AuditLogger;
   private hooks?: AgentHooks;
   private maxParallelTools: number;
+  private compaction: "summarize" | "drop";
+  private environmentProvider?: () => string;
   private lastRunStats: RunStats | null = null;
   private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
 
@@ -222,7 +234,9 @@ export class ContextAgent {
     this.maxToolResultChars = config.maxToolResultChars ?? 24_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.maxParallelTools = Math.max(1, config.maxParallelTools ?? 4);
+    this.compaction = config.compaction ?? "summarize";
     this.guidelinesProvider = config.guidelinesProvider;
+    this.environmentProvider = config.environmentProvider;
     this.hooks = config.hooks;
     this.router = config.router;
     this.memory = config.memory;
@@ -240,6 +254,7 @@ export class ContextAgent {
   }
 
   getMessages(): readonly AgentMessage[] { return this.messages; }
+  getToolNames(): string[] { return [...this.tools.keys()]; }
   reset(): void { this.messages = []; }
   addUserMessage(content: string): void { this.messages.push({ role: "user", content }); }
   loadMessages(messages: AgentMessage[]): void { this.messages = [...messages]; }
@@ -297,7 +312,7 @@ export class ContextAgent {
     let step = 0;
     while (budget.shouldContinue()) {
       options.onStream?.({ type: "step_start", step });
-      this.compactIfNeeded(options);
+      await this.compactIfNeeded(caller, options);
       const systemWithGuidelines = this.buildSystemPrompt(query);
       const resp = await withRetry(
         () => {
@@ -428,6 +443,12 @@ export class ContextAgent {
 
   private buildSystemPrompt(query: string): string {
     let prompt = this.system;
+    if (this.environmentProvider) {
+      try {
+        const env = this.environmentProvider();
+        if (env) prompt += `\n\n${env}`;
+      } catch {}
+    }
     const guidelines = this.guidelinesProvider?.(query);
     if (guidelines) prompt += `\n\n## Project Guidelines\n${guidelines}`;
     if (this.memory) {
@@ -440,11 +461,77 @@ export class ContextAgent {
     return prompt;
   }
 
-  private compactIfNeeded(options: AgentRunOptions): void {
+  private async compactIfNeeded(caller: LLMCaller, options: AgentRunOptions): Promise<void> {
+    if (totalTokens(this.messages) <= this.historyTokenBudget) return;
+    if (this.compaction === "summarize") {
+      const result = await this.compactBySummarizing(caller, options.signal);
+      if (result) {
+        options.onStream?.({ type: "history_compacted", droppedMessages: result.dropped, summarized: true });
+        return;
+      }
+      // Summarization failed (provider error, nothing to summarize) — fall through.
+    }
     const { messages, droppedCount } = compactHistory(this.messages, this.historyTokenBudget);
     if (droppedCount > 0) {
       this.messages = messages;
-      options.onStream?.({ type: "history_compacted", droppedMessages: droppedCount });
+      options.onStream?.({ type: "history_compacted", droppedMessages: droppedCount, summarized: false });
+    }
+  }
+
+  /** Force a compaction pass right now (the CLI's /compact). Returns what happened. */
+  async compact(options: AgentRunOptions = {}): Promise<{ dropped: number; summarized: boolean }> {
+    const caller = this.router ? this.router.getCallerForQuery("summarize the conversation", this.messages).caller : this.caller!;
+    if (this.compaction === "summarize") {
+      // Manual compaction targets a much smaller tail than the automatic
+      // trigger — the user asked for room NOW, not "when over budget".
+      const tailBudget = Math.max(200, Math.floor(totalTokens(this.messages) * 0.25));
+      const result = await this.compactBySummarizing(caller, options.signal, /*force*/ true, tailBudget);
+      if (result) return { dropped: result.dropped, summarized: true };
+    }
+    const { messages, droppedCount } = compactHistory(this.messages, Math.floor(this.historyTokenBudget / 2));
+    this.messages = messages;
+    return { dropped: droppedCount, summarized: false };
+  }
+
+  /**
+   * Summarizing compaction: keep the first user message and a recent tail
+   * verbatim, have the model condense everything between into a context note,
+   * and splice `[first user + note] + tail` back together. One extra LLM call
+   * buys continuity that drop-oldest can't: decisions, file paths, and
+   * constraints from evicted turns survive. Returns null when there is
+   * nothing worth summarizing or the call fails (caller falls back).
+   */
+  private async compactBySummarizing(caller: LLMCaller, signal?: AbortSignal, force = false, tailBudgetOverride?: number): Promise<{ dropped: number } | null> {
+    // Tail keeps ~40% of budget so the summary + tail land well under it.
+    const tailBudget = tailBudgetOverride ?? Math.floor(this.historyTokenBudget * 0.4);
+    const { firstUser, middle, tail } = splitForCompaction(this.messages, tailBudget);
+    if (!firstUser || middle.length < (force ? 1 : 4)) return null;
+    try {
+      const transcript = renderTranscript(middle);
+      const resp = await caller.call(
+        [{ role: "user", content: `Condense this agent-session transcript into a context note (≤ 400 words). Keep: what was asked, decisions made, file paths and symbols touched, key findings, and any unfinished work or constraints. Drop pleasantries and raw tool dumps.\n\n${transcript}` }],
+        [],
+        "You compress conversation history for an AI coding agent. Reply with ONLY the note text.",
+        undefined,
+        signal,
+      );
+      const note = resp.text.trim();
+      if (!note) return null;
+      const summaryMessage: AgentMessage = {
+        role: "assistant",
+        content: `[Context note — earlier conversation compacted]\n${note}`,
+      };
+      // user → assistant(summary) → tail. Anthropic rejects consecutive
+      // same-role messages, so bridge with a user turn when the tail opens
+      // with an assistant message. Tool pairing in the tail is already
+      // repaired by splitForCompaction.
+      const bridge: AgentMessage[] = tail[0]?.role === "assistant"
+        ? [{ role: "user", content: "(continuing — see the context note above)" }]
+        : [];
+      this.messages = [firstUser, summaryMessage, ...bridge, ...tail];
+      return { dropped: middle.length };
+    } catch {
+      return null;
     }
   }
 }

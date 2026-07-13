@@ -4,7 +4,12 @@ import { OpenContext } from "../core/context";
 import { SqliteStore } from "../core/sqlite-store";
 import { OpenContextConfig, EMBEDDING_MODELS, DEFAULT_MODEL_FOR_PROVIDER } from "../core/types";
 import { runMCPServer } from "../mcp/server";
-import { ContextAgent, defaultAgentTools, LLMProvider } from "../agent/agent";
+import { ContextAgent, defaultAgentTools, defaultCodebaseTools, LLMProvider } from "../agent/agent";
+import { AgentPlan } from "../agent/plan";
+import { PermissionManager } from "../agent/permissions";
+import { SessionStore } from "../agent/session-store";
+import { environmentProvider } from "../agent/env";
+import { runRepl } from "./repl";
 import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, loadEnterpriseEdition, isEntitled, checkOrgDomainBinding } from "../core/license";
 
 /** Best-effort local identity for SSO-lite activation checks. */
@@ -18,7 +23,6 @@ function resolveActivationEmail(): string | null {
 }
 import { loadPolicy, describePolicy, policyRequiresAudit } from "../core/policy";
 import { AuditLogger, defaultAuditDir, readAuditEvents, verifyAuditChain } from "../core/audit";
-import * as readline from "readline";
 
 const program = new Command();
 
@@ -147,7 +151,30 @@ program.command("watch").description("Index the workspace and keep it live as fi
   process.on("SIGTERM", stop);
 });
 
-program.command("agent").description("Interactive agent").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "LLM provider", "openai").option("--llm-model <model>", "LLM model (default: provider-appropriate)").option("--api-key <key>", "API key").option("--print <query>", "Non-interactive").option("--allow-edits", "Enable file-edit tools (str-replace, create-file, remove-file)").option("--allow-shell", "Enable the run-command shell tool (off by default)").option("--no-index", "Skip the startup index (use the existing index as-is)").option("--watch", "Keep the index live as files change during the session").option("--route", "Route each query to a cost-appropriate model tier (fast/standard/reasoning)").option("--memory", "Remember codebase insights across sessions (.open-context/memories.json)").option("--audit", "Append runs and tool calls to the tamper-evident audit log (.open-context/audit/)").action(async (opts) => {
+program.command("agent", { isDefault: true }).description("Interactive coding agent (default command — bare `oce` starts it)")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("-p, --provider <provider>", "LLM provider", "openai")
+  .option("--llm-model <model>", "LLM model (default: provider-appropriate)")
+  .option("--api-key <key>", "API key")
+  .option("--print <query>", "Non-interactive: answer one query and exit")
+  .option("--json", "With --print: emit {answer, stats, toolCalls} as JSON")
+  .option("--allow-edits", "(--print only) enable file-edit tools; interactive sessions have them behind approvals")
+  .option("--allow-shell", "(--print only) enable the run-command tool; interactive sessions have it behind approvals")
+  .option("--auto-edit", "Approval mode: file edits run without asking, shell still asks")
+  .option("--full-auto", "Approval mode: nothing asks (containers/CI)")
+  .option("--continue", "Resume the most recent session in this workspace")
+  .option("--resume <id>", "Resume a specific saved session (see /sessions)")
+  .option("--no-plan", "Disable the agent's update-plan tool")
+  .option("--no-delegate", "Disable the sub-agent delegate tool")
+  .option("--no-env", "Do not inject platform/git/index facts into the system prompt")
+  .option("--no-index", "Skip the startup index (use the existing index as-is)")
+  .option("--watch", "Keep the index live as files change during the session")
+  .option("--route", "Route each query to a cost-appropriate model tier (fast/standard/reasoning)")
+  .option("--memory", "Remember codebase insights across sessions (.open-context/memories.json)")
+  .option("--audit", "Append runs and tool calls to the tamper-evident audit log (.open-context/audit/)")
+  .option("--no-embed-cache", "Disable the shared embedding cache")
+  .action(async (opts) => {
+  const interactive = !opts.print;
   // Routing config is validated up front — before the (potentially long)
   // index run — so `-p google --route` fails in milliseconds, not minutes.
   const provider = (opts.provider || "openai") as LLMProvider;
@@ -192,16 +219,39 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
     memory = new SessionMemory({ storePath: config.storePath || pathMod.join(config.workspaceRoot, ".open-context") });
   }
   const FALLBACK_MODEL: Record<string, string> = { openai: "gpt-4o", anthropic: "claude-sonnet-4-6" };
+  const model = opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o";
+
+  // Approvals: interactive sessions get edits+shell BEHIND the approval flow
+  // (suggest mode asks per mutation, like the other leading CLIs); --print
+  // has no approver, so tools stay opt-in via the explicit flags.
+  const permissions = new PermissionManager({
+    mode: opts.fullAuto ? "full-auto" : opts.autoEdit ? "auto-edit" : interactive ? "suggest" : "full-auto",
+  });
+  const plan = new AgentPlan();
+  const editLog: import("../agent/types").EditProposal[] = [];
+
   // Policy can strip capabilities the flags asked for — say so up front
   // instead of letting the agent discover missing tools mid-run.
   const policyBlocks: string[] = [];
   const tools = defaultAgentTools({
     context: ctx,
-    includeEdits: !!opts.allowEdits,
-    shell: !!opts.allowShell,
+    includeEdits: interactive ? true : !!opts.allowEdits,
+    shell: interactive ? true : !!opts.allowShell,
+    onEdit: (e) => editLog.push(e),
+    plan: opts.plan !== false ? plan : undefined,
+    delegate: opts.delegate !== false ? {
+      makeAgent: () => new ContextAgent({
+        provider, model, apiKey: opts.apiKey, router,
+        tools: defaultCodebaseTools(ctx),
+        maxSteps: 8, compaction: "drop",
+        systemPrompt: "You are a codebase research sub-agent. Investigate the brief thoroughly with your tools, then reply with a single, complete report (file paths + line ranges + key excerpts). Your reply goes to another agent, not a human.",
+      }),
+    } : undefined,
     onPolicyBlock: (cap, reason) => policyBlocks.push(`${cap}: ${reason}`),
   });
   for (const b of policyBlocks) process.stderr.write(`⚠ policy: ${b}\n`);
+  permissions.registerMutatingTools(tools.filter(t => t.mutates).map(t => t.name));
+
   // Audit: explicit --audit needs the audit-log entitlement; a policy that
   // REQUIRES audit always wins (the signed policy is the org's authority).
   let audit: AuditLogger | undefined;
@@ -215,44 +265,95 @@ program.command("agent").description("Interactive agent").option("-w, --workspac
       process.exit(1);
     }
   }
+
   const agent = new ContextAgent({
     provider,
-    model: opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o",
+    model,
     apiKey: opts.apiKey,
     tools,
     router,
     memory,
     memorySource: "cli-agent",
     audit,
+    hooks: permissions.asHooks(),
+    environmentProvider: opts.env !== false
+      ? environmentProvider(config.workspaceRoot, () => ({ chunks: ctx.getChunkCount(), searchMode: ctx.getStatus().searchMode }))
+      : undefined,
   });
-  const toolNames = tools.map(t => t.name).filter(n => !["codebase-retrieval", "list-files", "read-file", "find-symbol-definition", "find-symbol-references"].includes(n));
-  process.stderr.write(`Tools: codebase-retrieval, list-files, read-file, symbols${toolNames.length ? ", " + toolNames.join(", ") : ""}.${opts.route ? " Routing: on." : ""}${opts.memory ? ` Memory: on (${memory ? "loaded " + memory.getAll().length + " entries" : ""}).` : ""}${audit ? " Audit: on." : ""}\n`);
-  const stream = (ev: any) => {
-    if (ev.type === "text") process.stdout.write(ev.text);
-    else if (ev.type === "model_selected") process.stderr.write(`[routed: ${ev.tier.name} → ${ev.tier.model}]\n`);
-    else if (ev.type === "tool_call") process.stdout.write(`\n[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);
-    else if (ev.type === "tool_result") process.stdout.write(`[tool ${ev.toolResult.name} result: ${ev.toolResult.result.length} chars]\n`);
-    else if (ev.type === "retry") process.stdout.write(`\n[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);
-    else if (ev.type === "history_compacted") process.stdout.write(`\n[compacted ${ev.droppedMessages} messages]\n`);
-    else if (ev.type === "run_end" && ev.stats) {
-      const s = ev.stats;
-      const tokens = s.usage.inputTokens || s.usage.outputTokens ? `, ${s.usage.inputTokens} in / ${s.usage.outputTokens} out tokens` : "";
-      process.stderr.write(`\n[${s.steps} step${s.steps === 1 ? "" : "s"}, ${s.toolCalls} tool call${s.toolCalls === 1 ? "" : "s"}${s.toolErrors ? ` (${s.toolErrors} errored)` : ""}${tokens}, ${(s.durationMs / 1000).toFixed(1)}s]\n`);
+
+  // Sessions: every conversation persists; --continue / --resume restore one.
+  const sessionStore = SessionStore.forWorkspace(config.workspaceRoot, config.storePath);
+  let sessionId = sessionStore.newId();
+  if (opts.continue || opts.resume) {
+    const saved = opts.resume ? sessionStore.load(String(opts.resume)) : sessionStore.latest();
+    if (saved) {
+      try {
+        agent.importSession(saved.session);
+        sessionId = saved.id;
+        process.stderr.write(`Resumed session '${saved.title}' (${saved.turns} turns).\n`);
+      } catch (e: any) {
+        console.error(`Could not resume session: ${e?.message ?? e}`);
+        process.exit(1);
+      }
+    } else if (opts.resume) {
+      console.error(`No session '${opts.resume}' — run /sessions in the REPL or check .open-context/sessions/.`);
+      process.exit(1);
     }
-  };
-  if (opts.print) { await agent.run(opts.print, { onStream: stream }); process.stdout.write("\n"); await watcher?.stop(); ctx.close(); return; }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  rl.on("close", () => { void watcher?.stop().then(() => ctx.close()); });
-  console.log(`Open Context Agent | Type 'exit' to quit, 'reset' to clear\n`);
-  const p = () => rl.question("> ", async (q) => {
-    if (!q.trim()) return p();
-    if (q.trim() === "exit") return rl.close();
-    if (q.trim() === "reset") { agent.reset(); console.log("Cleared."); return p(); }
-    try { await agent.run(q, { onStream: stream }); console.log("\n"); }
-    catch (e: any) { console.error(`Error: ${e.message}`); }
-    p();
+  }
+
+  if (opts.print) {
+    const toolCallLog: { name: string; ok: boolean }[] = [];
+    const stream = (ev: any) => {
+      if (opts.json) {
+        if (ev.type === "tool_result") toolCallLog.push({ name: ev.toolResult.name, ok: !ev.toolResult.error });
+        return; // JSON mode: stdout carries exactly one JSON document
+      }
+      if (ev.type === "text") process.stdout.write(ev.text);
+      else if (ev.type === "model_selected") process.stderr.write(`[routed: ${ev.tier.name} → ${ev.tier.model}]\n`);
+      else if (ev.type === "tool_call") process.stderr.write(`[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);
+      else if (ev.type === "tool_result") process.stderr.write(`[tool ${ev.toolResult.name} result: ${ev.toolResult.result.length} chars]\n`);
+      else if (ev.type === "retry") process.stderr.write(`[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);
+      else if (ev.type === "history_compacted") process.stderr.write(`[compacted ${ev.droppedMessages} messages]\n`);
+      else if (ev.type === "run_end" && ev.stats) {
+        const s = ev.stats;
+        const tokens = s.usage.inputTokens || s.usage.outputTokens ? `, ${s.usage.inputTokens} in / ${s.usage.outputTokens} out tokens` : "";
+        process.stderr.write(`\n[${s.steps} step${s.steps === 1 ? "" : "s"}, ${s.toolCalls} tool call${s.toolCalls === 1 ? "" : "s"}${s.toolErrors ? ` (${s.toolErrors} errored)` : ""}${tokens}, ${(s.durationMs / 1000).toFixed(1)}s]\n`);
+      }
+    };
+    const answer = await agent.run(opts.print, { onStream: stream });
+    if (opts.json) {
+      console.log(JSON.stringify({ answer, stats: agent.getLastRunStats(), toolCalls: toolCallLog }, null, 2));
+    } else {
+      process.stdout.write("\n");
+    }
+    try { sessionStore.save(sessionId, opts.print, agent.exportSession(), 1); } catch {}
+    await watcher?.stop();
+    ctx.close();
+    return;
+  }
+
+  await runRepl({
+    agent,
+    plan,
+    permissions,
+    sessionStore,
+    sessionId,
+    editLog,
+    banner: {
+      model,
+      provider,
+      workspace: config.workspaceRoot,
+      index: `${ctx.getChunkCount().toLocaleString()} chunks · ${ctx.getStatus().searchMode}`,
+      mode: permissions.getMode(),
+      extras: [
+        ...(opts.route ? ["model routing on"] : []),
+        ...(memory ? [`memory on (${memory.getAll().length} entries)`] : []),
+        ...(audit ? ["audit on"] : []),
+      ],
+    },
   });
-  p();
+  await watcher?.stop();
+  ctx.close();
 });
 
 program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)")

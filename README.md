@@ -85,20 +85,52 @@ oce search "how does the auth middleware work?"
 ### 5. Run the interactive agent
 
 ```bash
-oce agent --workspace ./my-project --allow-edits
-> how does the auth middleware work?
-> refactor the user service to use dependency injection
+oce                       # bare `oce` starts the agent in the current directory
+oce agent -w ./my-project # or target a workspace explicitly
 ```
 
-The agent is **read-only by default** (codebase retrieval + file reads). Grant write/exec access explicitly: `--allow-edits` enables the file-editing tools and `--allow-shell` enables the `run-command` tool. The same applies to the programmatic API — `defaultAgentTools({ context })` returns read-only tools unless you pass `includeEdits: true` and/or `shell: true`.
+```
+Open Context · code-native agent
+model      openai/gpt-5.4
+workspace  /home/you/my-project
+index      12,481 chunks · hybrid
+approvals  suggest
+type a request, or /help for commands · Ctrl+C interrupts
 
-Optional smarts:
+› refactor the user service to use dependency injection
+```
 
-- `--route` sends each query to a cost-appropriate model tier — quick lookups to a fast model, multi-file/analytical work to the strongest, everything else to your `--llm-model`.
-- `--memory` makes the agent remember codebase insights across sessions (stored locally in `.open-context/memories.json`) and inject the relevant ones per query.
-- `--audit` appends every run and tool call to the tamper-evident audit log (see below).
+The REPL streams styled output, shows each tool call with a live spinner and timing, and — before any file edit or shell command — prints a **diff/command preview and asks for approval** (`y` / `a`lways / `n`). Ctrl+C interrupts the current run without quitting the session.
 
-Each turn ends with a stats line — steps, tool calls, provider-reported token usage, wall time. Read-only tool calls within a turn execute in parallel; any turn containing an edit or shell call runs strictly in order.
+**Approval modes** (as in the other leading coding CLIs):
+
+- default (`suggest`) — every edit and shell command asks first
+- `--auto-edit` — file edits apply automatically; shell still asks
+- `--full-auto` — nothing asks (for containers / CI)
+
+Switch mid-session with `/mode`. Interactive sessions have the edit and shell tools available behind approvals; the non-interactive `--print` path keeps them opt-in via `--allow-edits` / `--allow-shell`.
+
+**Slash commands:** `/help` `/reset` `/compact` `/plan` `/diff` `/usage` `/tools` `/mode` `/sessions` `/resume` `/exit`.
+
+**Sessions persist automatically** to `.open-context/sessions/`. `oce --continue` resumes the last conversation in the workspace; `oce --resume <id>` restores a specific one (list them with `/sessions`).
+
+**Harness features:**
+
+- **Plan tracking** — the agent maintains a live step checklist for multi-step work, rendered as you watch.
+- **Sub-agent delegation** — broad explorations run in a scoped read-only child agent, so their large intermediate output never floods the main context.
+- **Summarizing compaction** — when history gets long, older turns are condensed into a context note *by the model* rather than dropped, so decisions and file paths survive; force it with `/compact`.
+- **Environment awareness** — platform, git branch/status, date, and index stats are injected into the system prompt.
+- **Cost + parallelism** — every turn ends with a stats line (steps, tool calls, token usage, wall time); read-only tool calls in a turn run in parallel, while any turn with an edit or shell call stays strictly ordered.
+- `--route` sends each query to a cost-appropriate model tier; `--memory` remembers codebase insights across sessions; `--audit` logs runs to the tamper-evident audit log.
+
+Non-interactive use for scripts and CI:
+
+```bash
+oce --print "where is the auth middleware defined?"           # one answer, then exit
+oce --print "list the exported symbols in src/core" --json     # {answer, stats, toolCalls}
+```
+
+The programmatic API mirrors all of this: `defaultAgentTools({ context })` stays read-only unless you pass `includeEdits`/`shell`/`plan`/`delegate`, and `ContextAgent` accepts `hooks` (a `PermissionManager` composes in here), `compaction`, and `environmentProvider`.
 
 ### 6. Connect to Claude / Cursor via MCP
 

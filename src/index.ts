@@ -44,6 +44,18 @@ export type { DefaultRoutingOptions } from "./agent/model-router";
 export type { ModelTier, RoutingConfig } from "./agent/model-router";
 export { SessionMemory } from "./agent/session-memory";
 export type { MemoryEntry, MemoryKind } from "./agent/session-memory";
+export { AgentPlan, planTool } from "./agent/plan";
+export type { PlanStep, PlanStepStatus } from "./agent/plan";
+export { PermissionManager, describeToolCall } from "./agent/permissions";
+export type { ApprovalMode, ApprovalDecision, ApprovalRequest, PermissionManagerOptions } from "./agent/permissions";
+export { delegateTool } from "./agent/delegate";
+export type { DelegateRunner, DelegateToolOptions } from "./agent/delegate";
+export { collectEnvironment, renderEnvironment, environmentProvider } from "./agent/env";
+export type { EnvironmentInfo } from "./agent/env";
+export { SessionStore } from "./agent/session-store";
+export type { SessionMeta, SavedSession } from "./agent/session-store";
+export { splitForCompaction, renderTranscript, compactHistory, estimateTokens, totalTokens } from "./agent/utils";
+export type { CompactionSplit, CompactionResult } from "./agent/utils";
 export {
   getLicense, verifyLicenseToken, isEntitled, requireFeature, loadEnterpriseEdition,
   saveLicenseToken, loadLicenseToken, clearLicense, licenseConfigPath, licenseConfigDir,
