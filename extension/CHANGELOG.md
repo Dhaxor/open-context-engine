@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Reworked `oce` CLI into an interactive coding agent.** Bare `oce` now launches a full REPL: streamed styled output, live tool-call lines with timing, inline diff/command previews with `y`/`a`/`n` approvals, and slash commands (`/help` `/compact` `/plan` `/diff` `/usage` `/mode` `/sessions` `/resume` …). Approval modes `--auto-edit` / `--full-auto`, session persistence with `--continue` / `--resume`, and `--print [--json]` for scripting.
+- **Harness upgraded toward best-in-class:** model-summarized history compaction (with drop-oldest fallback), a live plan/todo tool, sub-agent delegation for broad explorations, environment context (platform/git/index) in the system prompt, and a composable permission system (suggest / auto-edit / full-auto).
+
 - **⚠ Security: the agent's shell tool now defaults to OFF.** `openContext.agent.shell.enabled` shipped as `true` with an empty allowlist, meaning a fresh install let the model run arbitrary commands. It is now opt-in; when enabling it, consider also pinning `openContext.agent.shell.allowlist`.
 - **Workspace/org policy enforcement.** A committed `.open-context/policy.json` (or an org-signed `policy.lock`) can disable the agent's shell/edit/web-search tools, pin shell allowlists, force local-only embeddings, and exclude paths from indexing. Policies always win over settings; the extension shows one warning when a capability was stripped.
 - **Tamper-evident audit log (opt-in, Enterprise).** `openContext.agent.audit.enabled` appends every agent run and tool call to a hash-chained `.open-context/audit/audit.jsonl`; verify with `oce audit --verify`. A policy with `"audit": { "required": true }` forces it on.

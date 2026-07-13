@@ -57,6 +57,9 @@ export interface StreamEvent {
   retryDelayMs?: number;
   retryReason?: string;
   droppedMessages?: number;
+  /** For history_compacted: true when the evicted middle was summarized by
+   *  the model rather than dropped. */
+  summarized?: boolean;
   /** Emitted once per run when a ModelRouter picked the tier for this query. */
   tier?: { name: string; provider: string; model: string };
   /** Emitted after each LLM call that reported token usage. */
@@ -108,7 +111,15 @@ export interface AgentConfig {
   maxRetries?: number;
   /** Max read-only tool calls executed concurrently within one step. Default 4. */
   maxParallelTools?: number;
+  /** How to reclaim context when history exceeds historyTokenBudget:
+   *  "summarize" (default) has the model condense the evicted middle into a
+   *  context note — one extra LLM call, far better continuity; "drop" evicts
+   *  oldest messages silently (the pre-existing behavior, zero extra calls). */
+  compaction?: "summarize" | "drop";
   guidelinesProvider?: (query: string) => string | null;
+  /** Appended to the system prompt each run — platform/git/index facts.
+   *  See environmentProvider() in agent/env.ts for the standard one. */
+  environmentProvider?: () => string;
   hooks?: AgentHooks;
   /** Route each query to a cost-appropriate model tier (fast/standard/
    *  reasoning). When set, provider/model act as a fallback only and each

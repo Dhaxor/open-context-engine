@@ -32,6 +32,50 @@ export interface CompactionResult {
   droppedCount: number;
 }
 
+/** Partition history for summarizing compaction: the first user message and a
+ *  recent tail (≤ tailBudget tokens) are kept verbatim; everything between is
+ *  the "middle" that gets summarized. Pure — no LLM here. */
+export interface CompactionSplit {
+  firstUser: AgentMessage | null;
+  middle: AgentMessage[];
+  tail: AgentMessage[];
+}
+
+export function splitForCompaction(messages: AgentMessage[], tailBudget: number): CompactionSplit {
+  const firstUserIdx = messages.findIndex(m => m.role === "user");
+  const firstUser = firstUserIdx >= 0 ? messages[firstUserIdx] : null;
+  const rest = messages.filter((_, i) => i !== firstUserIdx);
+  const tail: AgentMessage[] = [];
+  let tailTokens = 0;
+  for (let i = rest.length - 1; i >= 0; i--) {
+    const t = messageTokens(rest[i]);
+    if (tailTokens + t > tailBudget && tail.length > 0) break;
+    tail.unshift(rest[i]);
+    tailTokens += t;
+  }
+  const middle = rest.slice(0, rest.length - tail.length);
+  repairOrphans(tail);
+  return { firstUser, middle, tail };
+}
+
+/** Render messages into a plain-text transcript for the summarizer. Tool
+ *  results are clipped hard — the summary needs what was LEARNED, not the
+ *  full dumps that blew the budget in the first place. */
+export function renderTranscript(messages: AgentMessage[], maxToolResultChars = 600): string {
+  const lines: string[] = [];
+  for (const m of messages) {
+    if (m.role === "user") lines.push(`USER: ${m.content}`);
+    else if (m.role === "assistant") {
+      if (m.content) lines.push(`ASSISTANT: ${m.content}`);
+      for (const tc of m.toolCalls ?? []) lines.push(`ASSISTANT → tool ${tc.name}(${JSON.stringify(tc.arguments).slice(0, 300)})`);
+    } else if (m.role === "tool") {
+      const body = m.content.length > maxToolResultChars ? m.content.slice(0, maxToolResultChars) + "…" : m.content;
+      lines.push(`TOOL ${m.toolName ?? ""}: ${body}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export function compactHistory(messages: AgentMessage[], budget: number): CompactionResult {
   if (messages.length <= 2) return { messages, droppedCount: 0 };
   let tokens = totalTokens(messages);
