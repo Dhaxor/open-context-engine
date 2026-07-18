@@ -38,6 +38,7 @@ const DEFAULT_LLM_MODEL: Record<string, string> = {
     openai: "gpt-5.4",
     anthropic: "claude-opus-4-7",
     google: "gemini-3.1-pro-preview",
+    ollama: "llama3.1",
     custom: "",
 };
 
@@ -114,7 +115,8 @@ export class AgentService {
         const model = cfg.get<string>("llm.model", "") || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
         const baseUrl = cfg.get<string>("llm.baseUrl", "") || undefined;
         const svc = ContextService.getInstance();
-        const apiKey = (await svc.getLLMApiKey(provider)) ?? envKey(provider);
+        // Ollama runs locally and needs no key; the SDK just wants a non-empty string.
+        const apiKey = (await svc.getLLMApiKey(provider)) || envKey(provider) || (provider === "ollama" ? "ollama" : "");
         if (!apiKey) {
             throw new Error(buildMissingKeyMessage(provider));
         }

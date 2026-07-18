@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { OpenContext } from "../core/context";
 import { unifiedDiff, countOccurrences, replaceAll } from "../core/diff";
+import { resolveInside } from "../core/utils";
 import { EditProposal, ToolDefinition } from "./types";
 
 export interface EditApplier {
@@ -14,7 +15,10 @@ export interface EditApplier {
 
 export class FsEditApplier implements EditApplier {
   constructor(private workspaceRoot: string) {}
-  private abs(p: string): string { return path.resolve(this.workspaceRoot, p); }
+  // Containment: model-supplied paths must stay inside the workspace —
+  // resolveInside throws on `..`/absolute escapes, which surfaces to the
+  // model as a tool error instead of writing outside the repo.
+  private abs(p: string): string { return resolveInside(this.workspaceRoot, p); }
   async readFile(rel: string): Promise<string | null> {
     try { return await fs.promises.readFile(this.abs(rel), "utf8"); } catch { return null; }
   }

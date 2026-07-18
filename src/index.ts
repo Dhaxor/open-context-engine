@@ -12,8 +12,10 @@ export { SqliteStore, NativeBindingError } from "./core/sqlite-store";
 export { classifyNativeBindingError, diagnosisOneLiner } from "./core/native-binding-error";
 export type { NativeBindingDiagnosis, NativeBindingErrorKind } from "./core/native-binding-error";
 export { HybridRetriever, reciprocalRankFusion } from "./core/retriever";
-export { createReranker, VoyageReranker, CohereReranker } from "./core/reranker";
+export { createReranker, VoyageReranker, CohereReranker, LocalReranker } from "./core/reranker";
 export type { Reranker } from "./core/reranker";
+export { createLogger, errText } from "./core/log";
+export type { Logger, LogLevel, LogRecord } from "./core/log";
 export { ContextAgent, defaultCodebaseTools, defaultAgentTools, FsEditApplier, editTools } from "./agent/agent";
 export type { AgentConfig, AgentMessage, AgentRunOptions, LLMProvider, ToolCall, ToolDefinition, StreamEvent, EditProposal } from "./agent/types";
 export type { EditApplier } from "./agent/edit-tools";
@@ -56,6 +58,10 @@ export { SessionStore } from "./agent/session-store";
 export type { SessionMeta, SavedSession } from "./agent/session-store";
 export { splitForCompaction, renderTranscript, compactHistory, estimateTokens, totalTokens } from "./agent/utils";
 export type { CompactionSplit, CompactionResult } from "./agent/utils";
+export { OpenAICaller, AnthropicCaller, GoogleCaller, contextWindowFor } from "./agent/providers";
+export type { LLMCaller, LLMResponse } from "./agent/providers";
+export { resolveInside, isKeyishPath } from "./core/utils";
+export { scrubbedEnv } from "./agent/extra-tools";
 export {
   getLicense, verifyLicenseToken, isEntitled, requireFeature, loadEnterpriseEdition,
   saveLicenseToken, loadLicenseToken, clearLicense, licenseConfigPath, licenseConfigDir,

@@ -167,6 +167,10 @@ export class FileFilter {
         const rp = path.relative(rootDir, full).replace(/\\/g, "/");
         if (!this.shouldIncludePath(rp).include) continue;
         try {
+          // stat first: an oversized file must be rejected by its size, not
+          // after its entire contents were pulled into memory.
+          const st = await fs.promises.stat(full);
+          if (st.size > this.maxFileSize) continue;
           const buf = await fs.promises.readFile(full);
           const decision = this.shouldIncludeBuffer(rp, buf);
           if (!decision.include) continue;

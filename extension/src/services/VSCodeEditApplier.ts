@@ -1,12 +1,14 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { EditApplier } from "../../../src/agent/edit-tools";
+import { resolveInside } from "../../../src/core/utils";
 
 export class VSCodeEditApplier implements EditApplier {
     constructor(private workspaceRoot: string) {}
 
     private uri(rel: string): vscode.Uri {
-        return vscode.Uri.file(path.resolve(this.workspaceRoot, rel));
+        // Containment: model-supplied paths must stay inside the workspace.
+        return vscode.Uri.file(resolveInside(this.workspaceRoot, rel));
     }
 
     async readFile(rel: string): Promise<string | null> {

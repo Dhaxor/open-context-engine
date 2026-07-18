@@ -1,7 +1,7 @@
 import { OpenContext } from "../core/context";
 import { RetrieveOptions } from "../core/retriever";
 import { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, RunStats, TokenUsage, ToolCall, ToolDefinition } from "./types";
-import { AnthropicCaller, LLMCaller, OpenAICaller } from "./providers";
+import { AnthropicCaller, GoogleCaller, LLMCaller, OpenAICaller, contextWindowFor } from "./providers";
 import { compactHistory, renderTranscript, splitForCompaction, totalTokens, truncateToolResult, withRetry } from "./utils";
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";
 import { shellTool, webSearchTool, ShellToolOptions, WebSearchOptions } from "./extra-tools";
@@ -230,7 +230,10 @@ export class ContextAgent {
     for (const t of config.tools) this.tools.set(t.name, t);
     this.system = config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.maxSteps = config.maxSteps ?? 10;
-    this.historyTokenBudget = config.historyTokenBudget ?? 120_000;
+    // Default history budget scales with the model's real context window
+    // (half of it, capped — leaves room for system prompt, tools, and output).
+    this.historyTokenBudget = config.historyTokenBudget
+      ?? Math.min(300_000, Math.floor(contextWindowFor(config.model) * 0.5));
     this.maxToolResultChars = config.maxToolResultChars ?? 24_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.maxParallelTools = Math.max(1, config.maxParallelTools ?? 4);
@@ -245,10 +248,20 @@ export class ContextAgent {
     if (!this.router) {
       // No router: a single fixed caller is built up front, as before. With a
       // router, callers are created lazily per tier inside the router itself.
+      const maxTokens = config.maxTokens ?? 4096;
+      if (config.provider === "ollama") {
+        // Fully-local agent: Ollama speaks the OpenAI chat API at /v1. No key
+        // is required — the SDK just wants a non-empty string.
+        const base = config.baseUrl
+          ?? (process.env.OLLAMA_BASE_URL ? process.env.OLLAMA_BASE_URL.replace(/\/$/, "") + "/v1" : "http://localhost:11434/v1");
+        this.caller = new OpenAICaller(config.model, config.apiKey || "ollama", base, maxTokens);
+        return;
+      }
       const apiKey = config.apiKey ?? envKey(config.provider);
       if (!apiKey) throw new Error(`Missing API key for provider ${config.provider}`);
-      if (config.provider === "openai" || config.provider === "custom") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
-      else if (config.provider === "anthropic") this.caller = new AnthropicCaller(config.model, apiKey, config.baseUrl, config.maxTokens ?? 4096);
+      if (config.provider === "openai" || config.provider === "custom") this.caller = new OpenAICaller(config.model, apiKey, config.baseUrl, maxTokens);
+      else if (config.provider === "anthropic") this.caller = new AnthropicCaller(config.model, apiKey, config.baseUrl, maxTokens);
+      else if (config.provider === "google") this.caller = new GoogleCaller(config.model, apiKey, config.baseUrl, maxTokens);
       else throw new Error(`Provider ${config.provider} not yet supported`);
     }
   }

@@ -14,12 +14,25 @@ export interface EmbeddingProvider {
 interface RetryOptions { maxAttempts: number; baseDelayMs: number; maxDelayMs: number; }
 const DEFAULT_RETRY: RetryOptions = { maxAttempts: 5, baseDelayMs: 500, maxDelayMs: 15000 };
 const VOYAGE_MAX_BATCH_CHARS = 100_000;
+/** Hard ceiling on any single embedding HTTP round-trip — a hung socket must
+ *  not stall an index run forever. */
+const HTTP_TIMEOUT_MS = 60_000;
 
 function shouldRetryStatus(status: number | undefined): boolean {
   return status === 408 || status === 425 || status === 429 || (status !== undefined && status >= 500);
 }
 
 async function sleep(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)); }
+
+/** Parse a Retry-After header (delta-seconds or HTTP-date) into ms, capped. */
+export function parseRetryAfterMs(value: string | null | undefined, capMs = 60_000): number | undefined {
+  if (!value) return undefined;
+  const secs = Number(value);
+  if (Number.isFinite(secs)) return Math.min(capMs, Math.max(0, secs * 1000));
+  const at = Date.parse(value);
+  if (!Number.isNaN(at)) return Math.min(capMs, Math.max(0, at - Date.now()));
+  return undefined;
+}
 
 async function retry<T>(label: string, fn: () => Promise<T>, opts: RetryOptions = DEFAULT_RETRY): Promise<T> {
   let lastErr: unknown;
@@ -31,7 +44,10 @@ async function retry<T>(label: string, fn: () => Promise<T>, opts: RetryOptions 
       const retryable = status === undefined || shouldRetryStatus(status);
       if (!retryable || attempt === opts.maxAttempts) break;
       const jitter = Math.random() * 0.3 + 0.85;
-      const delay = Math.min(opts.maxDelayMs, opts.baseDelayMs * Math.pow(2, attempt - 1)) * jitter;
+      let delay = Math.min(opts.maxDelayMs, opts.baseDelayMs * Math.pow(2, attempt - 1)) * jitter;
+      // A server-provided Retry-After overrides our backoff — it knows.
+      const retryAfter: number | undefined = err?.retryAfterMs;
+      if (retryAfter !== undefined) delay = Math.max(delay, retryAfter);
       await sleep(delay);
     }
   }
@@ -83,7 +99,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   private getClient(): OpenAI {
     if (!this._client) {
       if (!this._apiKey) throw new Error("OPENAI_API_KEY is required. Set it via environment variable or config.");
-      this._client = new OpenAI({ apiKey: this._apiKey, baseURL: this._baseUrl, maxRetries: 0 });
+      this._client = new OpenAI({ apiKey: this._apiKey, baseURL: this._baseUrl, maxRetries: 0, timeout: HTTP_TIMEOUT_MS });
     }
     return this._client;
   }
@@ -127,10 +143,17 @@ export function isAuthError(err: unknown): boolean {
 }
 
 async function postJSON(url: string, headers: Record<string, string>, body: unknown): Promise<any> {
-  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+  });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new HTTPError(resp.status, text, `HTTP ${resp.status}: ${text.slice(0, 500)}`);
+    const err: any = new HTTPError(resp.status, text, `HTTP ${resp.status}: ${text.slice(0, 500)}`);
+    err.retryAfterMs = parseRetryAfterMs(resp.headers.get("retry-after"));
+    throw err;
   }
   return resp.json();
 }
@@ -205,6 +228,20 @@ const TRANSFORMERS_PKG = ["@huggingface", "transformers"].join("/");
 let transformersLoader: () => Promise<any> = () => import(TRANSFORMERS_PKG);
 export function __setTransformersLoaderForTests(loader: (() => Promise<any>) | null): void {
   transformersLoader = loader ?? (() => import(TRANSFORMERS_PKG));
+}
+
+/** Shared entry to the optional @huggingface/transformers module (embeddings
+ *  AND the local reranker use it) with one actionable error message. */
+export async function loadTransformersModule(feature: string): Promise<any> {
+  try {
+    return await transformersLoader();
+  } catch {
+    throw new Error(
+      `${feature} needs the optional dependency '@huggingface/transformers'. ` +
+      "Install it with: npm install @huggingface/transformers " +
+      "(first run downloads the model to " + localModelCacheDir() + ", offline afterwards).",
+    );
+  }
 }
 
 /** Where downloaded ONNX models live. Override with OCE_MODEL_DIR. */

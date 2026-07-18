@@ -193,9 +193,13 @@ describe("revocation list", () => {
     saveLicenseToken(mint(payload({ id: "lic_x" })));
     saveRevocationToken(mintRevocations(["lic_x"]));
     expect(getLicense({ publicKey: PUB, now: NOW }).reason).toBe("revoked");
-    // Attacker edits the cached list to un-revoke themselves → signature dies
-    // → list is discarded → fail-open (bounded by license expiry).
-    fs.writeFileSync(revocationCachePath(), mintRevocations(["lic_x"]).replace(/.$/, "0"));
+    // Attacker edits the cached list to remove their id → payload no longer
+    // matches the signature → list is discarded → fail-open (bounded by expiry).
+    // Re-sign-free tamper: swap in a different (validly-shaped) payload while
+    // keeping the old signature.
+    const goodSig = mintRevocations(["lic_x"]).split(".")[1];
+    const forgedSeg = Buffer.from(JSON.stringify({ revoked: [], updatedAt: NOW })).toString("base64url");
+    fs.writeFileSync(revocationCachePath(), `${forgedSeg}.${goodSig}`);
     expect(getLicense({ publicKey: PUB, now: NOW }).valid).toBe(true);
   });
 

@@ -1,4 +1,4 @@
-export type LLMProvider = "openai" | "anthropic" | "google" | "custom";
+export type LLMProvider = "openai" | "anthropic" | "google" | "ollama" | "custom";
 
 export interface ToolDefinition {
   name: string;

@@ -1,5 +1,5 @@
-import * as path from "path";
 import { spawn } from "child_process";
+import { resolveInside } from "../core/utils";
 import { ToolDefinition } from "./types";
 
 export interface ShellToolOptions {
@@ -52,7 +52,14 @@ export function shellTool(opts: ShellToolOptions): ToolDefinition {
           return `Command '${base}' is not in the allowlist [${allow.join(", ")}]. Update openContext.agent.shell.allowlist to permit it.`;
         }
       }
-      const cwd = args.cwd ? path.resolve(opts.workspaceRoot, String(args.cwd)) : opts.workspaceRoot;
+      // Containment: cwd must stay inside the workspace (`../..` or absolute
+      // paths would silently run the command elsewhere).
+      let cwd: string;
+      try {
+        cwd = args.cwd ? resolveInside(opts.workspaceRoot, String(args.cwd)) : opts.workspaceRoot;
+      } catch {
+        return `Error: cwd '${args.cwd}' is outside the workspace.`;
+      }
       const to = clamp(Number(args.timeout_ms ?? timeoutMs), 1000, 300_000);
       return runShell(cmd, cwd, to, maxOutput);
     },
@@ -86,9 +93,25 @@ export function webSearchTool(opts: WebSearchOptions): ToolDefinition {
   };
 }
 
+/** Vars that must not leak into model-driven child processes. PATH/HOME and
+ *  friends pass through; anything credential-shaped is dropped. */
+const SECRETISH_ENV = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION)/i;
+const ENV_ALLOW_DESPITE_MATCH = new Set(["SSH_AUTH_SOCK"]);
+
+export function scrubbedEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (SECRETISH_ENV.test(k) && !ENV_ALLOW_DESPITE_MATCH.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 async function runShell(cmd: string, cwd: string, timeoutMs: number, maxOutput: number): Promise<string> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, { shell: true, cwd, stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    // Scrubbed env: the agent's own API keys (and any other secrets in the
+    // parent env) must not be readable by arbitrary model-chosen commands.
+    const child = spawn(cmd, { shell: true, cwd, stdio: ["ignore", "pipe", "pipe"], env: scrubbedEnv() });
     let out = "";
     let err = "";
     let killed = false;

@@ -324,6 +324,23 @@ Exposed MCP tools:
 
 The `local` provider needs the optional `@huggingface/transformers` package; models download once into `~/.open-context/models` (override with `OCE_MODEL_DIR`) and run offline afterwards.
 
+### Agent LLMs
+
+`openai`, `anthropic`, `google` (Gemini, streaming + tools), `ollama` (fully local — `oce -p ollama --llm-model qwen2.5-coder:7b` needs no API key), and `custom` (any OpenAI-compatible endpoint via `--llm-base-url`). With `-p ollama` for the LLM, `--embedding-provider local` for embeddings, and `reranker: { provider: "local" }`, the **entire stack runs offline** — index, search, rerank, and agent.
+
+### Config file
+
+Persistent settings live in `~/.open-context/config.json` (user) and `<workspace>/.open-context/config.json` (project — commit it). Flags and env vars always win. API keys are deliberately rejected in config files; use env vars.
+
+```jsonc
+{
+  "embedding": { "provider": "local", "model": "jina-embeddings-v2-base-code" },
+  "llm": { "provider": "ollama", "model": "qwen2.5-coder:7b" },
+  "search": { "topK": 20, "minScore": 0.15 },
+  "chunkSize": 80
+}
+```
+
 ### Search Configuration
 
 ```typescript
