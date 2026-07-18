@@ -519,10 +519,14 @@
     "vscode:prepublish": "node build.js --minify",
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "lint": "tsc --noEmit",
+    "lint": "npm run typecheck",
     "rebuild": "node ./scripts/build-native-local.mjs",
     "package": "npm run rebuild && vsce package",
-    "verify-vsix": "node ./scripts/verify-vsix.mjs"
+    "verify-vsix": "node ./scripts/verify-vsix.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "verify:vsix": "node ./scripts/verify-vsix.mjs"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",

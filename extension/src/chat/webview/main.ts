@@ -4,11 +4,12 @@ import { esc, md, fmtDiff, relTime, shortPath } from "./render";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
 import { renderAccountSection, GET_TEAM_URL } from "../../shared/account-section";
 import { CHAT_TOUR_STEPS, chatTour } from "./tour";
+import type { HostToWebviewMessage, WebviewToHostMessage } from "./messages";
 
-declare function acquireVsCodeApi(): { postMessage(m: any): void };
+declare function acquireVsCodeApi(): { postMessage(m: WebviewToHostMessage): void };
 const V = acquireVsCodeApi();
 const $ = (id: string) => document.getElementById(id) as any;
-const post = (m: any) => V.postMessage(m);
+const post = (m: WebviewToHostMessage) => V.postMessage(m);
 
 // --- element refs ---
 const msgs = $("messages"), q = $("q"), sendBtn = $("sendBtn"), stopBtn = $("stopBtn");
@@ -484,7 +485,7 @@ q.onkeydown = (e: any) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDef
 q.oninput = function (this: any) { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 150) + "px"; };
 
 // --- host messages ---
-window.addEventListener("message", (e: any) => {
+window.addEventListener("message", (e: MessageEvent<HostToWebviewMessage>) => {
   const m = e.data;
   switch (m.type) {
     case "chunk": chunk(m.text); break;
