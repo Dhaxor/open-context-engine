@@ -102,7 +102,9 @@ describe("StreamingRetriever", () => {
       if (s.isFinal) final = s.results;
     }
     expect(calls).toBe(1);
-    expect(stages).toEqual(["vector", "bm25", "fused", "final"]);
+    // Incremental order: bm25 (sync, first) → vector (after embed) → fused →
+    // reranked (this pipeline has a reranker) → final.
+    expect(stages).toEqual(["bm25", "vector", "fused", "reranked", "final"]);
     expect(final.length).toBeGreaterThan(0);
   });
 });

@@ -6,7 +6,7 @@ import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
 import { AstChunker } from "./ast-chunker";
 import { FileFilter } from "./file-filter";
-import { computeBlobName, isBinaryBuffer } from "./utils";
+import { computeBlobName, isBinaryBuffer, isKeyishPath, resolveInside } from "./utils";
 import { formatSearchOutput } from "./search";
 import { HybridRetriever, RetrievalDebugReport, RetrieveOptions } from "./retriever";
 import { Reranker, createReranker } from "./reranker";
@@ -18,6 +18,9 @@ import { CodeGraph } from "./code-graph";
 import { extractEdges } from "./graph-extractor";
 import { GraphExpander } from "./graph-expander";
 import { loadPolicy, checkEmbeddingPolicy, EffectivePolicy } from "./policy";
+import { createLogger, errText } from "./log";
+
+const log = createLogger("context");
 import { ChunkWorkerPool, defaultPoolSize } from "./chunk-pool";
 import { ARTIFACT_MANIFEST_KEY, IndexArtifactManifest, packArtifact } from "./index-artifact";
 import { EmbedCache, contentHash } from "./embed-cache";
@@ -91,7 +94,8 @@ export class OpenContext {
   }
 
   private async recordGitState(): Promise<void> {
-    try { this.store.setIndexedGit(await getGitState(this.workspaceRoot)); } catch {}
+    try { this.store.setIndexedGit(await getGitState(this.workspaceRoot)); }
+    catch (err) { log.debug("failed to record git state", { error: errText(err) }); }
   }
 
   getGuidelines(): Guidelines | null {
@@ -337,7 +341,8 @@ export class OpenContext {
         const language = parsed?.language ?? AstChunker.languageFor(file.path);
         let edges: import("./code-graph").GraphEdge[] = [];
         if (language) {
-          try { edges = extractEdges(file, language, parsed?.tree ?? null).edges; } catch {}
+          try { edges = extractEdges(file, language, parsed?.tree ?? null).edges; }
+          catch (err) { log.debug("graph extraction failed", { path: file.path, error: errText(err) }); }
         }
         out.push({ path: file.path, chunks: fileChunks, edges });
       } finally {
@@ -419,7 +424,16 @@ export class OpenContext {
 
   async readFile(filePath: string, startLine?: number, endLine?: number): Promise<string | null> {
     try {
-      const fullPath = path.join(this.workspaceRoot, filePath);
+      // Containment: agent-reachable — must not read outside the workspace.
+      let fullPath: string;
+      try {
+        fullPath = resolveInside(this.workspaceRoot, filePath);
+      } catch {
+        return `Cannot read '${filePath}': path is outside the workspace.`;
+      }
+      if (isKeyishPath(filePath.replace(/\\/g, "/"))) {
+        return `Cannot read '${filePath}': credential-like files are blocked.`;
+      }
       const buf = await fs.promises.readFile(fullPath);
       if (isBinaryBuffer(buf)) return `Cannot read '${filePath}': binary file (this model does not support image or binary input).`;
       const full = buf.toString("utf8");

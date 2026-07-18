@@ -153,9 +153,117 @@ export class AnthropicCaller implements LLMCaller {
   }
 }
 
+/**
+ * Google Gemini caller — generativelanguage.googleapis.com SSE streaming.
+ * Function calls map to/from our ToolCall shape (Gemini has no call ids, so
+ * synthetic ids are minted; tool results round-trip by function NAME).
+ */
+export class GoogleCaller implements LLMCaller {
+  constructor(private model: string, private apiKey: string, private baseUrl: string = "https://generativelanguage.googleapis.com", private maxTokens: number = 4096) {}
+
+  async call(messages: AgentMessage[], tools: ToolDefinition[], system: string, onStream?: (e: StreamEvent) => void, signal?: AbortSignal): Promise<LLMResponse> {
+    // Tool results must carry the function NAME (Gemini keys on it, not ids).
+    const idToName = new Map<string, string>();
+    const contents: any[] = [];
+    for (const m of messages) {
+      if (m.role === "user") {
+        contents.push({ role: "user", parts: [{ text: m.content }] });
+      } else if (m.role === "assistant") {
+        const parts: any[] = [];
+        if (m.content) parts.push({ text: m.content });
+        for (const tc of m.toolCalls ?? []) {
+          idToName.set(tc.id, tc.name);
+          parts.push({ functionCall: { name: tc.name, args: tc.arguments } });
+        }
+        if (parts.length) contents.push({ role: "model", parts });
+      } else if (m.role === "tool") {
+        const name = m.toolName ?? idToName.get(m.toolCallId ?? "") ?? "tool";
+        contents.push({ role: "user", parts: [{ functionResponse: { name, response: { result: m.content } } }] });
+      }
+    }
+    const body = {
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
+      ...(tools.length ? { tools: [{ functionDeclarations: tools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })) }] } : {}),
+      generationConfig: { maxOutputTokens: this.maxTokens },
+    };
+    const url = `${this.baseUrl.replace(/\/$/, "")}/v1beta/models/${this.model}:streamGenerateContent?alt=sse`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!resp.ok || !resp.body) {
+      const text = await resp.text().catch(() => "");
+      const err: any = new Error(`Google: ${resp.status} ${text.slice(0, 200)}`);
+      err.status = resp.status;
+      throw err;
+    }
+    let text = "";
+    const toolCalls: ToolCall[] = [];
+    let stopReason: LLMResponse["stopReason"] = "stop";
+    let usage: TokenUsage | undefined;
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        let evt: any;
+        try { evt = JSON.parse(data); } catch { continue; }
+        const cand = evt.candidates?.[0];
+        for (const part of cand?.content?.parts ?? []) {
+          if (typeof part.text === "string" && part.text) {
+            text += part.text;
+            onStream?.({ type: "text", text: part.text });
+          }
+          if (part.functionCall) {
+            toolCalls.push({ id: genId(), name: part.functionCall.name, arguments: part.functionCall.args ?? {} });
+          }
+        }
+        if (cand?.finishReason === "MAX_TOKENS") stopReason = "length";
+        if (evt.usageMetadata) {
+          usage = {
+            inputTokens: evt.usageMetadata.promptTokenCount ?? 0,
+            outputTokens: evt.usageMetadata.candidatesTokenCount ?? 0,
+          };
+        }
+      }
+    }
+    if (toolCalls.length) stopReason = "tool_use";
+    return { text, toolCalls, stopReason, usage };
+  }
+}
+
 function safeJson(s: string): Record<string, any> {
   if (!s) return {};
   try { return JSON.parse(s); } catch { return { _raw: s }; }
+}
+
+/** Rough context-window sizes per model family, used to derive sane history
+ *  budgets without a tokenizer dependency (estimates stay chars/4). */
+const MODEL_CONTEXT_WINDOWS: [RegExp, number][] = [
+  [/gemini/i, 1_000_000],
+  [/claude/i, 200_000],
+  [/gpt-5/i, 272_000],
+  [/o[134](-|$)/i, 200_000],
+  [/gpt-4o|gpt-4\.1|gpt-4-turbo/i, 128_000],
+  [/llama|qwen|mistral|deepseek|phi|gemma|codestral/i, 32_000],
+];
+
+export function contextWindowFor(model: string): number {
+  for (const [re, size] of MODEL_CONTEXT_WINDOWS) {
+    if (re.test(model)) return size;
+  }
+  return 128_000;
 }
 
 function usesMaxCompletionTokens(model: string): boolean {

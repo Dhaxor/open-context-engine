@@ -23,6 +23,7 @@ function resolveActivationEmail(): string | null {
 }
 import { loadPolicy, describePolicy, policyRequiresAudit } from "../core/policy";
 import { AuditLogger, defaultAuditDir, readAuditEvents, verifyAuditChain } from "../core/audit";
+import { loadFileConfig } from "./config-file";
 
 const program = new Command();
 
@@ -46,29 +47,49 @@ function validateConfig(config: OpenContextConfig): void {
 }
 
 function resolveConfig(opts: any, o: { requireCreds?: boolean } = {}): OpenContextConfig {
-  const provider = (opts.provider || process.env.OCE_EMBEDDING_PROVIDER || "voyage") as OpenContextConfig["embedding"]["provider"];
-  const modelKey = opts.model || DEFAULT_MODEL_FOR_PROVIDER[provider] || "voyage-code-3";
   const workspace = opts.workspace || process.cwd();
+  // File config: user (~/.open-context/config.json) then workspace
+  // (.open-context/config.json). Flags and env vars always win over files.
+  const { config: file, warnings } = loadFileConfig(workspace);
+  for (const w of warnings) process.stderr.write(`⚠ config: ${w}\n`);
+  const provider = (opts.provider || process.env.OCE_EMBEDDING_PROVIDER || file.embedding?.provider || "voyage") as OpenContextConfig["embedding"]["provider"];
+  const modelKey = opts.model || file.embedding?.model || DEFAULT_MODEL_FOR_PROVIDER[provider] || "voyage-code-3";
   const modelInfo = EMBEDDING_MODELS[modelKey];
   // The registry may map a short key to a fully-qualified model id (e.g.
   // "all-MiniLM-L6-v2" → "Xenova/all-MiniLM-L6-v2"); unknown keys pass through.
   const model = modelInfo?.model ?? modelKey;
   let apiKey: string | undefined, baseUrl: string | undefined, dimension = modelInfo?.dimension ?? 1024;
   const batchSize = modelInfo?.batchSize ?? 32;
-  if (provider === "openai") { apiKey = opts.apiKey || process.env.OPENAI_API_KEY; baseUrl = opts.baseUrl; }
+  if (provider === "openai") { apiKey = opts.apiKey || process.env.OPENAI_API_KEY; baseUrl = opts.baseUrl || file.embedding?.baseUrl; }
   else if (provider === "voyage") { apiKey = opts.apiKey || process.env.VOYAGE_API_KEY; }
-  else if (provider === "ollama") { baseUrl = opts.baseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434"; }
+  else if (provider === "ollama") { baseUrl = opts.baseUrl || process.env.OLLAMA_BASE_URL || file.embedding?.baseUrl || "http://localhost:11434"; }
+  const num = (v: unknown): number | undefined => (v === undefined || v === null || v === "" ? undefined : Number(v));
   const config: OpenContextConfig = {
     workspaceRoot: workspace,
     embedding: { provider, model, apiKey, baseUrl, dimension, batchSize },
-    storePath: opts.storePath, maxFileSize: opts.maxFileSize, chunkSize: opts.chunkSize, chunkOverlap: opts.chunkOverlap,
+    storePath: opts.storePath ?? file.storePath,
+    maxFileSize: num(opts.maxFileSize) ?? file.maxFileSize,
+    chunkSize: num(opts.chunkSize) ?? file.chunkSize,
+    chunkOverlap: num(opts.chunkOverlap) ?? file.chunkOverlap,
+    ...(file.search && (file.search.topK !== undefined || file.search.minScore !== undefined)
+      ? { search: { ...(file.search.topK !== undefined ? { topK: file.search.topK } : {}), ...(file.search.minScore !== undefined ? { minScore: file.search.minScore } : {}) } }
+      : {}),
     // Cache is on for the CLI (commander's --no-embed-cache sets false).
-    embedCache: opts.embedCache !== false,
+    embedCache: opts.embedCache !== false && (file.embedCache ?? true),
   };
   // requireCreds false = the command won't embed (e.g. exporting an existing
   // index) — don't demand API keys it will never use.
   if (o.requireCreds !== false) validateConfig(config);
   return config;
+}
+
+/** The flags every store-touching command shares. */
+function withStoreOptions(cmd: import("commander").Command): import("commander").Command {
+  return cmd
+    .option("--store-path <path>", "Custom store directory (default: .open-context/)")
+    .option("--chunk-size <lines>", "Lines per chunk for non-AST files (default 80)")
+    .option("--chunk-overlap <lines>", "Overlap between chunks (default 15)")
+    .option("--max-file-size <bytes>", "Skip files larger than this (default 1 MiB)");
 }
 
 /** Embedder stand-in for commands that must open a store but never embed. */
@@ -91,7 +112,7 @@ function requireTeamIndex(command: string): void {
 
 program.name("oce").description("Open Context Engine").version("0.1.0");
 
-program.command("index").description("Index workspace").option("-w, --workspace <path>", "Workspace root", process.cwd()).option("-p, --provider <provider>", "Embedding provider").option("-m, --model <model>", "Embedding model").option("--api-key <key>", "API key").option("--incremental", "Incremental").option("--no-embed-cache", "Disable the shared embedding cache").action(async (opts) => {
+withStoreOptions(program.command("index").description("Index workspace").option("-w, --workspace <path>", "Workspace root", process.cwd()).option("-p, --provider <provider>", "Embedding provider").option("-m, --model <model>", "Embedding model").option("--api-key <key>", "API key").option("--incremental", "Incremental").option("--no-embed-cache", "Disable the shared embedding cache")).action(async (opts) => {
   const ctx = await OpenContext.create(resolveConfig(opts));
   console.log("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`));
   console.log(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
@@ -105,13 +126,34 @@ program.command("index").description("Index workspace").option("-w, --workspace 
   }
 });
 
-program.command("search <query>").description("Search codebase").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").action(async (query, opts) => { console.log(await (await OpenContext.create(resolveConfig(opts))).search(query)); });
+withStoreOptions(program.command("search <query>").description("Search codebase").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").option("-k, --top-k <n>", "Max results").option("--json", "Emit results as JSON (path, lines, score, snippet)")).action(async (query, opts) => {
+  const ctx = await OpenContext.create(resolveConfig(opts));
+  try {
+    if (opts.json) {
+      const results = await ctx.searchRaw(query, opts.topK ? Number(opts.topK) : undefined);
+      console.log(JSON.stringify(results.map(r => ({
+        path: r.chunk.path,
+        startLine: r.chunk.startLine,
+        endLine: r.chunk.endLine,
+        score: r.score,
+        vectorScore: r.vectorScore,
+        rerankScore: r.rerankScore,
+        symbol: r.chunk.symbolName,
+        snippet: r.chunk.contents.slice(0, 400),
+      })), null, 2));
+    } else {
+      console.log(await ctx.search(query));
+    }
+  } finally {
+    ctx.close();
+  }
+});
 
-program.command("mcp").description("Run MCP server (stdio by default; --http for a shared Streamable HTTP endpoint). Indexes on startup and watches for changes.")
+withStoreOptions(program.command("mcp").description("Run MCP server (stdio by default; --http for a shared Streamable HTTP endpoint). Indexes on startup and watches for changes.")
   .option("-w, --workspace <path>", "Workspace", process.cwd())
   .option("-p, --provider <provider>", "Provider")
   .option("-m, --model <model>", "Model")
-  .option("--api-key <key>", "API key")
+  .option("--api-key <key>", "API key"))
   .option("--no-watch", "Do not keep the index live (no file watching)")
   .option("--http", "Serve over Streamable HTTP instead of stdio")
   .option("--port <n>", "HTTP port (with --http)", "8940")
@@ -133,7 +175,7 @@ program.command("mcp").description("Run MCP server (stdio by default; --http for
     });
   });
 
-program.command("watch").description("Index the workspace and keep it live as files change").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").option("--no-embed-cache", "Disable the shared embedding cache").action(async (opts) => {
+withStoreOptions(program.command("watch").description("Index the workspace and keep it live as files change").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").option("--no-embed-cache", "Disable the shared embedding cache")).action(async (opts) => {
   const config = resolveConfig(opts);
   const { createLiveContext } = await import("../core/live-index");
   console.log(`Indexing ${config.workspaceRoot} ...`);
@@ -151,11 +193,14 @@ program.command("watch").description("Index the workspace and keep it live as fi
   process.on("SIGTERM", stop);
 });
 
-program.command("agent", { isDefault: true }).description("Interactive coding agent (default command — bare `oce` starts it)")
+withStoreOptions(program.command("agent", { isDefault: true }).description("Interactive coding agent (default command — bare `oce` starts it)")
   .option("-w, --workspace <path>", "Workspace", process.cwd())
-  .option("-p, --provider <provider>", "LLM provider", "openai")
+  .option("-p, --provider <provider>", "LLM provider: openai | anthropic | google | ollama | custom")
   .option("--llm-model <model>", "LLM model (default: provider-appropriate)")
-  .option("--api-key <key>", "API key")
+  .option("--llm-base-url <url>", "LLM endpoint override (custom/ollama — e.g. an LM Studio or remote Ollama URL)")
+  .option("--embedding-provider <provider>", "Embedding provider (defaults to config file / voyage — separate from the LLM provider)")
+  .option("--embedding-model <model>", "Embedding model")
+  .option("--api-key <key>", "LLM API key"))
   .option("--print <query>", "Non-interactive: answer one query and exit")
   .option("--json", "With --print: emit {answer, stats, toolCalls} as JSON")
   .option("--allow-edits", "(--print only) enable file-edit tools; interactive sessions have them behind approvals")
@@ -175,9 +220,18 @@ program.command("agent", { isDefault: true }).description("Interactive coding ag
   .option("--no-embed-cache", "Disable the shared embedding cache")
   .action(async (opts) => {
   const interactive = !opts.print;
+  // LLM settings resolve flags → config file → defaults. The LLM provider is
+  // DISTINCT from the embedding provider: `-p anthropic` used to leak into the
+  // embedding config and crash with "Unknown embedding provider".
+  const fileCfg = loadFileConfig(opts.workspace || process.cwd()).config;
+  const provider = (opts.provider || fileCfg.llm?.provider || "openai") as LLMProvider;
+  // The file's model/baseUrl only apply when the file's provider is in effect —
+  // `-p anthropic` must not inherit an Ollama model name from the file.
+  const fileLlmApplies = !opts.provider || opts.provider === fileCfg.llm?.provider;
+  opts.llmModel = opts.llmModel || (fileLlmApplies ? fileCfg.llm?.model : undefined);
+  opts.llmBaseUrl = opts.llmBaseUrl || (fileLlmApplies ? fileCfg.llm?.baseUrl : undefined);
   // Routing config is validated up front — before the (potentially long)
   // index run — so `-p google --route` fails in milliseconds, not minutes.
-  const provider = (opts.provider || "openai") as LLMProvider;
   let router: import("../agent/model-router").ModelRouter | undefined;
   if (opts.route) {
     try {
@@ -191,7 +245,9 @@ program.command("agent", { isDefault: true }).description("Interactive coding ag
       process.exit(1);
     }
   }
-  const config = resolveConfig(opts);
+  // Embedding config comes from its own flags/env/file — NOT from -p (which
+  // is the LLM provider) and NOT from --api-key (which is the LLM key).
+  const config = resolveConfig({ ...opts, provider: opts.embeddingProvider, model: opts.embeddingModel, apiKey: undefined });
   const ctx = await OpenContext.create(config);
   if (ctx.getStatus().searchMode === "keyword-only") {
     process.stderr.write(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.\n`);
@@ -218,7 +274,7 @@ program.command("agent", { isDefault: true }).description("Interactive coding ag
     const pathMod = await import("path");
     memory = new SessionMemory({ storePath: config.storePath || pathMod.join(config.workspaceRoot, ".open-context") });
   }
-  const FALLBACK_MODEL: Record<string, string> = { openai: "gpt-4o", anthropic: "claude-sonnet-4-6" };
+  const FALLBACK_MODEL: Record<string, string> = { openai: "gpt-4o", anthropic: "claude-sonnet-4-6", google: "gemini-3-flash", ollama: "llama3.1" };
   const model = opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o";
 
   // Approvals: interactive sessions get edits+shell BEHIND the approval flow
@@ -241,7 +297,7 @@ program.command("agent", { isDefault: true }).description("Interactive coding ag
     plan: opts.plan !== false ? plan : undefined,
     delegate: opts.delegate !== false ? {
       makeAgent: () => new ContextAgent({
-        provider, model, apiKey: opts.apiKey, router,
+        provider, model, apiKey: opts.apiKey, baseUrl: opts.llmBaseUrl, router,
         tools: defaultCodebaseTools(ctx),
         maxSteps: 8, compaction: "drop",
         systemPrompt: "You are a codebase research sub-agent. Investigate the brief thoroughly with your tools, then reply with a single, complete report (file paths + line ranges + key excerpts). Your reply goes to another agent, not a human.",
@@ -270,6 +326,7 @@ program.command("agent", { isDefault: true }).description("Interactive coding ag
     provider,
     model,
     apiKey: opts.apiKey,
+    baseUrl: opts.llmBaseUrl,
     tools,
     router,
     memory,
@@ -463,6 +520,67 @@ program.command("multi-search <query>").description("Search across multiple repo
     }
     console.log(await mr.searchFormatted(query, Number(opts.topK)));
     mr.close();
+  });
+
+program.command("status").description("Show index health: store, chunks, files, search mode, policy, license")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("--store-path <path>", "Custom store directory")
+  .option("--json", "Emit as JSON")
+  .action(async (opts: any) => {
+    const fs = await import("fs");
+    const pathMod = await import("path");
+    const { defaultStorePath } = await import("../core/context");
+    const config = resolveConfig(opts, { requireCreds: false });
+    config.embedder = staticEmbedder(config.embedding);
+    const storeDir = config.storePath || defaultStorePath(config.workspaceRoot);
+    const dbPath = pathMod.join(storeDir, "context.db");
+    const ctx = await OpenContext.create(config);
+    try {
+      const status = ctx.getStatus();
+      const policy = ctx.getPolicy();
+      const license = getLicense();
+      let dbSizeBytes = 0;
+      try { dbSizeBytes = fs.statSync(dbPath).size; } catch {}
+      const report = {
+        workspace: config.workspaceRoot,
+        store: { dir: storeDir, dbSizeBytes },
+        index: { chunks: ctx.getChunkCount(), searchMode: status.searchMode, ...(status.degradedReason ? { degradedReason: status.degradedReason } : {}) },
+        embedding: { provider: config.embedding.provider, model: config.embedding.model, dimension: config.embedding.dimension },
+        policy: policy ? { sources: policy.sources, locked: policy.locked, summary: describePolicy(policy) } : null,
+        license: { plan: license.plan, valid: license.valid, ...(license.payload?.org ? { org: license.payload.org } : {}) },
+      };
+      if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
+      console.log(`workspace  ${report.workspace}`);
+      console.log(`store      ${storeDir} (${(dbSizeBytes / 1e6).toFixed(1)} MB)`);
+      console.log(`index      ${report.index.chunks.toLocaleString()} chunks · ${report.index.searchMode}${status.degradedReason ? ` (${status.degradedReason})` : ""}`);
+      console.log(`embedding  ${report.embedding.provider}/${report.embedding.model} (${report.embedding.dimension}d)`);
+      console.log(`policy     ${report.policy ? report.policy.summary : "(disabled)"}`);
+      console.log(`license    ${report.license.plan}${report.license.org ? ` (${report.license.org})` : ""}`);
+    } finally {
+      ctx.close();
+    }
+  });
+
+program.command("clean").description("Delete the workspace's index store (sessions, memories, and audit logs are kept)")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("--store-path <path>", "Custom store directory")
+  .option("--yes", "Confirm deletion (required)")
+  .action(async (opts: any) => {
+    const fs = await import("fs");
+    const pathMod = await import("path");
+    const { defaultStorePath } = await import("../core/context");
+    const storeDir = opts.storePath || defaultStorePath(opts.workspace);
+    const dbPath = pathMod.join(storeDir, "context.db");
+    if (!fs.existsSync(dbPath)) { console.log(`No index database at ${dbPath}.`); return; }
+    if (!opts.yes) {
+      console.error(`This deletes the index database at ${dbPath} (a re-index rebuilds it). Re-run with --yes to confirm.`);
+      process.exit(1);
+    }
+    let removed = 0;
+    for (const suffix of ["", "-wal", "-shm", ".pre-pull"]) {
+      try { fs.unlinkSync(dbPath + suffix); removed++; } catch {}
+    }
+    console.log(`Removed ${removed} file(s) from ${storeDir}. Run 'oce index' to rebuild.`);
   });
 
 program.command("push-index <dest>").description("Export the index as an artifact and publish it — Team feature. <dest> is a file path or HTTP(S) URL (PUT; presigned S3/GCS URLs work).")

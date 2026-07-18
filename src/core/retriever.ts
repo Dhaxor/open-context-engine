@@ -8,6 +8,9 @@ import { RecencyScores, applyRecencyBoost } from "./git-recency";
 import { expandQuery } from "./query-expander";
 import { QueryCache } from "./query-cache";
 import { GraphExpander } from "./graph-expander";
+import { createLogger, errText } from "./log";
+
+const log = createLogger("retriever");
 
 export interface RetrieveOptions {
   pathPrefix?: string;
@@ -16,6 +19,11 @@ export interface RetrieveOptions {
   activePath?: string;
   openPaths?: string[];
   contextText?: string;
+  /** Incremental-stage callback: invoked the moment each pipeline stage's
+   *  results exist (bm25 → vector → fused → reranked). BM25 fires before the
+   *  query embedding round-trip, so consumers get first results in
+   *  milliseconds. See StreamingRetriever for the async-iterator wrapper. */
+  onStage?: (stage: "bm25" | "vector" | "fused" | "reranked", results: SearchResult[]) => void;
 }
 
 export interface RetrievalDebugItem {
@@ -76,13 +84,30 @@ export class HybridRetriever {
 
   async retrieve(query: string, opts: RetrieveOptions = {}): Promise<SearchResult[]> {
     const ranked = await this.rank(query, opts);
-    const trimmed = ranked.results.slice(0, ranked.finalK);
+    const trimmed = this.applyMinScore(ranked.results).slice(0, ranked.finalK);
     if (!(opts.expandSymbols ?? this.search.expandSymbols ?? true)) return trimmed;
     if (this.graphExpander) {
       const { results } = this.graphExpander.expand(trimmed, query);
       return results;
     }
     return this.expandResults(trimmed, query).results;
+  }
+
+  /**
+   * Relevance floor (SearchConfig.minScore). RRF fusion scores live on a
+   * ~1/60 scale, so the floor deliberately applies to the BOUNDED per-result
+   * relevance signals instead: the reranker's 0..1 relevance when present,
+   * else vector cosine SIMILARITY (vectorScore stores sqlite-vec's cosine
+   * distance, so similarity = 1 - distance). Keyword-only results (unbounded
+   * BM25, no vector) are never floored — no comparable scale to cut on.
+   */
+  private applyMinScore(results: SearchResult[]): SearchResult[] {
+    const floor = this.search.minScore ?? 0;
+    if (floor <= 0) return results;
+    return results.filter(r => {
+      const relevance = r.rerankScore ?? (r.vectorScore !== undefined ? 1 - r.vectorScore : undefined);
+      return relevance === undefined || relevance >= floor;
+    });
   }
 
   async retrieveDebug(query: string, opts: RetrieveOptions = {}): Promise<RetrievalDebugReport> {
@@ -116,6 +141,11 @@ export class HybridRetriever {
     const { original, expanded } = expandQuery(query);
     const vectorQuery = expanded;
 
+    // BM25 first: it's a synchronous local SQLite query, so streaming
+    // consumers see their first results before the (network) query embed.
+    const bm25Hits = this.store.bm25Search(original, candidateK, opts.pathPrefix);
+    opts.onStage?.("bm25", bm25Hits);
+
     // Keyword-only mode (sqlite-vec unavailable): the short-circuit must come
     // BEFORE the query embed — an empty vectorSearch alone would still spend
     // (or crash on) an embedding call that has nothing to consume it.
@@ -128,7 +158,7 @@ export class HybridRetriever {
       }
       vectorHits = this.store.vectorSearch(queryVec, candidateK, opts.pathPrefix);
     }
-    const bm25Hits = this.store.bm25Search(original, candidateK, opts.pathPrefix);
+    opts.onStage?.("vector", vectorHits);
 
     let fused = applyEditorContextBoost(applySymbolAwareBoost(reciprocalRankFusion(
       [
@@ -141,6 +171,7 @@ export class HybridRetriever {
     if (this.recency) {
       fused = applyRecencyBoost(fused, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
     }
+    opts.onStage?.("fused", fused);
 
     let results = fused;
     if (this.reranker && (this.search.rerank ?? true) && results.length > 1) {
@@ -151,13 +182,12 @@ export class HybridRetriever {
           if (this.recency) {
             results = applyRecencyBoost(results, this.recency, this.search.recencyWeight ?? 0.3) as SearchResult[];
           }
+          opts.onStage?.("reranked", results);
         }
       } catch (err) {
         // A reranker outage must not take down search — fall back to the fused
         // (vector + BM25 + boost) ordering, which is already good.
-        if (process.env.OPEN_CONTEXT_DEBUG) {
-          console.error(`Reranker failed; using fused results. ${err instanceof Error ? err.message : String(err)}`);
-        }
+        log.info("reranker failed; using fused order", { error: errText(err) });
       }
     }
     return { vectorHits, bm25Hits, fused, results, finalK };

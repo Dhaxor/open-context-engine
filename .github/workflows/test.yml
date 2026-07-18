@@ -21,14 +21,24 @@ permissions:
 
 jobs:
   test:
-    name: Vitest + core typecheck
-    runs-on: ubuntu-22.04
+    # Native deps (better-sqlite3, sqlite-vec) are the #1 documented failure
+    # class — test where users actually run, not just one Linux image.
+    name: Vitest + core typecheck (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+        node: ["22.16.0"]
+        include:
+          - os: ubuntu-22.04
+            node: "20"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          # Same pin as release-vsix.yml — bump them together.
-          node-version: "22.16.0"
+          # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
+          node-version: ${{ matrix.node }}
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run

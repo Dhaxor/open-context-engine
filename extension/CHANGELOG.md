@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Security hardening.** Every agent-reachable filesystem/exec surface is now workspace-contained (`read-file`, edit tools, shell `cwd` — `../../etc/passwd` and absolute-path escapes are refused); shell commands run with a **scrubbed environment** (API keys/tokens/secrets never reach child processes); the credential blocklist now covers `.env*`, `.npmrc`, `.netrc`, `.git-credentials`, `secrets.*`, tfstate, and everything under `.aws/`/`.ssh/`/`.kube/`/`.gnupg/`, and `read-file` refuses credential-like files outright.
+- **Google + Ollama agent LLMs.** Selecting Google no longer throws at runtime — a native Gemini streaming caller (tools, usage) ships; new `ollama` provider runs the agent fully offline against a local model. History budgets now derive from each model's real context window.
+- **Local reranker.** `reranker: { provider: "local" }` runs a cross-encoder in-process via the optional `@huggingface/transformers` dep — the full retrieval pipeline (embed + BM25 + rerank) now works with zero cloud keys.
+- **Robustness.** Embedding/rerank HTTP calls carry hard timeouts and honor `Retry-After`; SQLite gets `busy_timeout` so the CLI and extension can share a store without SQLITE_BUSY crashes; oversized files are rejected by `stat` before being read into memory; the `search.minScore` setting is now actually enforced (as a bounded relevance floor).
+- **Real streaming retrieval.** `StreamingRetriever.retrieveWithStages` now yields stages as they happen — BM25 results arrive before the query embedding round-trip even starts.
+- **CLI: config file + new commands.** `~/.open-context/config.json` and `<ws>/.open-context/config.json` (flags/env still win; API keys in files are rejected); `oce status`, `oce clean --yes`, `oce search --json`; `--store-path/--chunk-size/--chunk-overlap/--max-file-size` are now real flags on every store command. Fixed: `oce agent -p anthropic` no longer crashes (LLM vs embedding provider fully separated; new `--embedding-provider/--embedding-model`).
+- **Structured logging.** `OCE_LOG=debug|info|error|silent` (+ `OCE_LOG_FORMAT=json`) replaces silent `catch {}` swallows in graph extraction, git state, grammar loading, and reranker fallback. Local stderr only — still zero telemetry.
+- **CI/release.** Tests now run on Linux/macOS/Windows × Node 20/22; Dependabot + CodeQL enabled; npm publishing automated on version tags.
+
 - **Reworked `oce` CLI into an interactive coding agent.** Bare `oce` now launches a full REPL: streamed styled output, live tool-call lines with timing, inline diff/command previews with `y`/`a`/`n` approvals, and slash commands (`/help` `/compact` `/plan` `/diff` `/usage` `/mode` `/sessions` `/resume` …). Approval modes `--auto-edit` / `--full-auto`, session persistence with `--continue` / `--resume`, and `--print [--json]` for scripting.
 - **Harness upgraded toward best-in-class:** model-summarized history compaction (with drop-oldest fallback), a live plan/todo tool, sub-agent delegation for broad explorations, environment context (platform/git/index) in the system prompt, and a composable permission system (suggest / auto-edit / full-auto).
 

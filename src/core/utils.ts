@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import * as nodePath from "path";
 
 export function sha256(data: string | Buffer): string { return createHash("sha256").update(data).digest("hex"); }
 
@@ -31,8 +32,36 @@ export function isBinaryContent(contents: string | Buffer): boolean {
   return isBinaryBuffer(typeof contents === "string" ? Buffer.from(contents, "utf8") : contents);
 }
 
-const KEYISH = [/\.pem$/i, /\.key$/i, /\.pfx$/i, /\.p12$/i, /\.jks$/i, /\.keystore$/i, /\.pkcs12$/i, /\.crt$/i, /\.cer$/i, /^id_rsa$/, /^id_ed25519$/, /^id_ecdsa$/, /^id_dsa$/];
-export function isKeyishPath(p: string): boolean { const b = p.split("/").pop() || ""; return KEYISH.some(r => r.test(b)); }
+const KEYISH = [
+  /\.pem$/i, /\.key$/i, /\.pfx$/i, /\.p12$/i, /\.jks$/i, /\.keystore$/i, /\.pkcs12$/i, /\.crt$/i, /\.cer$/i,
+  /^id_rsa$/, /^id_ed25519$/, /^id_ecdsa$/, /^id_dsa$/,
+  // Credential dotfiles and secret stores — never index these.
+  /^\.env(\..+)?$/i, /^\.npmrc$/, /^\.netrc$/i, /^\.pgpass$/, /^\.htpasswd$/, /^\.git-credentials$/,
+  /^credentials$/i, /\.tfstate(\.backup)?$/, /^secrets?\.(json|ya?ml|toml|properties)$/i,
+];
+/** Directories whose entire contents are credential material. */
+const KEYISH_DIRS = new Set([".aws", ".ssh", ".gnupg", ".kube", ".docker"]);
+export function isKeyishPath(p: string): boolean {
+  const segments = p.split("/");
+  const b = segments.pop() || "";
+  if (segments.some(s => KEYISH_DIRS.has(s.toLowerCase()))) return true;
+  return KEYISH.some(r => r.test(b));
+}
+
+/**
+ * Resolve `p` (relative or absolute) against `root` and REQUIRE the result to
+ * stay inside `root`. This is the single containment primitive for every
+ * agent-facing filesystem surface — read-file, the edit tools, and the shell
+ * tool's cwd all funnel through it so `../../etc/passwd` (or an absolute
+ * path) cannot escape the workspace.
+ */
+export function resolveInside(root: string, p: string): string {
+  const absRoot = nodePath.resolve(root);
+  const abs = nodePath.resolve(absRoot, p);
+  const rel = nodePath.relative(absRoot, abs);
+  if (rel === "" || (!rel.startsWith("..") && !nodePath.isAbsolute(rel))) return abs;
+  throw new Error(`Path escapes the workspace: ${p}`);
+}
 export function formatResults(results: import("./types").SearchResult[]): string {
   if (!results.length) return "No results found.";
   return results.map(r => {

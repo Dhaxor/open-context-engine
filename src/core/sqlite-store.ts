@@ -178,6 +178,10 @@ export class SqliteStore {
       this.db.pragma("journal_mode = WAL");
       this.db.pragma("synchronous = NORMAL");
       this.db.pragma("foreign_keys = ON");
+      // The CLI and the extension can hold the same store open; WAL allows
+      // concurrent readers but writers need a grace period instead of an
+      // instant SQLITE_BUSY throw.
+      this.db.pragma("busy_timeout = 5000");
     } catch (err) {
       // better-sqlite3 itself failed — nothing can work. Stay fatal.
       throw nativeBindingError(err);

@@ -17,6 +17,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
+import { createLogger, errText } from "./log";
+
+const astLog = createLogger("tree-sitter");
 import type {
   Parser as TsParser,
   Language as TsLanguage,
@@ -76,7 +79,7 @@ export async function loadLanguage(name: string): Promise<TsLanguage | null> {
         const bytes = await fs.promises.readFile(wasmPath);
         return await mod.Language.load(bytes);
       } catch (err) {
-        if (process.env.OPEN_CONTEXT_DEBUG) console.error(`tree-sitter: failed to load ${name}:`, err);
+        astLog.debug(`failed to load grammar '${name}'`, { error: errText(err) });
         return null;
       }
     })();
@@ -129,7 +132,7 @@ export class ParserPool {
     try {
       tree = parser.parse(contents);
     } catch (err) {
-      if (process.env.OPEN_CONTEXT_DEBUG) console.error(`tree-sitter: parse error on ${filePath}:`, err);
+      astLog.debug(`parse error on ${filePath}`, { error: errText(err) });
       return null;
     }
     if (!tree) return null;

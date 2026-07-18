@@ -371,12 +371,14 @@
             "openai",
             "anthropic",
             "google",
+            "ollama",
             "custom"
           ],
           "enumDescriptions": [
             "OpenAI (GPT-5.4, GPT-5 Codex, GPT-5)",
             "Anthropic (Claude Opus 4.7, Sonnet 4.6, Haiku 4.5)",
             "Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5)",
+            "Ollama — fully local, no API key (llama3.1, qwen2.5-coder, …)",
             "Custom OpenAI-compatible endpoint (OpenRouter, LM Studio, etc.)"
           ],
           "default": "openai",

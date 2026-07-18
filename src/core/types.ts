@@ -63,7 +63,7 @@ export interface FreshnessReport {
   git: { indexed?: GitState; current: GitState; changed: boolean };
 }
 export interface EmbeddingConfig { provider: "openai" | "voyage" | "ollama" | "local"; model: string; apiKey?: string; baseUrl?: string; dimension: number; batchSize: number; }
-export interface RerankerConfig { provider: "voyage" | "cohere" | "none"; model?: string; apiKey?: string; baseUrl?: string; }
+export interface RerankerConfig { provider: "voyage" | "cohere" | "local" | "none"; model?: string; apiKey?: string; baseUrl?: string; }
 export interface SearchConfig {
   topK: number;
   maxOutputLength: number;
