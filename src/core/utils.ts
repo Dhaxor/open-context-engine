@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import * as fs from "fs";
 import * as nodePath from "path";
 
 export function sha256(data: string | Buffer): string { return createHash("sha256").update(data).digest("hex"); }
@@ -48,19 +49,55 @@ export function isKeyishPath(p: string): boolean {
   return KEYISH.some(r => r.test(b));
 }
 
+export class PathOutsideWorkspaceError extends Error {
+  constructor(inputPath: string) {
+    super(`Path outside workspace: ${inputPath}`);
+    this.name = "PathOutsideWorkspaceError";
+  }
+}
+
+function isInsidePath(root: string, candidate: string): boolean {
+  const rel = nodePath.relative(root, candidate);
+  return rel === "" || (!rel.startsWith("..") && !nodePath.isAbsolute(rel));
+}
+
+function deepestExistingPath(abs: string): string | null {
+  let cur = abs;
+  while (true) {
+    if (fs.existsSync(cur)) return cur;
+    const parent = nodePath.dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
 /**
- * Resolve `p` (relative or absolute) against `root` and REQUIRE the result to
- * stay inside `root`. This is the single containment primitive for every
- * agent-facing filesystem surface — read-file, the edit tools, and the shell
- * tool's cwd all funnel through it so `../../etc/passwd` (or an absolute
- * path) cannot escape the workspace.
+ * Resolve a model/user supplied workspace-relative path and require that both
+ * its normalized lexical path and its real path (for existing files or existing
+ * parent directories) remain inside the workspace. Absolute paths and `..`
+ * traversal are rejected even when they would resolve back into the workspace.
  */
+export function resolveWorkspacePath(workspaceRoot: string, relPath: string): string {
+  if (nodePath.isAbsolute(relPath)) throw new PathOutsideWorkspaceError(relPath);
+  if (relPath.split(/[\\/]+/).includes("..")) throw new PathOutsideWorkspaceError(relPath);
+
+  const normalized = nodePath.normalize(relPath);
+  const absRoot = nodePath.resolve(workspaceRoot);
+  const abs = nodePath.resolve(absRoot, normalized);
+  if (!isInsidePath(absRoot, abs)) throw new PathOutsideWorkspaceError(relPath);
+
+  const existing = deepestExistingPath(abs);
+  if (existing) {
+    const realRoot = fs.realpathSync.native(absRoot);
+    const realExisting = fs.realpathSync.native(existing);
+    if (!isInsidePath(realRoot, realExisting)) throw new PathOutsideWorkspaceError(relPath);
+  }
+  return abs;
+}
+
+/** @deprecated Use resolveWorkspacePath for agent/tool user paths. */
 export function resolveInside(root: string, p: string): string {
-  const absRoot = nodePath.resolve(root);
-  const abs = nodePath.resolve(absRoot, p);
-  const rel = nodePath.relative(absRoot, abs);
-  if (rel === "" || (!rel.startsWith("..") && !nodePath.isAbsolute(rel))) return abs;
-  throw new Error(`Path escapes the workspace: ${p}`);
+  return resolveWorkspacePath(root, p);
 }
 export function formatResults(results: import("./types").SearchResult[]): string {
   if (!results.length) return "No results found.";

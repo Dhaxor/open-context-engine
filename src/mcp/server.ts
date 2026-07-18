@@ -58,9 +58,12 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
     try {
       audit("read-file", { path: p.path, start_line: p.start_line, end_line: p.end_line });
       const c = await context.readFile(p.path, p.start_line, p.end_line);
-      return c === null
-        ? { content: [{ type: "text" as const, text: `Not found: ${p.path}` }], isError: true }
-        : { content: [{ type: "text" as const, text: c }] };
+      if (c === null) return { content: [{ type: "text" as const, text: `Not found: ${p.path}` }], isError: true };
+      const isPathOutsideWorkspace = c.includes("path is outside the workspace");
+      return {
+        content: [{ type: "text" as const, text: c }],
+        ...(isPathOutsideWorkspace ? { isError: true } : {}),
+      };
     } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
   });
 

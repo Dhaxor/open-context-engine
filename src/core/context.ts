@@ -6,7 +6,7 @@ import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
 import { AstChunker } from "./ast-chunker";
 import { FileFilter } from "./file-filter";
-import { computeBlobName, isBinaryBuffer, isKeyishPath, resolveInside } from "./utils";
+import { computeBlobName, isBinaryBuffer, isKeyishPath, resolveWorkspacePath } from "./utils";
 import { formatSearchOutput } from "./search";
 import { HybridRetriever, RetrievalDebugReport, RetrieveOptions } from "./retriever";
 import { Reranker, createReranker } from "./reranker";
@@ -427,7 +427,7 @@ export class OpenContext {
       // Containment: agent-reachable — must not read outside the workspace.
       let fullPath: string;
       try {
-        fullPath = resolveInside(this.workspaceRoot, filePath);
+        fullPath = resolveWorkspacePath(this.workspaceRoot, filePath);
       } catch {
         return `Cannot read '${filePath}': path is outside the workspace.`;
       }
