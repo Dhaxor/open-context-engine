@@ -34,7 +34,7 @@ jobs:
           - os: ubuntu-22.04
             node: "20"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
@@ -47,7 +47,7 @@ jobs:
     name: Extension typecheck
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "22.16.0"
