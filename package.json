@@ -11,9 +11,16 @@
     "prepare": "npm run build",
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "typecheck": "npm run typecheck:core && npm run typecheck:extension",
+    "test": "npm run test:core && npm run test:extension",
+    "test:watch": "vitest",
+    "typecheck:core": "tsc --noEmit",
+    "typecheck:extension": "npm --prefix extension run typecheck",
+    "test:core": "vitest run",
+    "test:extension": "npm --prefix extension run test",
+    "verify:core": "npm run typecheck:core && npm run test:core",
+    "verify:extension": "npm --prefix extension run verify",
+    "verify": "npm run verify:core && npm run verify:extension"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
