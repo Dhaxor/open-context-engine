@@ -35,7 +35,7 @@ jobs:
             node: "20"
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
           node-version: ${{ matrix.node }}
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.16.0"
       # Extension tsc resolves imports from BOTH dependency trees: it
