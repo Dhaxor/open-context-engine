@@ -537,7 +537,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
-    "chokidar": "^4.0.3",
+    "chokidar": "^5.0.0",
     "highlight.js": "^11.11.1",
     "ignore": "^6.0.0",
     "markdown-it": "^14.2.0",
