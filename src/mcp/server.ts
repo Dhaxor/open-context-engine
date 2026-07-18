@@ -8,6 +8,7 @@ import { liveIndex } from "../core/live-index";
 import { FileWatcher } from "../core/file-watcher";
 import { AuditLogger } from "../core/audit";
 import { renderDefinition, renderReference } from "../agent/agent";
+import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
 
 export interface CreateMCPServerOptions {
   /** When set, every MCP tool invocation is appended to the audit log. */
@@ -137,7 +138,10 @@ export interface RunMCPServerOptions {
  *  pattern — sharing one transport across clients corrupts the handshake).
  *  Tool registration is cheap; the heavy state (the index) lives in the shared
  *  OpenContext the factory closes over. Exported for tests. */
-export async function startHttpServer(serverFactory: () => Promise<McpServer>, opts: HttpTransportOptions, log: (m: string) => void): Promise<http.Server> {
+export async function startHttpServer(serverFactory: () => Promise<McpServer>, opts: HttpTransportOptions, diagnosticsOrLog: Diagnostics | ((message: string) => void)): Promise<http.Server> {
+  const diagnostics: Diagnostics = typeof diagnosticsOrLog === "function"
+    ? { info: diagnosticsOrLog, warn: diagnosticsOrLog, error: diagnosticsOrLog, debug: diagnosticsOrLog, progress: diagnosticsOrLog }
+    : diagnosticsOrLog;
   // Lazy import: stdio users never pay for the HTTP transport.
   const { StreamableHTTPServerTransport } = await import("@modelcontextprotocol/sdk/server/streamableHttp.js");
 
@@ -166,7 +170,7 @@ export async function startHttpServer(serverFactory: () => Promise<McpServer>, o
       await server.connect(transport);
       await transport.handleRequest(req, res, body);
     } catch (e: any) {
-      log(`http error: ${e?.message ?? e}`);
+      diagnostics.error(`http error: ${e?.message ?? e}`);
       if (!res.headersSent) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Internal error" }));
@@ -181,19 +185,19 @@ export async function startHttpServer(serverFactory: () => Promise<McpServer>, o
     httpServer.once("error", reject);
     httpServer.listen(opts.port, host, () => resolve());
   });
-  log(`listening on http://${host}:${opts.port} (Streamable HTTP)${opts.authToken ? " — bearer auth required" : ""}`);
+  diagnostics.info(`listening on http://${host}:${opts.port} (Streamable HTTP)${opts.authToken ? " — bearer auth required" : ""}`);
   return httpServer;
 }
 
 export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServerOptions = {}): Promise<void> {
   const ctx = await OpenContext.create(config);
-  const log = (m: string) => process.stderr.write(`[open-context] ${m}\n`);
+  const diagnostics = createMcpStderrDiagnostics();
 
   // Connect before indexing so the MCP initialize handshake isn't blocked by a
   // potentially slow first index. stdout is the protocol channel — all logs go to stderr.
   let httpServer: http.Server | null = null;
   if (opts.http) {
-    httpServer = await startHttpServer(() => createMCPServer(ctx, { audit: opts.audit }), opts.http, log);
+    httpServer = await startHttpServer(() => createMCPServer(ctx, { audit: opts.audit }), opts.http, diagnostics);
   } else {
     const server = await createMCPServer(ctx, { audit: opts.audit });
     await server.connect(new StdioServerTransport());
@@ -205,7 +209,7 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
   {
     const status = ctx.getStatus();
     if (status.searchMode === "keyword-only") {
-      log(`WARNING: sqlite-vec unavailable — running keyword-only (BM25) search without semantic ranking. ${status.degradedReason ?? ""}`);
+      diagnostics.warn(`WARNING: sqlite-vec unavailable — running keyword-only (BM25) search without semantic ranking. ${status.degradedReason ?? ""}`);
     }
   }
 
@@ -225,13 +229,13 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
   // Bring the index up to date and keep it live, without blocking startup.
   void liveIndex(ctx, config, {
     watch: opts.watch ?? true,
-    onReindex: (r) => log(`reindexed: +${r.newlyIndexed.length} ~${r.removed.length} removed (${r.duration}ms)${r.failed?.length ? ` — ${r.failed.length} FAILED to embed (will retry next index): ${r.failedReason ?? ""}` : ""}`),
-    onError: (e) => log(`watch error: ${e.message}`),
+    onReindex: (r) => diagnostics.info(`reindexed: +${r.newlyIndexed.length} ~${r.removed.length} removed (${r.duration}ms)${r.failed?.length ? ` — ${r.failed.length} FAILED to embed (will retry next index): ${r.failedReason ?? ""}` : ""}`),
+    onError: (e) => diagnostics.error(`watch error: ${e.message}`),
   })
     .then(({ result, watcher: w }) => {
       watcher = w;
-      log(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
-      if (result.failed?.length) log(`WARNING: ${result.failed.length} file(s) failed to embed — they will be retried on the next index. ${result.failedReason ?? ""}`);
+      diagnostics.info(`index ready: ${ctx.getChunkCount()} chunks across ${result.newlyIndexed.length + result.alreadyIndexed.length} files${w ? "; watching for changes" : ""}`);
+      if (result.failed?.length) diagnostics.warn(`WARNING: ${result.failed.length} file(s) failed to embed — they will be retried on the next index. ${result.failedReason ?? ""}`);
     })
-    .catch((e) => log(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));
+    .catch((e) => diagnostics.error(`initial index failed: ${e instanceof Error ? e.message : String(e)}`));
 }
