@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Context Engine — your codebase, indexed. Nothing leaves the machine.</title>
+<meta name="description" content="Local-first code retrieval and coding agent. Hybrid semantic + keyword search over your codebase, served to any AI via MCP — with a fully offline mode. MIT core.">
+<meta property="og:title" content="Open Context Engine">
+<meta property="og:description" content="Local-first code retrieval for AI. recall@10 0.977 · 13 languages · fully offline mode. MIT core.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#retrieval">Product</a>
+      <a href="#local" class="optional">Local-first</a>
+      <a href="#team">Team</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g open-context-engine" aria-label="Copy install command">
+      npm i -g open-context-engine <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <div class="hero-grid">
+      <div>
+        <h1>Your codebase, indexed.<br>Your AI, grounded.<br><span class="dim">Nothing leaves the machine.</span></h1>
+        <p class="sub">Open Context Engine turns any repo into a searchable knowledge base for AI — hybrid semantic + keyword retrieval, AST-aware chunking, and a code graph, served to Claude, Cursor, or its own coding agent over MCP. Local-first, MIT core.</p>
+        <div class="hero-ctas">
+          <button class="btn btn-primary" data-copy="npm install -g open-context-engine">Copy install command</button>
+          <a class="btn btn-ghost" href="pricing.html">Team pricing</a>
+        </div>
+        <div class="hero-stats num" aria-label="Measured retrieval quality">
+          <span class="stat"><span class="k">recall@10</span><span class="v">0.977</span></span>
+          <span class="stat"><span class="k">nDCG@10</span><span class="v">0.812</span></span>
+          <span class="stat"><span class="k">mean latency</span><span class="v">251<em>ms</em></span></span>
+          <span class="stat"><span class="k">languages</span><span class="v">13</span></span>
+          <span class="stat"><span class="k">tests</span><span class="v">450</span></span>
+        </div>
+      </div>
+      <div class="term reveal" role="img" aria-label="An oce agent session answering a codebase question with retrieved files">
+        <div class="term-bar"><span>~/acme/monorepo — oce</span><span class="hint">⌃C interrupts · /help</span></div>
+        <div class="term-body"><pre><span class="t-faint">Open Context · code-native agent</span>
+<span class="t-faint">index      12,481 chunks · hybrid</span>
+<span class="t-faint">approvals  suggest</span>
+
+<span class="t-p">›</span> <span class="t-in">where do we validate webhook signatures?</span>
+  <span class="t-ok">✓</span> <span class="t-in">codebase-retrieval</span> <span class="t-dim">webhook signature validation · 0.3s</span>
+  <span class="t-ok">✓</span> <span class="t-in">read-file</span> <span class="t-dim">billing/src/verify.ts:41-63 · 0.1s</span>
+
+Signatures are verified in <span class="t-p">verifySignature()</span> —
+HMAC-SHA256 over <span class="t-dim">id.timestamp.payload</span> with a
+constant-time compare. Called from the webhook
+route before any parsing:
+
+<span class="t-dim">╭── ts billing/src/verify.ts</span>
+<span class="t-dim">│</span> <span class="t-in">export function verifySignature(sig, raw) {</span>
+<span class="t-dim">│</span>   <span class="t-in">const mac = hmac(secret, raw);</span>
+<span class="t-dim">│</span>   <span class="t-in">return timingSafeEqual(mac, sig);</span>
+<span class="t-dim">╰──</span>
+
+<span class="t-faint">1 step · 2 tools · 4,120→96 tok · 3.8s</span>
+<span class="t-p">›</span> <span class="t-caret">▍</span></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="retrieval">
+    <div class="wrap">
+      <div class="chunk reveal">src/core/retriever.ts:1-180 <span class="score">0.98</span></div>
+      <h2 class="reveal">Retrieval that ranks like it means it</h2>
+      <p class="lede reveal">One query fans out across dense vectors and BM25, fuses with reciprocal-rank fusion, reranks, then expands along the code graph — so callers and callees ride along with every hit.</p>
+      <div class="results">
+        <div class="result reveal"><span class="rank num">01</span><h3>Hybrid search</h3><p>Vector similarity and porter-stemmed keyword search run together and fuse — semantically relevant and lexically precise, in one ranking.</p><span class="score num">0.977</span></div>
+        <div class="result reveal"><span class="rank num">02</span><h3>AST-aware chunking</h3><p>Tree-sitter splits code along real boundaries — functions, classes, methods — across TypeScript, Python, Go, Rust, Java, C#, C, C++, Ruby, PHP, Kotlin, and Swift.</p><span class="score num">13 langs</span></div>
+        <div class="result reveal"><span class="rank num">03</span><h3>Code graph expansion</h3><p>Import, call, and inheritance edges are extracted at index time. Top results pull in their callers and definitions automatically.</p><span class="score num">3 edge kinds</span></div>
+        <div class="result reveal"><span class="rank num">04</span><h3>Streaming stages</h3><p>Keyword hits stream back before the query embedding round-trip even starts. UIs paint first results in milliseconds and refine as stages land.</p><span class="score num">&lt;5ms first</span></div>
+        <div class="result reveal"><span class="rank num">05</span><h3>Measured, not guessed</h3><p>A committed gold set scores every ranking change: recall, MRR, nDCG, context-recall — with before/after deltas in CI. Run <code>oce eval</code> on your own repo.</p><span class="score num">44 cases</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="agent">
+    <div class="wrap">
+      <div class="chunk reveal">src/cli/repl.ts:1-273 <span class="score">0.96</span></div>
+      <h2 class="reveal">A coding agent that asks before it acts</h2>
+      <p class="lede reveal">Bare <code>oce</code> opens a full agent REPL grounded in your index — plans its steps, delegates broad research to sub-agents, and shows a diff preview with an approval prompt before any edit or shell command runs.</p>
+      <div class="duo">
+        <div class="card reveal">
+          <h3>Approvals, three speeds</h3>
+          <p>Default asks on every mutation. <code>--auto-edit</code> lets file edits through and still gates shell. <code>--full-auto</code> for containers. Workspace policies cap all of it.</p>
+          <div class="mono-block"><pre><span class="t-dim">┌─ edit src/auth.ts ───────────────</span>
+<span class="t-dim">│</span> <span style="color:var(--del)">- return user.length > 0;</span>
+<span class="t-dim">│</span> <span style="color:var(--ok)">+ return validateSession(user);</span>
+<span class="t-dim">└──────────────────────────────────</span>
+<span class="t-warn">approve?</span> <span class="t-dim">[y]es · [a]lways · [n]o:</span> <span class="t-caret">▍</span></pre></div>
+        </div>
+        <div class="card reveal">
+          <h3>Context that survives long sessions</h3>
+          <p>History over budget gets condensed by the model into a context note — decisions and file paths survive, raw tool dumps don't. Sessions persist; <code>--continue</code> picks up where you left off.</p>
+          <div class="mono-block"><pre><span class="t-dim">✂ compacted 31 messages into a context note</span>
+<span class="t-p">›</span> <span class="t-in">/plan</span>
+<span class="t-ok">✔</span> <span class="t-dim">find the double-charge path</span>
+<span style="color:var(--warn)">▸</span> <span class="t-in">add idempotency key to retries</span>
+<span class="t-faint">○ backfill test for webhook replays</span></pre></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="local">
+    <div class="wrap">
+      <div class="chunk reveal">docs/local-first.md:1-38 <span class="score">0.97</span></div>
+      <h2 class="reveal">Fully local, provably</h2>
+      <p class="lede reveal">Air-gapped is a supported mode, not a degraded one. Every stage of the stack has an in-process or self-hosted option — no API key anywhere in the loop.</p>
+      <div class="duo">
+        <div class="card reveal" style="grid-column: 1 / -1;">
+          <table class="matrix">
+            <thead><tr><th>stage</th><th>cloud option</th><th>fully local option</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>Embeddings</td><td>Voyage · OpenAI</td><td>in-process ONNX or Ollama</td><td class="yes">✓ offline</td></tr>
+              <tr><td>Keyword search</td><td>—</td><td>SQLite FTS5, always local</td><td class="yes">✓ offline</td></tr>
+              <tr><td>Reranking</td><td>Voyage · Cohere</td><td>in-process cross-encoder</td><td class="yes">✓ offline</td></tr>
+              <tr><td>Agent LLM</td><td>Anthropic · OpenAI · Google</td><td>Ollama / any OpenAI-compatible</td><td class="yes">✓ offline</td></tr>
+              <tr><td>Index storage</td><td>—</td><td>local SQLite + sqlite-vec</td><td class="yes">✓ offline</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="team">
+    <div class="wrap">
+      <div class="chunk reveal">src/core/index-artifact.ts:1-168 <span class="score">0.95</span></div>
+      <h2 class="reveal">One embedding bill for the whole team</h2>
+      <p class="lede reveal">Index once in CI, publish the artifact to storage you control — S3, GCS, a shared drive — and every teammate pulls it. Only their local diff re-embeds. A content-hash cache means identical code never bills twice.</p>
+      <div class="duo">
+        <div class="card reveal">
+          <h3>Push from CI</h3>
+          <div class="mono-block"><pre><span class="t-dim">$</span> <span class="t-in">oce push-index s3://acme/oce/main.db.gz</span>
+<span class="t-dim">Published: 12,481 chunks · 1,904 files
+· commit ab12cd34</span></pre></div>
+        </div>
+        <div class="card reveal">
+          <h3>Pull everywhere</h3>
+          <div class="mono-block"><pre><span class="t-dim">$</span> <span class="t-in">oce pull-index s3://acme/oce/main.db.gz</span>
+<span class="t-dim">Installed team index.
+Reconciled: <span class="t-ok">3 files re-embedded</span>,
+1,901 reused from the artifact</span></pre></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="trust">
+    <div class="wrap">
+      <div class="chunk reveal">src/core/audit.ts:1-203 <span class="score">0.94</span></div>
+      <h2 class="reveal">Built to pass procurement</h2>
+      <p class="lede reveal">Org-signed policies your developers can't loosen. A hash-chained audit log where tampering is detectable, not deniable. Offline Ed25519 licenses that verify without phoning home.</p>
+      <div class="hashchain reveal" aria-hidden="true"><span>9f2a1c04</span><i></i><span>c77e0b12</span><i></i><span>4d91ee38</span><i></i><span>a05b7f90</span></div>
+      <div class="duo" style="margin-top: 0;">
+        <div class="card reveal">
+          <h3>Policy locks</h3>
+          <p>Commit a policy file: disable shell, pin command allowlists, force local-only embeddings, exclude paths. Team orgs get Ed25519-signed locks that flags can't override.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Tamper-evident audit</h3>
+          <p>Every run, tool call, and MCP invocation appends to a hash chain. <code>oce audit --verify</code> pinpoints any alteration, deletion, or reorder. Local file — your data stays yours.</p>
+        </div>
+        <div class="card reveal">
+          <h3>Sandboxed by default</h3>
+          <p>Workspace containment on every file surface, scrubbed environments for shell commands, credential files blocked from the index outright. Zero telemetry — verifiable in the MIT source.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="connect">
+    <div class="wrap">
+      <div class="chunk reveal">src/mcp/server.ts:1-149 <span class="score">0.93</span></div>
+      <h2 class="reveal">Speaks MCP natively</h2>
+      <p class="lede reveal">Six retrieval and symbol tools over stdio for Claude Desktop, Claude Code, and Cursor — or a shared Streamable-HTTP endpoint with bearer auth for the whole team. A VS Code extension ships the same engine with chat, edit review, and index health.</p>
+      <div class="duo">
+        <div class="card reveal">
+          <h3>Claude / Cursor</h3>
+          <div class="mono-block"><pre>{ <span class="t-dim">"mcpServers"</span>: { <span class="t-dim">"open-context"</span>: {
+    <span class="t-dim">"command"</span>: <span class="t-in">"oce"</span>,
+    <span class="t-dim">"args"</span>: [<span class="t-in">"mcp"</span>] } } }</pre></div>
+        </div>
+        <div class="card reveal">
+          <h3>Team endpoint</h3>
+          <div class="mono-block"><pre><span class="t-dim">$</span> <span class="t-in">oce mcp --http --auth-token $TOKEN</span>
+<span class="t-dim">listening on http://127.0.0.1:8940
+bearer auth · /health · watching</span></pre></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pricing-cta">
+    <div class="wrap" style="text-align: center;">
+      <h2 class="reveal">Free for individuals. $25 per seat for teams.</h2>
+      <p class="lede reveal" style="margin-left: auto; margin-right: auto;">The engine is MIT — index, search, MCP, and the agent are free forever. Teams pay for shared indexes, the embedding cache, policy locks, and multi-repo search.</p>
+      <div class="hero-ctas reveal" style="justify-content: center;">
+        <a class="btn btn-primary" href="pricing.html">See pricing</a>
+        <a class="btn btn-ghost" href="https://github.com/Dhaxor/open-context-engine">Read the source</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="#retrieval">Retrieval</a>
+        <a href="#agent">Agent</a>
+        <a href="#local">Local-first</a>
+        <a href="pricing.html">Pricing</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://github.com/Dhaxor/open-context-engine#-quick-start">Quick start</a>
+        <a href="https://www.npmjs.com/package/open-context-engine">npm</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

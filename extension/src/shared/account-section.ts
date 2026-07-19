@@ -1,7 +1,7 @@
 import { icon } from "../chat/webview/icons";
 import { esc } from "../chat/webview/render";
 
-export const GET_TEAM_URL = "https://opencontext.dev/pricing";
+export const GET_TEAM_URL = "https://opencontextengine.com/pricing.html";
 
 export type LicenseStatus = {
   plan?: string;
