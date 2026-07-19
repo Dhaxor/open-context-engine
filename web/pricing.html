@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing — Open Context Engine</title>
+<meta name="description" content="Open Context Engine pricing. MIT core free forever; Team $25/seat/month for shared indexes and policy locks; Enterprise for SSO, audit, and org controls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/#local" class="optional">Local-first</a>
+      <a href="/#team">Team</a>
+      <a href="pricing.html" style="color: var(--ink);">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g open-context-engine" aria-label="Copy install command">
+      npm i -g open-context-engine <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">business/pricing.md:1-64 <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Licenses, not lock-in</h1>
+    <p class="sub">Every license is an offline-verifiable Ed25519 token. Activation never phones home, air-gapped installs are first-class, and the engine itself is MIT — you are never renting your own index back.</p>
+
+    <div class="plans">
+      <div class="plan reveal">
+        <span class="tier">Community</span>
+        <div class="price">$0 <em>· MIT, forever</em></div>
+        <ul class="spec">
+          <li class="hl">Full engine: hybrid retrieval, AST chunking, code graph</li>
+          <li class="hl">Agent REPL with approvals, plans, sessions</li>
+          <li>MCP server (stdio + HTTP) for Claude and Cursor</li>
+          <li>VS Code extension</li>
+          <li>Fully-offline mode: local embeddings, rerank, Ollama LLM</li>
+          <li>Single-workspace indexes, personal embedding cache</li>
+        </ul>
+        <a class="btn btn-ghost" href="https://github.com/Dhaxor/open-context-engine#-quick-start">Install free</a>
+        <span class="fineprint">npm install -g open-context-engine</span>
+      </div>
+
+      <div class="plan featured reveal">
+        <span class="tier">Team</span>
+        <div class="price num">$25 <em>/ seat / month</em></div>
+        <ul class="spec">
+          <li>Everything in Community, plus:</li>
+          <li class="hl">Team index sync — index once in CI, everyone pulls</li>
+          <li class="hl">Shared embedding cache — identical code never bills twice</li>
+          <li class="hl">Multi-repo search across local checkouts</li>
+          <li class="hl">Org-signed policy locks developers can't loosen</li>
+          <li>Priority fixes and direct support</li>
+        </ul>
+        <!-- TODO(polar): replace href with the Polar checkout link for the Team product -->
+        <a class="btn btn-primary" href="mailto:hello@opencontextengine.com?subject=Open%20Context%20Team">Start a team</a>
+        <span class="fineprint">seats verified offline · licenses expire ≤ 1yr, renewals re-issue</span>
+      </div>
+
+      <div class="plan reveal">
+        <span class="tier">Enterprise</span>
+        <div class="price">Custom <em>· annual</em></div>
+        <ul class="spec">
+          <li>Everything in Team, plus:</li>
+          <li class="hl">Tamper-evident audit log with <code>oce audit --verify</code></li>
+          <li class="hl">SSO-bound licenses (org-domain activation)</li>
+          <li class="hl">Revocation lists for offboarding</li>
+          <li>Air-gapped deployment support</li>
+          <li>Security review support and a signed vendor questionnaire</li>
+        </ul>
+        <a class="btn btn-ghost" href="mailto:hello@opencontextengine.com?subject=Open%20Context%20Enterprise">Talk to us</a>
+        <span class="fineprint">from $15k / year</span>
+      </div>
+    </div>
+
+    <div class="hashchain" aria-hidden="true" style="margin-top: var(--s8);"><span>ed25519</span><i></i><span>offline-verified</span><i></i><span>no phone-home</span></div>
+
+    <div class="duo" style="margin-top: 0; padding-bottom: var(--s12);">
+      <div class="card reveal">
+        <h3>How activation works</h3>
+        <p>You get a signed token by email. Run <code>oce activate &lt;token&gt;</code> — verification happens locally against an embedded public key. No account, no server round-trip, works air-gapped.</p>
+      </div>
+      <div class="card reveal">
+        <h3>Why per-seat is honest here</h3>
+        <p>Seats are in the signed license and enforcement is honor-based by design — your procurement can audit it in the source. We'd rather be verifiable than adversarial.</p>
+      </div>
+      <div class="card reveal">
+        <h3>Try Team risk-free</h3>
+        <p>Email us for a 14-day trial license — full Team features, no card. If it doesn't save your team its price in embedding spend alone, don't buy it.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/open-context-engine">npm</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>
