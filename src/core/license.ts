@@ -18,7 +18,7 @@ import * as path from "path";
 /** Ed25519 public key (base64 SPKI DER) that license tokens are verified against.
  *  Generate your own with `node scripts/license-tool.mjs generate-keys` and paste it here;
  *  keep the matching private key secret. */
-const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEA9GbEuFu++amEVa/eDfTaC/fLZPExt5HNi+dLua5QFoQ=";
+const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEANybrLf3Rpvaxc78/z6W/BbTZHtJV0ys12BTMPp5lggw=";
 
 /** Days a subscription license keeps working past `exp` — absorbs renewal lag, clock skew,
  *  and brief offline gaps so a single missed day never bricks an air-gapped install. */
