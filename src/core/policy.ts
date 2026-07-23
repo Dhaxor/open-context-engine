@@ -150,7 +150,7 @@ export interface VerifySignedPolicyOptions {
 
 /** Same embedded key the license gate uses — the vendor signs org policy locks
  *  at issuance time, exactly like license tokens. Kept in sync with license.ts. */
-const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEA9GbEuFu++amEVa/eDfTaC/fLZPExt5HNi+dLua5QFoQ=";
+const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEANybrLf3Rpvaxc78/z6W/BbTZHtJV0ys12BTMPp5lggw=";
 
 /** Verify a signed policy token (`base64url(json).base64url(sig)`). Returns
  *  the payload, or null (with a reason pushed to warnings) on any failure. */
