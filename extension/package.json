@@ -1,13 +1,22 @@
 {
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
-  "description": "AI-powered codebase indexing, semantic search, and context-aware chat",
-  "version": "0.2.0",
+  "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
+  "version": "0.3.0",
   "publisher": "open-context",
   "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0A0D12",
+    "theme": "dark"
+  },
+  "homepage": "https://opencontextengine.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/Dhaxor/open-context-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dhaxor/open-context-engine/issues"
   },
   "engines": {
     "vscode": "^1.103.0"
@@ -22,7 +31,10 @@
     "code indexing",
     "AI",
     "embeddings",
-    "RAG"
+    "RAG",
+    "mcp",
+    "copilot alternative",
+    "local-first"
   ],
   "activationEvents": [
     "onStartupFinished"

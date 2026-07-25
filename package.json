@@ -1,12 +1,45 @@
 {
   "name": "open-context-engine",
-  "version": "0.1.0",
-  "description": "Context engine for codebase indexing and retrieval",
+  "version": "0.3.0",
+  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "oce": "dist/cli/index.js"
   },
+  "license": "MIT",
+  "author": "Gain (https://github.com/dhaxor)",
+  "homepage": "https://opencontextengine.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dhaxor/open-context-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dhaxor/open-context-engine/issues"
+  },
+  "keywords": [
+    "code-search",
+    "semantic-search",
+    "embeddings",
+    "rag",
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "coding-agent",
+    "tree-sitter",
+    "sqlite-vec",
+    "local-first",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "!dist/**/*.map"
+  ],
   "scripts": {
     "prepare": "npm run build",
     "build": "tsc",
@@ -15,7 +48,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
-    "preview": "wrangler dev"
+    "preview": "wrangler dev",
+    "prepublishOnly": "npm run typecheck && npm run test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

@@ -28,6 +28,14 @@ billing/
 debug-*.js
 debug-*.ts
 scratch/
+# Local operator scripts (_check_ci.sh, _claude_*.sh, …). These are personal
+# workflow helpers, never product code — and `files` in package.json keeps them
+# out of the npm tarball regardless.
+_*.sh
+_*.py
+_*.mjs
+_*.json
+_*.txt
 
 # Logs
 *.log
