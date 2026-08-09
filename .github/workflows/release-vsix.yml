@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Use Node.js 22.16.0
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           # Pinned exact: setup-node's "22.x" floats with new releases, which
           # broke deterministic builds before. Bump in lockstep with @electron/
@@ -213,7 +213,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.16.0"
 
