@@ -525,26 +525,26 @@
     "verify-vsix": "node ./scripts/verify-vsix.mjs"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
+    "@electron/rebuild": "^4.2.0",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.103.0",
+    "@types/vscode": "^1.125.0",
     "@vscode/vsce": "^3.6.0",
     "electron": "42.3.0",
-    "esbuild": "^0.24.0",
-    "node-abi": "^4.12.0",
+    "esbuild": "^0.28.2",
+    "node-abi": "^4.33.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
-    "highlight.js": "^11.11.1",
+    "highlight.js": "^11.12.0",
     "ignore": "^6.0.0",
     "markdown-it": "^14.2.0",
-    "minimatch": "^10.0.0",
+    "minimatch": "^10.2.6",
     "openai": "^4.70.0",
     "sqlite-vec": "^0.1.9",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.25.10"
+    "web-tree-sitter": "^0.26.12"
   }
 }
