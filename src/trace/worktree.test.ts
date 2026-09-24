@@ -263,7 +263,9 @@ describe("WorktreeManager", () => {
     });
     const list = await wt.list();
     expect(list).toHaveLength(2);
-    expect(list[0]).toMatchObject({ path: "/repo", branch: "main", main: true });
-    expect(list[1]).toMatchObject({ path: "/tmp/wt-detached", branch: undefined, main: false });
+    // Paths come back normalised to native form: "/repo" on POSIX, "<drive>:\repo"
+    // on Windows — the same form path.join produces, so lookups compare equal.
+    expect(list[0]).toMatchObject({ path: path.resolve("/repo"), branch: "main", main: true });
+    expect(list[1]).toMatchObject({ path: path.resolve("/tmp/wt-detached"), branch: undefined, main: false });
   });
 });

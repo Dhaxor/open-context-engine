@@ -87,7 +87,7 @@ export async function startTraceServer(opts: TraceServerOptions): Promise<TraceS
 
   const server = http.createServer((req, res) => {
     void handle(req, res).catch(err => {
-      const message = String(err?.message ?? err);
+      const message = failureMessage(err);
       log(`trace server error: ${message}`);
       // The real reason, not "Internal error". This endpoint is loopback-only
       // and token-gated, so there is nobody to leak it to — and an opaque 500
@@ -235,8 +235,8 @@ export async function startTraceServer(opts: TraceServerOptions): Promise<TraceS
         try {
           await s.rewind(hash);
           return sendJson(res, 200, { rewound: true });
-        } catch (err: any) {
-          return sendJson(res, 409, { error: String(err?.message ?? err) });
+        } catch (err) {
+          return sendJson(res, 409, { error: failureMessage(err) });
         }
       }
       case "/api/mode": {
@@ -251,8 +251,8 @@ export async function startTraceServer(opts: TraceServerOptions): Promise<TraceS
         try {
           await s.compact();
           return sendJson(res, 200, { compacted: true });
-        } catch (err: any) {
-          return sendJson(res, 500, { error: String(err?.message ?? err) });
+        } catch (err) {
+          return sendJson(res, 500, { error: failureMessage(err) });
         }
       case "/api/shell": {
         const command = String(body?.command ?? "").trim();
@@ -293,8 +293,8 @@ export async function startTraceServer(opts: TraceServerOptions): Promise<TraceS
           // 202 even on a failed start: the entry exists and carries the reason,
           // which is more useful to render than a bare error.
           return sendJson(res, 202, { id: entry.id, status: entry.status, error: entry.error });
-        } catch (err: any) {
-          return sendJson(res, 409, { error: String(err?.message ?? err) });
+        } catch (err) {
+          return sendJson(res, 409, { error: failureMessage(err) });
         }
       }
       case "review": {
@@ -376,6 +376,14 @@ function soloSummary(session: TraceSession) {
     turn: meta.turn,
     active: true,
   };
+}
+
+/**
+ * What a client is told about a failure: an Error's message and nothing else.
+ * Never the stack, and never a thrown non-Error, which can carry anything.
+ */
+function failureMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unexpected error";
 }
 
 function sendMethodNotAllowed(res: http.ServerResponse): void {
