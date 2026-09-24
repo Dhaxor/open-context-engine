@@ -11,10 +11,10 @@ application menu, `trace://` deep links, and remembered window bounds.
 ## Why Electron
 
 The index is a native SQLite handle (`better-sqlite3` + `sqlite-vec`) that has
-to live in the same process as the server. Electron hosts that directly, and
-this repo already rebuilds `better-sqlite3` against the Electron ABI for the VS
-Code extension. A Rust shell would need Node shipped alongside it as a sidecar
-process purely to hold the database open.
+to live in the same process as the server. Electron hosts that directly — the
+VS Code extension already runs the same `better-sqlite3` inside Electron. A
+Rust shell would need Node shipped alongside it as a sidecar process purely to
+hold the database open.
 
 ## Run it
 

@@ -179,8 +179,11 @@ export class SqliteStore {
     // incremental indexing skip embedding forever once vectors come back.
     if (this.vectorStateChanged()) {
       const mode = this._vectorAvailable ? "vector" : "keyword-only";
-      // A fallback to keyword-only must not cost someone their embeddings.
-      if (this.opts.keywordOnly === "fallback" && !this.opts.readOnly) {
+      // A fallback to keyword-only must not cost someone their embeddings. A
+      // vector-stamped store with no chunks has none to lose: the stamp lands
+      // on open, so a first index that failed without a key leaves exactly
+      // that behind, and refusing it would lock the user out of keyword search.
+      if (this.opts.keywordOnly === "fallback" && !this.opts.readOnly && this.hasIndexedChunks()) {
         this.db.close();
         throw new KeywordFallbackRefusedError();
       }
@@ -288,6 +291,16 @@ export class SqliteStore {
    *  API key will ever be used before constructing an engine. */
   static sqliteVecResolvable(): boolean {
     try { sqliteVecExtensionPath(); return true; } catch { return false; }
+  }
+
+  /** Whether the store holds any indexed chunk. `chunks` is a plain table, so
+   *  this works whether or not sqlite-vec is loaded. */
+  private hasIndexedChunks(): boolean {
+    try {
+      return this.db.prepare("SELECT 1 FROM chunks LIMIT 1").get() !== undefined;
+    } catch {
+      return false; // no chunks table yet — nothing indexed
+    }
   }
 
   /** True when the persisted index was built in a different vector/keyword

@@ -10,7 +10,7 @@ import { VSCodeEditApplier } from "../services/VSCodeEditApplier";
 import { SearchResult } from "../../../src/core/types";
 import { EditProposal } from "../../../src/agent/types";
 import { unifiedDiff } from "../../../src/core/diff";
-import { buildConfigPayload, defaultModelFor, handleConfigMessage } from "../shared/open-context-config";
+import { buildConfigPayload, handleConfigMessage, resolveLLMModel } from "../shared/open-context-config";
 import { SettingsPanel } from "../settings/SettingsPanel";
 
 type ChatMode = "agent" | "search";
@@ -311,7 +311,7 @@ export class ChatView implements vscode.WebviewViewProvider {
         if (this._sessionId) return this._sessionId;
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<string>("llm.provider", "openai");
-        const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
+        const model = resolveLLMModel(cfg, provider);
         const s = this._history.create(provider, model);
         this._setSessionId(s.id);
         return s.id;
@@ -341,7 +341,7 @@ export class ChatView implements vscode.WebviewViewProvider {
     private _sendModelInfo(): void {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<string>("llm.provider", "openai");
-        const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
+        const model = resolveLLMModel(cfg, provider);
         this._view?.webview.postMessage({ type: "model", provider, model });
     }
 

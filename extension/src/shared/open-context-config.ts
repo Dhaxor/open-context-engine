@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 import { ContextService } from "../services/ContextService";
+import { defaultModelFor, resolveEmbeddingModel, resolveLLMModel } from "./model-settings";
+
+export { defaultModelFor, resolveEmbeddingModel, resolveLLMModel };
 
 export interface OpenContextConfigPayload {
   type: "config";
@@ -14,21 +17,13 @@ export interface OpenContextConfigPayload {
   indexWorkspaceRoot: string;
 }
 
-export function defaultModelFor(provider: string): string {
-  if (provider === "anthropic") return "claude-opus-4-7";
-  if (provider === "openai") return "gpt-5.4";
-  if (provider === "google") return "gemini-3.1-pro-preview";
-  if (provider === "custom") return "";
-  return provider;
-}
-
 export async function buildConfigPayload(): Promise<OpenContextConfigPayload> {
   const cfg = vscode.workspace.getConfiguration("openContext");
   const provider = cfg.get<string>("llm.provider", "openai");
-  const model = cfg.get<string>("llm.model", "") || defaultModelFor(provider);
+  const model = resolveLLMModel(cfg, provider);
   const baseUrl = cfg.get<string>("llm.baseUrl", "");
   const embeddingProvider = cfg.get<string>("embedding.provider", "voyage");
-  const embeddingModel = cfg.get<string>("embedding.model", "");
+  const embeddingModel = resolveEmbeddingModel(cfg, embeddingProvider);
   const svc = ContextService.getInstance();
   const hasKey: Record<string, boolean> = {
     openai: await svc.hasLLMApiKey("openai"),

@@ -31,12 +31,16 @@ code you actually have.
 2. With no embedding key, search runs on keyword ranking and works straight
    away.
 3. For semantic search, run **Open Context: Set Embedding API Key** with a
-   Voyage key (the default, `voyage-code-3`) or an OpenAI key. For free local
+   Voyage key — Voyage (`voyage-code-3`) is the default provider. To use
+   OpenAI instead, set `openContext.embedding.provider` to `openai` first; the
+   key is stored for whichever provider is selected. For free local
    embeddings, run `ollama pull nomic-embed-text` and set
-   `openContext.embedding.provider` to `ollama`.
+   `openContext.embedding.provider` to `ollama` — no key needed. Each provider
+   uses its own default model unless you set `openContext.embedding.model`.
 4. For chat, pick `openContext.llm.provider` — OpenAI, Anthropic, Google,
    Ollama, or any OpenAI-compatible endpoint via `custom` — and run
-   **Open Context: Set LLM API Key**.
+   **Open Context: Set LLM API Key**, or choose both from the chat's model
+   picker.
 
 Keys are kept in VS Code's SecretStorage.
 

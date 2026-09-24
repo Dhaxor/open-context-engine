@@ -383,9 +383,26 @@ describe("SqliteStore keyword-only by choice", () => {
     const dir = await tmp();
     const vectors = new SqliteStore(dir, DIM);
     await vectors.initialize();
+    vectors.add(makeChunk("a"));
     vectors.close();
     const fallback = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
     await expect(fallback.initialize()).rejects.toThrow(/oce setup/);
+  });
+
+  it("rebuilds a vector-stamped store with no chunks — there are no embeddings to lose", async () => {
+    const dir = await tmp();
+    // The mode is stamped on open, so a first index that failed for want of a
+    // key leaves a vector-stamped but empty store behind.
+    const failedFirstRun = new SqliteStore(dir, DIM);
+    await failedFirstRun.initialize();
+    failedFirstRun.close();
+
+    const fallback = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await fallback.initialize();
+    expect(fallback.isVectorAvailable()).toBe(false);
+    fallback.add(makeChunk("parser", { contents: "function parseConfigFile() {}", vector: undefined }));
+    expect(fallback.bm25Search("parseConfigFile", 5).map(h => h.chunk.id)).toEqual(["parser"]);
+    fallback.close();
   });
 
   it("lets an explicit choice transition a vector index like any mode change", async () => {

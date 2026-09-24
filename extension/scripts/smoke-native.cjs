@@ -16,7 +16,9 @@ const os = require("os");
 const path = require("path");
 const { createRequire } = require("module");
 
-const root = path.resolve(process.argv[2] || path.join(__dirname, ".."));
+// realpath: module resolution returns real paths, and on macOS the temp dir
+// (/var/...) is a symlink to /private/var/..., which garbles relative labels.
+const root = fs.realpathSync(path.resolve(process.argv[2] || path.join(__dirname, "..")));
 const runtime = process.versions.electron ? `Electron ${process.versions.electron}` : `Node ${process.versions.node}`;
 const where = `${runtime}, ABI ${process.versions.modules}, ${process.platform}-${process.arch}`;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oce-smoke-"));

@@ -21,6 +21,19 @@ let outputChannel: vscode.OutputChannel | undefined;
  *  the user could never see, which is why "indexing silently failed" was the
  *  first-run experience for paying customers on mismatched VS Code builds. */
 function reportIndexingError(err: unknown): void {
+  if (err instanceof Error && err.name === "KeywordFallbackRefusedError") {
+    // The store holds embeddings built with a key that is no longer set. The
+    // core refuses to wipe them for a keyword-only fallback; its message names
+    // CLI commands, so say it the extension's way.
+    outputChannel?.appendLine(`[${new Date().toISOString()}] ${err.message}`);
+    vscode.window.showWarningMessage(
+      "Open Context: this workspace's index was built with semantic search, but no embedding API key is set. Set the key it was built with to keep using it.",
+      "Set API Key",
+    ).then((pick) => {
+      if (pick === "Set API Key") void vscode.commands.executeCommand("openContext.setEmbeddingApiKey");
+    });
+    return;
+  }
   const diag = classifyNativeBindingError(err);
   outputChannel?.appendLine("");
   outputChannel?.appendLine(`[${new Date().toISOString()}] ${diag.title}`);
@@ -50,6 +63,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // is the host (musl, old glibc, wrong arch), and it deserves a clear error.
     const binding = ensureNativeBinding();
     outputChannel.appendLine(`[${new Date().toISOString()}] native binding: ${binding.detail} (ABI ${binding.abi})`);
+    // The loader's own error (dlopen text, .node path, stack): what anyone
+    // debugging an inert extension actually needs.
+    if (binding.raw) outputChannel.appendLine(binding.raw);
     if (!binding.ok) {
         vscode.window.showErrorMessage(`Open Context Engine cannot start — ${binding.detail}`, "Open Output").then((pick) => {
             if (pick === "Open Output") outputChannel?.show(true);
@@ -102,6 +118,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             outputChannel?.appendLine(`[${new Date().toISOString()}] watch reindex: ${result.failed.length} file(s) failed to embed (will retry on next index). ${result.failedReason ?? ""}`);
         }
         void refreshStatus();
+    }));
+    context.subscriptions.push(svc.onEmbeddingKeyChanged((hasKey) => {
+        // Every key-save path lands here — the command, the settings panel,
+        // the chat's key form. A new key reopens the store empty in vector
+        // mode, so rebuild it now instead of leaving search empty until files
+        // change.
+        if (hasKey) void vscode.commands.executeCommand("openContext.indexWorkspace");
+        else void refreshStatus();
     }));
 
     const restartWatching = async () => {
@@ -299,13 +323,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.setEmbeddingApiKey", async () => {
-            const value = await vscode.window.showInputBox({ prompt: "Embedding API key (stored securely via VS Code SecretStorage)", password: true });
+            // The key belongs to whichever provider is selected, so name it.
+            const provider = vscode.workspace.getConfiguration("openContext").get<string>("embedding.provider", "voyage");
+            const label = ({ voyage: "Voyage", openai: "OpenAI" } as Record<string, string>)[provider] ?? provider;
+            const value = await vscode.window.showInputBox({
+                prompt: `${label} embedding API key (stored in VS Code SecretStorage). To use another provider, change openContext.embedding.provider first.`,
+                password: true,
+            });
             if (value === undefined) return;
+            // setEmbeddingApiKey fires onEmbeddingKeyChanged, which re-indexes.
             await svc.setEmbeddingApiKey(value);
-            vscode.window.showInformationMessage(value ? "Embedding API key saved — re-indexing with semantic search." : "Embedding API key cleared.");
-            // A new key moves the index from keyword-only to vectors; rebuild it now
-            // rather than leaving search keyword-only until the next change.
-            if (value) void vscode.commands.executeCommand("openContext.indexWorkspace");
+            vscode.window.showInformationMessage(value ? `${label} key saved — re-indexing with semantic search.` : "Embedding API key cleared.");
         }),
 
         vscode.commands.registerCommand("openContext.setLLMApiKey", async () => {
@@ -370,12 +398,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     if (!context.globalState.get<boolean>("openContext.noKeyNoticeShown")) {
                         await context.globalState.update("openContext.noKeyNoticeShown", true);
                         vscode.window.showInformationMessage(
-                            "Open Context: indexed with keyword search. Set an embedding API key (Voyage or OpenAI) for semantic search, or choose Ollama in settings for free local embeddings.",
+                            "Open Context: indexed with keyword search. For semantic search, set a Voyage API key, or choose another embedding provider — OpenAI, or Ollama for free local embeddings.",
                             "Set API Key",
-                            "Settings",
+                            "Choose Provider",
                         ).then((pick) => {
                             if (pick === "Set API Key") void vscode.commands.executeCommand("openContext.setEmbeddingApiKey");
-                            else if (pick === "Settings") void vscode.commands.executeCommand("openContext.openSettings");
+                            else if (pick === "Choose Provider") void vscode.commands.executeCommand("workbench.action.openSettings", "openContext.embedding");
                         });
                     }
                 } else if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {

@@ -83,5 +83,5 @@ node_modules/tree-sitter-wasms/out/*.wasm
 !node_modules/openai/**
 # tree-sitter-wasms deliberately has NO broad negation — vsce negations are
 # not order-sensitive (a `!pkg/**` would re-include every grammar and defeat
-# the *.wasm prune above). Only package.json + the 8 grammar negations ship.
+# the *.wasm prune above). Only package.json + the 14 grammar negations ship.
 !node_modules/tree-sitter-wasms/package.json

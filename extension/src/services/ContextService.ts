@@ -8,6 +8,7 @@ import { classifyNativeBindingError, diagnosisOneLiner } from "../../../src/core
 import { OpenContextConfig, EmbeddingConfig, IndexingResult, EMBEDDING_MODELS, SearchResult, FreshnessReport } from "../../../src/core/types";
 import { RetrievalDebugReport, RetrieveOptions } from "../../../src/core/retriever";
 import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, isEntitled } from "../../../src/core/license";
+import { resolveEmbeddingModel } from "../shared/model-settings";
 
 export interface LicenseStatusView { valid: boolean; plan: string; reason: string; inGrace: boolean; daysLeft?: number; org?: string; seats?: number; exp?: number; }
 
@@ -44,13 +45,6 @@ export interface IndexHealthReport {
     notes: string[];
 }
 
-const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
-    openai: "text-embedding-3-small",
-    voyage: "voyage-code-3",
-    ollama: "nomic-embed-text",
-    local: "jina-embeddings-v2-base-code",
-};
-
 export class ContextService implements vscode.Disposable {
     private static _instance: ContextService;
     private _context: OpenContext | null = null;
@@ -60,6 +54,13 @@ export class ContextService implements vscode.Disposable {
     private _onReindex = new vscode.EventEmitter<IndexingResult>();
     private _lastIndexError: string | undefined;
     readonly onReindex = this._onReindex.event;
+    /** Fires after the embedding key is saved (true) or cleared (false), from
+     *  any path: the command, the settings panel, or the chat's key form. */
+    private _onEmbeddingKeyChanged = new vscode.EventEmitter<boolean>();
+    readonly onEmbeddingKeyChanged = this._onEmbeddingKeyChanged.event;
+    /** Bumped whenever the open contexts are closed. Anything that captured an
+     *  OpenContext (the chat agent's tools) compares it to know it is stale. */
+    private _generation = 0;
 
     private constructor() {}
 
@@ -261,6 +262,13 @@ export class ContextService implements vscode.Disposable {
         const watching = this._watcher !== null;
         await this.dispose();
         if (watching) await this.startWatching().catch(() => {});
+        // The store rebuilds empty in the new mode, so it needs a full index —
+        // the watcher only picks up files as they change.
+        this._onEmbeddingKeyChanged.fire(Boolean(value));
+    }
+
+    public getContextGeneration(): number {
+        return this._generation;
     }
 
     public async setLLMApiKey(value: string, provider?: string): Promise<void> {
@@ -363,6 +371,7 @@ export class ContextService implements vscode.Disposable {
 
     public async dispose(): Promise<void> {
         await this.stopWatching();
+        this._generation++;
         this._context?.close();
         this._context = null;
         for (const c of this._multiContexts.values()) { try { c.close(); } catch {} }
@@ -378,7 +387,9 @@ export class ContextService implements vscode.Disposable {
     private async getConfigForPath(workspaceRoot: string): Promise<OpenContextConfig> {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<"openai" | "voyage" | "ollama" | "local">("embedding.provider", "voyage");
-        const modelKey = cfg.get<string>("embedding.model", DEFAULT_MODEL_BY_PROVIDER[provider] ?? "voyage-code-3");
+        // Not cfg.get: package.json's default ("voyage-code-3") would follow the
+        // user into any other provider they pick.
+        const modelKey = resolveEmbeddingModel(cfg, provider);
         const modelInfo = EMBEDDING_MODELS[modelKey];
         // Registry keys may map to fully-qualified model ids (local ONNX models do).
         const model = modelInfo?.model ?? modelKey;

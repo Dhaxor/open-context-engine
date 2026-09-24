@@ -9,6 +9,7 @@ import { AuditLogger, defaultAuditDir } from "../../../src/core/audit";
 import { policyRequiresAudit } from "../../../src/core/policy";
 import { getLicense, isEntitled } from "../../../src/core/license";
 import { VSCodeEditApplier } from "./VSCodeEditApplier";
+import { resolveLLMModel } from "../shared/model-settings";
 
 export interface ToolCallInfo {
     id: string;
@@ -112,7 +113,9 @@ export class AgentService {
     private async ensureAgent(events: AgentEvents): Promise<ContextAgent> {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<LLMProvider>("llm.provider", "openai");
-        const model = cfg.get<string>("llm.model", "") || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
+        // Not cfg.get: package.json's default ("gpt-5.4") would follow the user
+        // into any other provider picked in settings.json.
+        const model = resolveLLMModel(cfg, provider) || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
         const baseUrl = cfg.get<string>("llm.baseUrl", "") || undefined;
         const svc = ContextService.getInstance();
         // Ollama runs locally and needs no key; the SDK just wants a non-empty string.
@@ -142,11 +145,17 @@ export class AgentService {
             else this.warnOnce("openContext.agent.audit.enabled needs an Enterprise license — audit logging stays off. Run 'oce license' to check.");
         }
         const key = `${provider}|${model}|${baseUrl ?? ""}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
-        const cacheKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}|audit=${auditOn}`;
+        const agentKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}|audit=${auditOn}`;
+        // The tools capture `ctx`, so a reopened store (an embedding key saved,
+        // settings changed) needs a new agent even when nothing else changed —
+        // the old one would query a closed database and find nothing.
+        const cacheKey = `${agentKey}|ctx=${svc.getContextGeneration()}`;
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
+        // Only the store changed: keep the conversation.
+        const carried = this.agent && this.currentAgentKey === agentKey ? this.agent.exportSession() : undefined;
         let router: ModelRouter | undefined;
         if (routingEnabled && (provider === "openai" || provider === "anthropic")) {
             router = new ModelRouter(defaultRoutingConfig(provider, {
@@ -188,9 +197,15 @@ export class AgentService {
                 onPolicyBlock: (cap, reason) => this.warnOnce(`Workspace policy: ${reason}.`),
             }),
         });
+        if (carried) {
+            try { this.agent.importSession(carried); } catch { /* start fresh rather than fail the turn */ }
+        }
         this.currentProviderKey = cacheKey;
+        this.currentAgentKey = agentKey;
         return this.agent;
     }
+
+    private currentAgentKey: string | null = null;
 
     private editForwarder?: (edit: EditProposal) => void;
     private warned = new Set<string>();

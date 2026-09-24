@@ -3,6 +3,8 @@
 ## 0.4.0
 
 - **Works on VS Code 1.139, and on every Electron after it.** VS Code 1.139 moved to Electron 43, and the per-ABI SQLite bindings this extension shipped (up to Electron 42) did not match it. The extension now uses better-sqlite3 13, a Node-API addon: one binary per platform loads in every Electron VS Code runs extensions in, and in plain Node on remote hosts (SSH, WSL, Codespaces). A new Electron in VS Code no longer needs a new extension build.
+- **Works with no embedding key.** A fresh install indexes with keyword search and says so once, instead of failing with a misleading native-binding error. Saving a Voyage or OpenAI key — from the command, the settings panel, or the chat — rebuilds the index with semantic search, and the chat keeps its conversation. An index built with a key that is later removed is kept, not wiped, and the extension asks for the key.
+- **Picking a provider picks its model.** Switching `openContext.embedding.provider` or `openContext.llm.provider` in settings now uses that provider's default model, instead of carrying over `voyage-code-3` or `gpt-5.4`.
 - **Six more languages get AST-aware chunking in the extension.** The C, C++, Ruby, PHP, Kotlin, and Swift grammars now ship in the VSIX. The engine supported them, but the extension left their grammars out and fell back to line-based chunking.
 - **Linux needs glibc 2.34+** (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer), the floor of the new binding's prebuild. On an older host, activation says so instead of failing mid-index.
 - **A smaller VSIX:** one native SQLite binding per platform instead of five.
@@ -28,9 +30,7 @@
 - **Embedding cache (on by default).** Vectors are cached by content hash in `~/.open-context/embed-cache.db`, shared across repos and branches — identical code never embeds (or bills) twice. Disable with `openContext.embedding.cache.enabled`.
 - **Team index sync (Team license, CLI).** `oce push-index` publishes the index as an artifact; `oce pull-index` installs it and re-embeds only the local diff. Pairs with the embedding cache for a one-embedding-bill-per-team story.
 
-- **Electron 42 (ABI 146) is now bundled.** VS Code 1.122+ / current Cursor builds that report the Electron ABI can load `better-sqlite3` again. Requires `better-sqlite3@^12.11.1` (V8 14 / Electron 42 compile fixes).
-
-- **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.35 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
+- **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.34 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
 
 ## 0.2.0
 
