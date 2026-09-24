@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 extension/node_modules/
+desktop/node_modules/
+# package-lock.json is the tracked lockfile — every CI job runs `npm ci`.
+# Installing with another package manager writes a second lockfile that then
+# drifts silently from it, so those are ignored rather than committed.
+pnpm-lock.yaml
+yarn.lock
 
 # Build output
 dist/
@@ -10,9 +16,6 @@ dist/
 .open-context/
 
 # Environment / secrets
-.env
-.env.*
-!.env.example
 
 # Internal commercialization docs + license SIGNING KEYS (never commit; keep private)
 business/
@@ -49,6 +52,11 @@ Thumbs.db
 .vscode/settings.json
 .vscode/launch.json
 .idea/
+# Local agent tooling state (preview launch config, local settings, scratch media)
+.claude/
+
+# Desktop app packaging output
+desktop/release/
 *.swp
 *.swo
 
@@ -69,3 +77,11 @@ extension/dev/_chat-html.cjs
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+.env
+.env.*
+!.env.example

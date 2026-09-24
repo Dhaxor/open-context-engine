@@ -1,6 +1,6 @@
 {
   "name": "open-context-engine",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,7 @@
     "cli"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "files": [
     "dist",
@@ -42,9 +42,15 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc",
+    "build": "tsc && npm run build:studio",
+    "build:studio": "node build-studio.js --minify",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "dev:studio": "node build-studio.js --watch",
+    "desktop": "electron desktop",
+    "check:desktop": "node scripts/check-desktop.js",
+    "preview:tui": "node scripts/tui-preview.js",
+    "release:check": "bash scripts/release-check.sh",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.studio.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
@@ -80,6 +86,12 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "cmdk": "^1.1.1",
+    "esbuild": "^0.28.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.6.0",
     "vitest": "^1.6.1",
     "wrangler": "^4.112.0"

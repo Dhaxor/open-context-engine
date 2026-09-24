@@ -30,9 +30,13 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macos-latest, windows-latest]
         node: ["22.16.0"]
+        # The supported floor (22) runs everywhere; the current LTS (24) is
+        # what most new installs get. Node 20 was dropped: it is end-of-life
+        # and better-sqlite3 no longer ships prebuilt binaries for it, so it
+        # only installs with a C++20 toolchain — package.json engines is >=22.
         include:
           - os: ubuntu-22.04
-            node: "20"
+            node: "24"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
