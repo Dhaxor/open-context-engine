@@ -96,17 +96,18 @@ package.
 
 ## CI: build all five supported platforms
 
-`.github/workflows/release-vsix.yml` defines a 5-leg matrix. Every leg
-packages, verifies, and runs the native smoke under Node and under Electron
-37.2.3 (VS Code 1.103) and 43.6.0 (VS Code 1.139); linux-arm64 skips the
-Electron run. Trigger paths:
+`.github/workflows/release-vsix.yml` defines a 5-leg matrix. Trigger paths:
 
-- **Tag push** (`git tag v0.4.0 && git push origin v0.4.0`) → builds all 5
-  platforms and publishes each to the Marketplace via `VSCE_PAT`. The same
-  tag publishes the npm package (`npm-publish.yml`).
+- **Tag push** (`git tag v0.1.1 && git push origin v0.1.1`) → builds all 5
+  platforms and publishes each to the Marketplace via `VSCE_PAT`.
 - **`workflow_dispatch`** with `publish: false` → builds all 5 without
   publishing. Useful for verifying a release before tagging.
 - **PR touching `extension/**`** → builds and verifies all 5 as a smoke test.
+
+Every leg packages its VSIX with `scripts/package-vsix.mjs`, verifies it, and
+runs the native smoke under Node and under Electron 37.2.3 (VS Code 1.103)
+and 43.6.0 (VS Code 1.139); linux-arm64 skips the Electron run. The same
+`v*.*.*` tag also publishes the npm package (`npm-publish.yml`).
 
 The publish job runs on a single Ubuntu runner and loops `vsce publish
 --packagePath` explicitly. We do not glob (PowerShell doesn't and the workflow
@@ -115,11 +116,6 @@ needs to be portable if we ever move it).
 ## Marketplace secrets
 
 - `VSCE_PAT` — Azure DevOps personal access token with **Marketplace →
-  Manage** scope and organization **All accessible organizations**, from the
-  Microsoft account that owns the `open-context` publisher. Store it in repo
-  settings → Secrets and variables → Actions → New repository secret. The
-  publish job is the only consumer.
-- **Azure DevOps retires global PATs on 1 December 2026.** After that date
-  `VSCE_PAT` stops working, and publishing has to move to Microsoft Entra ID
-  (`vsce publish --azure-credential` with workload identity federation). See
-  the VS Code docs, "Publishing Extensions" → "Secure automated publishing".
+  Manage** scope, issued to the `open-context` publisher. Rotate yearly.
+  Store in repo settings → Secrets and variables → Actions → New repository
+  secret. The publish job is the only consumer.

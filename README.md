@@ -32,7 +32,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 🔭 **Trace** | The agent workspace in your browser, terminal, or desktop: an evidence rail showing what is in the model's context (ranked, pinnable, evictable), checkpoint rewind, approvals with a blast-radius score, watchable sub-agents, and parallel sessions in isolated git worktrees you can review and land. |
 | 🤖 **Agent Harness** | A full tool-use agent with codebase retrieval, file editing, shell execution, and web search — plus parallel read-only tool execution, pre/post tool-call hooks, token-usage accounting, session export/import, model routing, and cross-session memory. |
 | 🔌 **MCP Native** | Exposes retrieval, file, and symbol tools through the Model Context Protocol over stdio or **Streamable HTTP** (shared endpoint with bearer auth). Works with Claude Desktop, Cursor, and any MCP-compatible client. |
-| 🧰 **VS Code Extension** | Sidebar chat grounded in the index, agent edits with per-file diff/undo/redo, live re-indexing on save, and an index-health panel. Ships per-platform with multi-ABI native bindings. |
+| 🧰 **VS Code Extension** | Sidebar chat grounded in the index, agent edits with per-file diff/undo/redo, live re-indexing on save, and an index-health panel. Ships per-platform; one Node-API SQLite binding runs on every VS Code from 1.103. |
 | 🛡️ **Policy Controls** | Pin what the engine may do per workspace or org: disable shell/edits/web-search, pin command allowlists, force local-only embeddings, exclude paths. Org-signed policy locks cannot be loosened locally. |
 | 🧾 **Tamper-Evident Audit Log** | Hash-chained JSONL of every agent run, tool call, and MCP invocation. `oce audit --verify` detects any alteration, deletion, or reordering. |
 | 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
@@ -205,15 +205,15 @@ engine: a sidebar **chat** grounded in your index (streaming, markdown,
 code-block copy/insert/apply), **agent edits** with per-file diff /
 undo / redo and a per-turn "undo all", **quick search**
 (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd>), auto-indexing on save, and an
-**index health panel** for debugging retrieval. Platform packages bundle
-native bindings for every supported VS Code runtime ABI — see
+**index health panel** for debugging retrieval. Each platform package carries
+one Node-API SQLite binding, which runs on every VS Code from 1.103 and on
+remote hosts (SSH, WSL, Codespaces) — see
 [`extension/PUBLISHING.md`](extension/PUBLISHING.md) for the support matrix,
 or build your own VSIX:
 
 ```bash
 cd extension && npm ci
-npm run rebuild        # downloads native bindings for all supported ABIs
-npx vsce package --target linux-x64
+npm run package -- linux-x64   # → ../artifacts/open-context-engine-linux-x64-<version>.vsix
 ```
 
 ## 📖 Usage Guide
