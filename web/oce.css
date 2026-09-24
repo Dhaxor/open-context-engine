@@ -265,4 +265,15 @@ footer { border-top: 1px solid var(--edge); padding: var(--s6) 0 var(--s8); }
   .result .score { display: none; }
   .nav-links a.optional { display: none; }
   .section { padding: var(--s8) 0; }
+  /* Wide content scrolls inside its own box; the page never scrolls sideways.
+     Before this, the homepage was 431px wide on a 375px phone. */
+  .card:has(.matrix) { overflow-x: auto; }
+  .card .mono-block pre { overflow-x: auto; }
+}
+
+@media (max-width: 560px) {
+  /* The hero carries its own install button; on a phone the nav chip only
+     pushes the page wider than the screen. */
+  .nav .install-chip { display: none; }
+  .matrix th, .matrix td { padding: 8px 6px; }
 }
