@@ -17,6 +17,9 @@ import { classifyNativeBindingError } from "../../../src/core/native-binding-err
  * install) gets a clear error before anything touches the store.
  */
 
+/** The --target values the release workflow publishes (scripts/package-vsix.mjs). */
+const PUBLISHED_TARGETS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
+
 export interface BindingSelection {
   ok: boolean;
   /** "loaded" on success; otherwise the user-facing reason. */
@@ -64,8 +67,15 @@ function hostMismatch(): string | undefined {
     if (musl) {
       return "Alpine / musl Linux isn't supported yet. Use a glibc-based image (Debian, Ubuntu, Fedora) for this workspace.";
     }
-    return `This copy of the extension is built for ${shipped.join(", ")}, but this machine is ${host}. ` +
-      "Install the build for this platform from the Marketplace (reinstall the extension and let VS Code pick it).";
+    // Only point at the Marketplace when it actually has a build for this host.
+    if (PUBLISHED_TARGETS.includes(host)) {
+      return `This copy of the extension is built for ${shipped.join(", ")}, but this machine is ${host}. ` +
+        "Install the build for this platform from the Marketplace (reinstall the extension and let VS Code pick it).";
+    }
+    if (host === "win32-arm64") {
+      return "There is no Windows-on-ARM build yet. Run the x64 build of VS Code (Windows runs it under emulation) and install the extension there, or open the folder through WSL.";
+    }
+    return `${host} isn't supported yet; the extension ships for ${PUBLISHED_TARGETS.join(", ")}.`;
   } catch {
     return undefined;
   }

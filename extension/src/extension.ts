@@ -15,6 +15,21 @@ import { classifyNativeBindingError } from "../../src/core/native-binding-error"
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel | undefined;
 
+/** Settings the store is built from (ContextService.getConfigForPath, the watcher). */
+const STORE_SETTINGS = [
+    "openContext.embedding",
+    "openContext.search",
+    "openContext.chunkSize",
+    "openContext.chunkOverlap",
+    "openContext.autoIndex",
+];
+/** Changes that switch the store's embedding space, so it must be re-indexed. */
+const EMBEDDING_SETTINGS = [
+    "openContext.embedding.provider",
+    "openContext.embedding.model",
+    "openContext.embedding.apiKey",
+];
+
 /** Show the user a real, actionable error for any failure that initializes the
  *  native SQLite binding (NMV mismatch, glibc skew, wrong arch, etc.). Until
  *  v0.1.1 the startup-index catch site swallowed these with a console.error
@@ -152,6 +167,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         vscode.window.showInformationMessage(`Indexed ${path.basename(s.workspaceRoot)}: ${s.indexedFiles} files (${s.totalChunks} chunks)`);
                     }
                 } catch (err: any) {
+                    // The run may have rebuilt the store before failing; don't
+                    // leave the status bar showing the old count.
+                    await refreshStatus();
                     if (err instanceof vscode.CancellationError) return;
                     vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
                 }
@@ -397,8 +415,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // search works; say so once and offer the way to semantic search.
                     if (!context.globalState.get<boolean>("openContext.noKeyNoticeShown")) {
                         await context.globalState.update("openContext.noKeyNoticeShown", true);
+                        // Only Voyage and OpenAI need a key, so the keyless fallback means one of them.
+                        const chosen = vscode.workspace.getConfiguration("openContext").get<string>("embedding.provider", "voyage") === "openai" ? "OpenAI" : "Voyage";
+                        const other = chosen === "OpenAI" ? "Voyage" : "OpenAI";
                         vscode.window.showInformationMessage(
-                            "Open Context: indexed with keyword search. For semantic search, set a Voyage API key, or choose another embedding provider — OpenAI, or Ollama for free local embeddings.",
+                            `Open Context: indexed with keyword search. For semantic search, set a ${chosen} API key, or choose another embedding provider — ${other}, or Ollama for free local embeddings.`,
                             "Set API Key",
                             "Choose Provider",
                         ).then((pick) => {
@@ -441,11 +462,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (!e.affectsConfiguration("openContext")) return;
+            // Reopen the store only for settings it is built from. Chat and agent
+            // settings are read per turn; reopening for them would close the
+            // store under an index in flight — the model & keys form writes
+            // llm.* on every save, right beside the key save that starts one.
+            if (!STORE_SETTINGS.some((key) => e.affectsConfiguration(key))) return;
             await svc.dispose();
             svc.bindExtensionContext(context);
             if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
                 svc.startWatching().catch(() => {});
+            }
+            // A new embedding provider, model or key reopens the store empty in
+            // the new mode; the watcher only picks up files as they change.
+            if (EMBEDDING_SETTINGS.some((key) => e.affectsConfiguration(key))) {
+                void vscode.commands.executeCommand("openContext.indexWorkspace");
             }
         }),
     );

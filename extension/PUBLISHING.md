@@ -58,7 +58,7 @@ guard, so affected users get a specific error message instead of a silent
 
 | Platform | Reason | Workaround |
 |---|---|---|
-| `win32-arm64` | No `sqlite-vec-windows-arm64` package exists — the VSIX would ship without vector search | Install the `win32-x64` VSIX manually — Windows-on-ARM runs it under emulation with a perf hit. Or use VS Code's WSL backend with `linux-arm64`/`linux-x64`. |
+| `win32-arm64` | No `sqlite-vec-windows-arm64` package exists — the VSIX would ship without vector search | Run the x64 build of VS Code, which Windows 11 on ARM runs under emulation (with a perf hit), and install the extension there — native arm64 VS Code can't load the x64 binary. Or use VS Code's WSL backend with `linux-arm64`/`linux-x64`. |
 | Alpine / musl | `sqlite-vec` publishes glibc builds only | Use a glibc-based devcontainer image (debian, ubuntu, fedora). |
 | glibc < 2.34 | Below the `better-sqlite3` prebuild's floor | Upgrade the distribution, or use the CLI/MCP server (`npm install -g open-context-engine`), which supports older glibc. |
 

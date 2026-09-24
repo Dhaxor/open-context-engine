@@ -32,7 +32,24 @@ function explicitSetting(cfg: vscode.WorkspaceConfiguration, key: string): strin
  * an OpenAI model. (The chat's model picker writes provider and model together.)
  */
 export function resolveLLMModel(cfg: vscode.WorkspaceConfiguration, provider: string): string {
-  return explicitSetting(cfg, "llm.model") || defaultModelFor(provider);
+  const set = explicitSetting(cfg, "llm.model");
+  if (!set) return defaultModelFor(provider);
+  // A set model that is recognisably another hosted provider's (e.g. gpt-5.4
+  // pinned by an earlier save, then llm.provider switched to anthropic) is a
+  // leftover, not a choice. `custom` endpoints (OpenRouter and the like) serve
+  // every provider's names, so they keep whatever was set.
+  const owner = hostedModelOwner(set);
+  if (owner && owner !== provider && provider !== "custom") return defaultModelFor(provider);
+  return set;
+}
+
+/** The hosted provider a model name belongs to, when the name says so. */
+function hostedModelOwner(model: string): "openai" | "anthropic" | "google" | undefined {
+  // gpt-<digit>, not gpt-: Ollama serves open-weight models named gpt-oss.
+  if (/^(gpt-\d|chatgpt-|o\d(-|$))/i.test(model)) return "openai";
+  if (/^claude-/i.test(model)) return "anthropic";
+  if (/^gemini-/i.test(model)) return "google";
+  return undefined;
 }
 
 /**
