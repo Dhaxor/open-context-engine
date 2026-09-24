@@ -88,9 +88,15 @@ jobs:
       - name: Install core deps (repo root)
         run: npm ci
 
+      # --ignore-scripts: lockfiles don't record better-sqlite3's
+      # "gypfile": false, so a plain `npm ci` runs `node-gyp rebuild` for it.
+      # That build is a no-op (the prebuild ships in the package), but node-gyp
+      # still has to find a compiler first, and on windows-latest it cannot
+      # recognise Visual Studio 18. No extension dependency needs an install
+      # script: esbuild's binary comes from its platform package.
       - name: Install extension deps
         working-directory: extension
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Package VSIX (${{ matrix.target }})
         working-directory: extension

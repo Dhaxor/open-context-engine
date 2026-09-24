@@ -78,7 +78,9 @@ jobs:
       # Extension tsc resolves imports from BOTH dependency trees: it
       # imports ../src (root deps) and its own node_modules.
       - run: npm ci
-      - run: npm ci
+      # --ignore-scripts skips a no-op node-gyp step for better-sqlite3; see
+      # the "Install extension deps" step in release-vsix.yml.
+      - run: npm ci --ignore-scripts
         working-directory: extension
       - run: npx tsc --noEmit
         working-directory: extension

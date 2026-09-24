@@ -212,7 +212,7 @@ remote hosts (SSH, WSL, Codespaces) — see
 or build your own VSIX:
 
 ```bash
-cd extension && npm ci
+cd extension && npm ci --ignore-scripts
 npm run package -- linux-x64   # → ../artifacts/open-context-engine-linux-x64-<version>.vsix
 ```
 

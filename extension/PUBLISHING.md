@@ -66,7 +66,7 @@ guard, so affected users get a specific error message instead of a silent
 
 ```bash
 cd extension
-npm ci
+npm ci --ignore-scripts
 npm run package -- linux-x64          # → ../artifacts/open-context-engine-linux-x64-<version>.vsix
 node ./scripts/verify-vsix.mjs ../artifacts/open-context-engine-linux-x64-*.vsix linux-x64
 code --install-extension ../artifacts/open-context-engine-linux-x64-*.vsix
@@ -86,13 +86,14 @@ ELECTRON_RUN_AS_NODE=1 npx electron@43.6.0 scripts/smoke-native.cjs .
 F5 (the dev host) needs no native step: `better-sqlite3` loads its prebuild
 straight from `node_modules`.
 
-**Windows without Visual Studio: use `npm ci --ignore-scripts`.** Lockfiles
-don't record better-sqlite3's `"gypfile": false`, so `npm ci` runs
-`node-gyp rebuild` for it. `binding.gyp` makes that a no-op when a prebuild
-exists, but on Windows node-gyp looks for Visual Studio's C++ workload first
-and fails without it. Skipping install scripts loses nothing here: the
-prebuild ships in the package, and esbuild's binary comes from its platform
-package.
+**Why `--ignore-scripts`.** Lockfiles don't record better-sqlite3's
+`"gypfile": false`, so a plain `npm ci` runs `node-gyp rebuild` for it.
+`binding.gyp` makes that a no-op when a prebuild exists, but node-gyp still
+has to find a compiler first. On Windows that means Visual Studio's C++
+workload, and node-gyp 11 (Node 22's npm) doesn't recognise Visual Studio 18,
+which is what `windows-latest` now ships. Skipping install scripts loses
+nothing: the prebuild ships in the package, and esbuild's binary comes from
+its platform package. CI installs the extension the same way.
 
 ## CI: build all five supported platforms
 

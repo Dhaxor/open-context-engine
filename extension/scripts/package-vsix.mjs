@@ -24,7 +24,7 @@ if (!TARGETS.includes(target)) {
 const extRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const prebuild = path.join(extRoot, "node_modules", "better-sqlite3", "prebuilds", `${target}.node`);
 if (!fs.existsSync(prebuild)) {
-  console.error(`No better-sqlite3 prebuild for ${target} at ${prebuild}. Run npm ci in extension/.`);
+  console.error(`No better-sqlite3 prebuild for ${target} at ${prebuild}. Run npm ci --ignore-scripts in extension/.`);
   process.exit(1);
 }
 
