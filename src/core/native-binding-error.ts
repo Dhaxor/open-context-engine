@@ -20,6 +20,7 @@ export type NativeBindingErrorKind =
   | "wrong_arch"              // ELF class / Mach-O magic mismatch (e.g. arm64 binary on x64 host)
   | "sqlite_vec_platform"     // sqlite-vec's per-OS optional dep is missing for this host
   | "missing_module"          // require/import couldn't resolve the package at all
+  | "keyword_only"            // not a failure: keyword-only search was chosen or fallen back to
   | "unknown";                // didn't match any known pattern — show raw message
 
 export interface NativeBindingDiagnosis {
