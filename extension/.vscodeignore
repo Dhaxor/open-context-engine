@@ -7,17 +7,28 @@ node_modules/.package-lock.json
 node_modules/.cache/**
 node_modules/.bin/**
 
-# Backup files electron-rebuild leaves behind. Never ship these or the
-# extension may load the wrong (pre-rebuild) binary at runtime.
+# Backup files a native rebuild can leave behind. Never ship these or the
+# extension may load the wrong binary at runtime.
 **/*.node.bak
 
 # Build tooling only needed at publish time — keep them out of the VSIX.
-node_modules/@electron/rebuild/**
 node_modules/@vscode/vsce/**
-node_modules/electron/**
 node_modules/typescript/**
 node_modules/esbuild/**
 scripts/**
+
+# Per-ABI bindings from before 0.4 (gitignored; may linger in old checkouts).
+# Shipping them would only add dead weight — verify-vsix.mjs fails on them.
+dist-native/**
+
+# better-sqlite3 13 is Node-API: its package carries a prebuild for all eight
+# platforms, plus the C++ sources and SQLite amalgamation for source builds.
+# A VSIX needs only its own target's prebuild, which scripts/package-vsix.mjs
+# re-includes with a single negation.
+node_modules/better-sqlite3/prebuilds/**
+node_modules/better-sqlite3/deps/**
+node_modules/better-sqlite3/src/**
+node_modules/better-sqlite3/binding.gyp
 
 # Documentation that belongs on GitHub, not in the runtime bundle.
 CHANGELOG.md
@@ -38,8 +49,8 @@ node_modules/uc.micro/**
 node_modules/punycode.js/**
 
 # tree-sitter-wasms ships ~40 language grammars (~50 MB); the engine can only
-# ever request the 8 in languageForPath (src/core/ast-graph-shared.ts). Keep
-# that list in sync — verify-vsix.mjs asserts exactly these 8 ship.
+# ever request the 14 in languageForPath (src/core/ast-graph-shared.ts). Keep
+# that list in sync — verify-vsix.mjs asserts exactly these 14 ship.
 node_modules/tree-sitter-wasms/out/*.wasm
 !node_modules/tree-sitter-wasms/out/tree-sitter-typescript.wasm
 !node_modules/tree-sitter-wasms/out/tree-sitter-tsx.wasm
@@ -49,14 +60,19 @@ node_modules/tree-sitter-wasms/out/*.wasm
 !node_modules/tree-sitter-wasms/out/tree-sitter-rust.wasm
 !node_modules/tree-sitter-wasms/out/tree-sitter-java.wasm
 !node_modules/tree-sitter-wasms/out/tree-sitter-c_sharp.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-c.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-cpp.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-ruby.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-php.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-kotlin.wasm
+!node_modules/tree-sitter-wasms/out/tree-sitter-swift.wasm
 
-# IMPORTANT: keep the native bindings in. Without these explicit negations a
-# future broad ignore (e.g. node_modules/*) would silently strip the .node and
-# we'd be back to "first index throws on a paying customer".
-# dist-native/ holds one better_sqlite3.node per supported Electron ABI; the
-# runtime selector copies the matching one into better-sqlite3 at activation.
-!dist-native/**
-!node_modules/better-sqlite3/**
+# IMPORTANT: keep the native modules in. Without these explicit negations a
+# future broad ignore (e.g. node_modules/*) would silently strip them and we'd
+# be back to "first index throws on a paying customer". better-sqlite3 is
+# negated narrowly (not `/**`) so the prebuild and source excludes above hold.
+!node_modules/better-sqlite3/package.json
+!node_modules/better-sqlite3/lib/**
 !node_modules/sqlite-vec/**
 !node_modules/sqlite-vec-*/**
 !node_modules/web-tree-sitter/**

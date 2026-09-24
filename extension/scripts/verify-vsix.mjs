@@ -5,7 +5,7 @@
  * cross-compile produced the wrong arch, or where npm's optional-dep
  * platform filter skipped the sqlite-vec package we needed.
  *
- * Run from a CI matrix leg after `vsce package --target <target>`:
+ * Run from a CI matrix leg after `scripts/package-vsix.mjs <target>`:
  *   node scripts/verify-vsix.mjs ../artifacts/open-context-engine-<target>.vsix <target>
  *
  * Expected: exit 0 with one OK line per checked binary.
@@ -16,6 +16,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const [vsixPath, target] = process.argv.slice(2);
 if (!vsixPath || !target) {
@@ -68,35 +69,41 @@ try {
   const sqliteVecPkgName = `sqlite-vec-${targetOs === "win32" ? "windows" : targetOs}-${targetArch}`;
   const vecSuffix = targetOs === "win32" ? "dll" : targetOs === "darwin" ? "dylib" : "so";
 
+  // better-sqlite3 13 is Node-API: one prebuild serves every Electron and
+  // Node ABI, loaded from prebuilds/<platform>-<arch>.node by its own loader.
+  const bs3Dir = path.join(extensionRoot, "node_modules", "better-sqlite3");
   expectedBins.push({
-    label: "better-sqlite3 (default)",
-    expected: path.join(extensionRoot, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node"),
+    label: "better-sqlite3 (Node-API prebuild)",
+    expected: path.join(bs3Dir, "prebuilds", `${target}.node`),
   });
   expectedBins.push({
     label: `sqlite-vec (${sqliteVecPkgName})`,
     expected: path.join(extensionRoot, "node_modules", sqliteVecPkgName, `vec0.${vecSuffix}`),
   });
 
-  // Multi-ABI bundle: one better_sqlite3.node per supported Electron ABI.
-  // A packaged VSIX without dist-native/abi-* would make the runtime selector
-  // silently no-op — only one VS Code Electron line would work.
-  const nativeDir = path.join(extensionRoot, "dist-native");
-  const abiDirs = fs.existsSync(nativeDir)
-    ? fs.readdirSync(nativeDir).filter(n => /^abi-\d+$/.test(n))
-    : [];
-  if (!abiDirs.length) {
-    console.error("FAIL  dist-native: no abi-* directories in the VSIX — multi-ABI bundle missing.");
-    process.exit(1);
+  let failed = false;
+
+  // Exactly this target's prebuild: the package carries all eight platforms,
+  // and scripts/package-vsix.mjs keeps only one. The C++ sources and SQLite
+  // amalgamation are for source builds, which a VSIX never does.
+  const prebuilds = fs.existsSync(path.join(bs3Dir, "prebuilds")) ? fs.readdirSync(path.join(bs3Dir, "prebuilds")) : [];
+  if (prebuilds.length !== 1 || prebuilds[0] !== `${target}.node`) {
+    console.error(`FAIL  better-sqlite3 prebuilds: expected exactly ${target}.node, found [${prebuilds.join(", ") || "none"}].`);
+    failed = true;
+  } else {
+    console.log(`OK    better-sqlite3 prebuilds: exactly ${target}.node.`);
   }
-  console.log(`OK    dist-native: shipping ABIs ${abiDirs.map(d => d.slice(4)).join(", ")}`);
-  for (const dirName of abiDirs) {
-    expectedBins.push({
-      label: `better-sqlite3 (${dirName})`,
-      expected: path.join(nativeDir, dirName, "better_sqlite3.node"),
-    });
+  for (const sourceOnly of ["deps", "src", "binding.gyp"]) {
+    if (fs.existsSync(path.join(bs3Dir, sourceOnly))) {
+      console.error(`FAIL  better-sqlite3/${sourceOnly} shipped: source-build input, excluded by .vscodeignore.`);
+      failed = true;
+    }
+  }
+  if (fs.existsSync(path.join(extensionRoot, "dist-native"))) {
+    console.error("FAIL  dist-native/ shipped: per-ABI bindings from before 0.4, excluded by .vscodeignore.");
+    failed = true;
   }
 
-  let failed = false;
   for (const { label, expected } of expectedBins) {
     if (!fs.existsSync(expected)) {
       console.error(`FAIL  ${label}: not found at ${path.relative(stagingDir, expected)}`);
@@ -143,7 +150,10 @@ try {
   // 1) tree-sitter grammars: exactly the languages languageForPath() can
   //    request (src/core/ast-graph-shared.ts). A new language needs BOTH the
   //    .vscodeignore negation and this list updated.
-  const EXPECTED_WASMS = ["typescript", "tsx", "javascript", "python", "go", "rust", "java", "c_sharp"];
+  const EXPECTED_WASMS = [
+    "typescript", "tsx", "javascript", "python", "go", "rust", "java", "c_sharp",
+    "c", "cpp", "ruby", "php", "kotlin", "swift",
+  ];
   const wasmDir = path.join(nmDir, "tree-sitter-wasms", "out");
   const shippedWasms = fs.existsSync(wasmDir)
     ? fs.readdirSync(wasmDir).filter(f => f.endsWith(".wasm")).map(f => f.replace(/^tree-sitter-/, "").replace(/\.wasm$/, "")).sort()
@@ -168,8 +178,7 @@ try {
   // 3) Runtime require check: every pure-JS external dist/extension.js loads
   //    must be fully loadable from the extracted tree — this walks transitive
   //    deps for real, so an over-aggressive exclusion fails HERE, not on a
-  //    user's machine. Native packages are resolve-only (their binding's ABI
-  //    may not match this script's Node).
+  //    user's machine.
   const req = createRequire(path.join(extensionRoot, "noop.js"));
   for (const mod of ["chokidar", "minimatch", "ignore", "openai", "web-tree-sitter"]) {
     try {
@@ -180,14 +189,31 @@ try {
       failed = true;
     }
   }
-  for (const mod of ["better-sqlite3", "sqlite-vec"]) {
+
+  // 4) Native smoke: load both native modules from the extracted tree and run
+  //    a real store through them (WAL, vec0 KNN, FTS5) under this Node — the
+  //    runtime remote extension hosts use. It needs a host of the target's own
+  //    platform, which every CI leg is; the release workflow repeats it under
+  //    Electron for desktop VS Code.
+  const hostTarget = `${process.platform}-${process.arch}`;
+  if (hostTarget === target) {
+    const smoke = path.join(path.dirname(fileURLToPath(import.meta.url)), "smoke-native.cjs");
     try {
-      req.resolve(mod);
-      console.log(`OK    runtime resolve: ${mod}`);
-    } catch (err) {
-      console.error(`FAIL  runtime resolve: ${mod} — ${err.message}`);
-      failed = true;
+      execFileSync(process.execPath, [smoke, extensionRoot], { stdio: "inherit" });
+    } catch {
+      failed = true; // smoke-native.cjs printed the FAIL line
     }
+  } else {
+    for (const mod of ["better-sqlite3", "sqlite-vec"]) {
+      try {
+        req.resolve(mod);
+        console.log(`OK    runtime resolve: ${mod}`);
+      } catch (err) {
+        console.error(`FAIL  runtime resolve: ${mod} — ${err.message}`);
+        failed = true;
+      }
+    }
+    console.log(`SKIP  native smoke: this host is ${hostTarget}, the VSIX is ${target}.`);
   }
 
   if (failed) process.exit(1);

@@ -1,70 +1,37 @@
-import * as fs from "fs";
-import * as path from "path";
+import { classifyNativeBindingError } from "../../../src/core/native-binding-error";
 
 /**
- * Multi-ABI native-binding selector.
+ * Native SQLite binding check at activation.
  *
- * The packaged VSIX ships one better_sqlite3.node per supported Electron ABI
- * under dist-native/abi-<N>/ (built by the release workflow's
- * ELECTRON_TARGETS loop). better-sqlite3 itself always loads from
- * node_modules/better-sqlite3/build/Release/better_sqlite3.node, so at
- * activation we copy the binding matching THIS VS Code's ABI
- * (process.versions.modules) into that location — once, marker-guarded.
+ * better-sqlite3 13 is a Node-API addon, so there is no binding to select for
+ * the running Electron ABI any more: one prebuilt binary per platform loads in
+ * every Electron VS Code ships (37 in 1.103 through 43 in 1.139) and in plain
+ * Node on remote hosts (SSH, WSL, Codespaces). Until 0.4 the VSIX carried one
+ * binary per ABI and copied the matching one into place here — and every new
+ * Electron in VS Code broke the extension until a rebuild shipped.
  *
- * This is what lets one VSIX span VS Code 1.103 → current instead of pinning
- * engines.vscode to a single Electron line and stranding everyone else.
+ * What remains worth doing at activation is proving the binding loads, so a
+ * host it can't run on (musl, a glibc older than the prebuild's, a wrong-arch
+ * install) gets a clear error before anything touches the store.
  */
 
 export interface BindingSelection {
   ok: boolean;
-  /** What happened: "single-abi-build" (dev/F5, no dist-native), "already-current",
-   *  "selected" (copied), or an error reason when ok=false. */
+  /** "loaded" on success; otherwise the user-facing reason. */
   detail: string;
   abi: string;
 }
 
-export function ensureNativeBinding(extensionRoot: string): BindingSelection {
+export function ensureNativeBinding(): BindingSelection {
   const abi = process.versions.modules;
-  const nativeDir = path.join(extensionRoot, "dist-native");
-  // Dev builds (F5) and tests run straight from node_modules with whatever
-  // ABI the local rebuild produced — nothing to select.
-  if (!fs.existsSync(nativeDir)) return { ok: true, detail: "single-abi-build", abi };
-
-  const candidate = path.join(nativeDir, `abi-${abi}`, "better_sqlite3.node");
-  if (!fs.existsSync(candidate)) {
-    let shipped: string[] = [];
-    try { shipped = fs.readdirSync(nativeDir).filter(n => n.startsWith("abi-")).map(n => n.slice(4)); } catch {}
-    return {
-      ok: false,
-      abi,
-      detail:
-        `This VS Code's Electron uses Node ABI ${abi}, but this build ships bindings for ABI ${shipped.join(", ") || "(none)"} only. ` +
-        `Update VS Code (or the extension) to a matching version — see PUBLISHING.md for the supported range.`,
-    };
-  }
-
-  const targetDir = path.join(extensionRoot, "node_modules", "better-sqlite3", "build", "Release");
-  const target = path.join(targetDir, "better_sqlite3.node");
-  const marker = path.join(targetDir, ".abi");
-
   try {
-    if (fs.existsSync(target) && fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim() === abi) {
-      return { ok: true, detail: "already-current", abi };
-    }
-    fs.mkdirSync(targetDir, { recursive: true });
-    // Copy to a temp name then rename: another VS Code window activating
-    // concurrently must never observe a half-written .node.
-    const tmp = target + `.tmp-${process.pid}`;
-    fs.copyFileSync(candidate, tmp);
-    fs.renameSync(tmp, target);
-    fs.writeFileSync(marker, abi);
-    return { ok: true, detail: "selected", abi };
-  } catch (err: any) {
-    return {
-      ok: false,
-      abi,
-      detail: `Failed to install the ABI-${abi} binding: ${err?.message ?? String(err)}. ` +
-        `The extension directory may be read-only; try reinstalling the extension.`,
-    };
+    // External to the bundle, so this resolves from the extension's own
+    // node_modules — the same module the store loads.
+    const Database = require("better-sqlite3");
+    new Database(":memory:").close();
+    return { ok: true, detail: "loaded", abi };
+  } catch (err) {
+    const diagnosis = classifyNativeBindingError(err);
+    return { ok: false, abi, detail: diagnosis.message };
   }
 }

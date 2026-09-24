@@ -41,10 +41,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     outputChannel = vscode.window.createOutputChannel("Open Context Engine");
     context.subscriptions.push(outputChannel);
 
-    // Select the better-sqlite3 binding matching THIS VS Code's Electron ABI
-    // before anything can touch the store. Packaged builds ship one binding
-    // per supported ABI; dev builds (no dist-native/) skip this entirely.
-    const binding = ensureNativeBinding(context.extensionUri.fsPath);
+    // Prove the native SQLite binding loads before anything can touch the
+    // store: one Node-API binary serves every Electron ABI, so a failure here
+    // is the host (musl, old glibc, wrong arch), and it deserves a clear error.
+    const binding = ensureNativeBinding();
     outputChannel.appendLine(`[${new Date().toISOString()}] native binding: ${binding.detail} (ABI ${binding.abi})`);
     if (!binding.ok) {
         vscode.window.showErrorMessage(`Open Context Engine cannot start — ${binding.detail}`, "Open Output").then((pick) => {

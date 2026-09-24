@@ -40,8 +40,9 @@ Rebuild once per Electron version:
 cd desktop && npm install && npm run rebuild
 ```
 
-That runs `electron-rebuild` against the root `node_modules`, the same approach
-`extension/scripts/build-native-local.mjs` uses for the VSIX.
+That runs `electron-rebuild` against the root `node_modules`. (The VS Code
+extension no longer needs this: it ships better-sqlite3 13, whose Node-API
+binary loads in any Electron.)
 
 ## Packaging
 
