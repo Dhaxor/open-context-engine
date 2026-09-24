@@ -20,9 +20,12 @@ export interface ContextStatus {
     embeddingModel: string;
     lastSynced: string;
     workspaceRoot: string;
-    /** "keyword-only" when sqlite-vec couldn't load and search runs on BM25 alone. */
+    /** "keyword-only" when search runs on BM25 alone: no embedding key yet, or sqlite-vec couldn't load. */
     searchMode: "hybrid" | "keyword-only";
     degradedReason?: string;
+    /** Why it is keyword-only: "keyword_only" means no embedding key (a choice
+     *  the user can undo); anything else is a platform failure. */
+    degradedKind?: string;
 }
 
 export interface IndexHealthReport {
@@ -159,6 +162,7 @@ export class ContextService implements vscode.Disposable {
             workspaceRoot: ctx.getWorkspaceRoot(),
             searchMode: inner.searchMode,
             ...(inner.degradedReason ? { degradedReason: inner.degradedReason } : {}),
+            ...(inner.degradedKind ? { degradedKind: inner.degradedKind } : {}),
         };
     }
 
@@ -252,6 +256,11 @@ export class ContextService implements vscode.Disposable {
         if (!this._extContext) return;
         if (value) await this._extContext.secrets.store("openContext.embedding.apiKey", value);
         else await this._extContext.secrets.delete("openContext.embedding.apiKey");
+        // The key decides between keyword-only and semantic search, so an open
+        // context is stale either way — from the command or the settings panel.
+        const watching = this._watcher !== null;
+        await this.dispose();
+        if (watching) await this.startWatching().catch(() => {});
     }
 
     public async setLLMApiKey(value: string, provider?: string): Promise<void> {
@@ -313,7 +322,7 @@ export class ContextService implements vscode.Disposable {
         const storeDir = config?.storePath || (workspaceRoot ? path.join(workspaceRoot, ".open-context") : "");
         const dbPath = storeDir ? path.join(storeDir, "context.db") : "";
         const notes: string[] = [];
-        const embeddingKeyPresent = provider === "ollama" || Boolean(await this.getEmbeddingApiKey());
+        const embeddingKeyPresent = provider === "ollama" || provider === "local" || Boolean(await this.getEmbeddingApiKey());
         let contextReady = false, initializationError: string | undefined, indexedFiles: number | undefined, totalChunks: number | undefined, freshness: FreshnessReport | undefined, activeFile: IndexHealthReport["activeFile"];
         try {
             if (workspaceRoot) {
@@ -321,7 +330,9 @@ export class ContextService implements vscode.Disposable {
                 const status = await this.getStatus();
                 contextReady = true; indexedFiles = status.indexedFiles; totalChunks = status.totalChunks;
                 if (status.searchMode === "keyword-only") {
-                    notes.push(`sqlite-vec unavailable on this platform — keyword-only (BM25) search; semantic ranking disabled. ${status.degradedReason ?? ""}`.trim());
+                    notes.push(status.degradedKind === "keyword_only"
+                        ? "Keyword-only (BM25) search: no embedding API key is set. Set one for semantic search (Open Context: Set Embedding API Key)."
+                        : `sqlite-vec unavailable on this platform — keyword-only (BM25) search; semantic ranking disabled. ${status.degradedReason ?? ""}`.trim());
                 }
                 freshness = await ctx.checkFreshness();
                 activeFile = await this.getActiveFileHealth(ctx.getWorkspaceRoot(), await ctx.listFiles());
@@ -332,7 +343,7 @@ export class ContextService implements vscode.Disposable {
         catch (err: any) { notes.push(`File scan failed: ${err?.message ?? String(err)}`); }
         const dbStat = statMaybe(dbPath);
         if (!workspaceRoot) notes.push("No index workspace is selected and no VS Code workspace folder is open.");
-        if (provider !== "ollama" && !embeddingKeyPresent) notes.push(`Missing ${provider} embedding API key.`);
+        if (!embeddingKeyPresent) notes.push(`Missing ${provider} embedding API key.`);
         if (selectedWorkspaceRoot && vscodeWorkspaceRoot && selectedWorkspaceRoot !== vscodeWorkspaceRoot) notes.push("Index workspace differs from the first VS Code workspace folder.");
         if (initializationError) {
             const diag = classifyNativeBindingError(initializationError);
@@ -374,9 +385,15 @@ export class ContextService implements vscode.Disposable {
         const dimension = modelInfo?.dimension ?? (provider === "openai" ? 1536 : provider === "voyage" ? 1024 : 768);
         const batchSize = modelInfo?.batchSize ?? (provider === "voyage" ? 32 : 100);
         const apiKey = await this.getEmbeddingApiKey();
+        // A hosted provider with no key would fail every index and search. Start
+        // on keyword search (BM25) instead, as the CLI does; "fallback" never
+        // wipes an index that was built with vectors.
+        const envKey = provider === "voyage" ? process.env.VOYAGE_API_KEY : provider === "openai" ? process.env.OPENAI_API_KEY : undefined;
+        const missingKey = (provider === "voyage" || provider === "openai") && !apiKey && !envKey;
 
         return {
             workspaceRoot,
+            ...(missingKey ? { keywordOnly: "fallback" as const } : {}),
             embedding: {
                 provider,
                 model,

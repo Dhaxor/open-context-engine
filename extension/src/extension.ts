@@ -26,7 +26,11 @@ function reportIndexingError(err: unknown): void {
   outputChannel?.appendLine(`[${new Date().toISOString()}] ${diag.title}`);
   outputChannel?.appendLine(diag.raw);
   if (!diag.recognized) {
-    vscode.window.showErrorMessage(`Open Context Engine: indexing failed — ${diag.title}`, "Open Output").then((pick) => {
+    // Not a native-binding failure the classifier knows, so its generic title
+    // ("failed to load native SQLite binding") would misdiagnose it. Say what
+    // actually failed.
+    const reason = (err instanceof Error ? err.message : String(err)).split("\n")[0];
+    vscode.window.showErrorMessage(`Open Context Engine: indexing failed — ${reason}`, "Open Output").then((pick) => {
       if (pick === "Open Output") outputChannel?.show(true);
     });
     return;
@@ -86,7 +90,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const rootName = path.basename(s.workspaceRoot) || s.workspaceRoot;
             const modeSuffix = s.searchMode === "keyword-only" ? " · keyword-only" : "";
             statusBarItem.text = `$(database) Open Context: ${rootName} · ${s.indexedFiles} files${modeSuffix}`;
-            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks${s.searchMode === "keyword-only" ? `\nKeyword-only (BM25) search — sqlite-vec unavailable on this platform.` : ""}`;
+            const keywordOnlyWhy = s.degradedKind === "keyword_only" ? "no embedding API key set" : "sqlite-vec unavailable on this platform";
+            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks${s.searchMode === "keyword-only" ? `\nKeyword-only (BM25) search — ${keywordOnlyWhy}.` : ""}`;
             treeProvider.refresh();
         } catch {}
     };
@@ -297,8 +302,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const value = await vscode.window.showInputBox({ prompt: "Embedding API key (stored securely via VS Code SecretStorage)", password: true });
             if (value === undefined) return;
             await svc.setEmbeddingApiKey(value);
-            await svc.dispose();
-            vscode.window.showInformationMessage(value ? "Embedding API key saved." : "Embedding API key cleared.");
+            vscode.window.showInformationMessage(value ? "Embedding API key saved — re-indexing with semantic search." : "Embedding API key cleared.");
+            // A new key moves the index from keyword-only to vectors; rebuild it now
+            // rather than leaving search keyword-only until the next change.
+            if (value) void vscode.commands.executeCommand("openContext.indexWorkspace");
         }),
 
         vscode.commands.registerCommand("openContext.setLLMApiKey", async () => {
@@ -357,17 +364,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // One-time keyword-only notice: persistent signal lives in the
                 // status bar + health panel, so don't toast on every command.
                 const status = await svc.getStatus();
-                if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                if (status.searchMode === "keyword-only" && status.degradedKind === "keyword_only") {
+                    // No embedding key yet — the first run for most installs. Keyword
+                    // search works; say so once and offer the way to semantic search.
+                    if (!context.globalState.get<boolean>("openContext.noKeyNoticeShown")) {
+                        await context.globalState.update("openContext.noKeyNoticeShown", true);
+                        vscode.window.showInformationMessage(
+                            "Open Context: indexed with keyword search. Set an embedding API key (Voyage or OpenAI) for semantic search, or choose Ollama in settings for free local embeddings.",
+                            "Set API Key",
+                            "Settings",
+                        ).then((pick) => {
+                            if (pick === "Set API Key") void vscode.commands.executeCommand("openContext.setEmbeddingApiKey");
+                            else if (pick === "Settings") void vscode.commands.executeCommand("openContext.openSettings");
+                        });
+                    }
+                } else if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
                     await context.globalState.update("openContext.keywordOnlyNoticeShown", true);
                     outputChannel?.appendLine(`[${new Date().toISOString()}] keyword-only mode: ${status.degradedReason ?? "sqlite-vec unavailable"}`);
                     vscode.window.showWarningMessage(
                         "Open Context: semantic search is unavailable on this platform — running keyword-only (BM25) search. Indexing and search still work.",
                         "Open Output",
                     ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
-                } else if (status.searchMode === "hybrid" && context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                } else if (status.searchMode === "hybrid") {
                     // Healthy again — re-arm so a future degraded period gets
                     // its one toast instead of being suppressed forever.
-                    await context.globalState.update("openContext.keywordOnlyNoticeShown", undefined);
+                    for (const flag of ["openContext.keywordOnlyNoticeShown", "openContext.noKeyNoticeShown"]) {
+                        if (context.globalState.get<boolean>(flag)) await context.globalState.update(flag, undefined);
+                    }
                 }
                 if (r.failed?.length) {
                     outputChannel?.appendLine(`[${new Date().toISOString()}] startup index: ${r.failed.length} file(s) failed to embed (will retry on next index). ${r.failedReason ?? ""}`);
