@@ -13,7 +13,7 @@ constraints behind it.
 |---|---|---|---|---|
 | `win32-x64` | Windows | x64 | `windows-latest` | ✅ Supported |
 | `linux-x64` | Linux glibc ≥ 2.35 | x64 | `ubuntu-22.04` | ✅ Supported |
-| `darwin-x64` | macOS 11+ | Intel | `macos-13` | ✅ Supported until macos-13 retirement (see "Drift") |
+| `darwin-x64` | macOS 11+ | Intel | `macos-15-intel` | ✅ Supported (macos-13 was retired; `macos-26-intel` is the next Intel label) |
 | `darwin-arm64` | macOS 11+ | Apple Silicon | `macos-latest` | ✅ Supported |
 | `win32-arm64` | Windows 11 ARM | arm64 | — | ❌ See "Unsupported platforms" |
 | `linux-arm64` | Linux glibc ≥ 2.35 | arm64 | `ubuntu-22.04-arm` | ✅ Supported |
