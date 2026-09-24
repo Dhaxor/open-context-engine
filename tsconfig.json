@@ -16,5 +16,8 @@
     "declarationMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  // src/trace/studio is browser code: esbuild bundles it to dist/trace/studio
+  // (see build-studio.js) and tsconfig.studio.json typechecks it against the
+  // DOM. Compiling it here too would emit unusable CommonJS next to the bundle.
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/trace/studio"]
 }

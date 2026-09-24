@@ -66,6 +66,44 @@ export interface SqliteStoreOptions {
    *  seam (createRequire.resolve defeats module mocking); pointing this at a
    *  nonexistent path forces keyword-only mode. */
   resolveVecPath?: () => string;
+  /**
+   * Never destroy index data on open.
+   *
+   * Opening a store whose embedding dimension, schema version, or search mode
+   * no longer matches the runtime normally clears it, because for an indexing
+   * run that is the only way to reach a consistent state. For a command that
+   * merely REPORTS — `status`, `audit`, `policy` — it is data loss triggered by
+   * a read: run `oce status` without naming the provider the index was built
+   * with and the index is gone.
+   *
+   * With this set, such a store opens as-is and `getStaleReason()` explains
+   * what a subsequent `oce index` would have to rebuild.
+   */
+  readOnly?: boolean;
+  /**
+   * Run keyword-only (BM25) without loading sqlite-vec at all.
+   *
+   *   "explicit"  the user chose it (`--embedding-provider none`). A store
+   *               built with vectors transitions like any other mode change.
+   *   "fallback"  nothing better is configured — no embedding provider, no key.
+   *               This must never destroy an existing VECTOR index to get
+   *               there: re-embedding costs real money, and "I opened a shell
+   *               without my API key" is not a request to throw it away. The
+   *               open refuses with KeywordFallbackRefusedError instead.
+   */
+  keywordOnly?: "explicit" | "fallback";
+}
+
+/** A keyword-only fallback would have wiped a vector index; refused instead. */
+export class KeywordFallbackRefusedError extends Error {
+  constructor() {
+    super(
+      "This workspace's index was built with semantic embeddings, but no embedding provider is configured now.\n" +
+      "Set the key it was built with (e.g. VOYAGE_API_KEY or OPENAI_API_KEY), or run 'oce setup'.\n" +
+      "To deliberately switch to keyword-only search instead: oce index --embedding-provider none",
+    );
+    this.name = "KeywordFallbackRefusedError";
+  }
 }
 
 export interface HybridSearchOptions {
@@ -111,6 +149,8 @@ export class SqliteStore {
   private opts: SqliteStoreOptions;
   private _vectorAvailable = true;
   private _vectorDiagnosis?: NativeBindingDiagnosis;
+  /** Set when a read-only open declined to rebuild a mismatched store. */
+  private staleReason: string | null = null;
   private insertChunkStmt!: Statement<any[]>;
   private insertVecStmt?: Statement<any[]>;
   private insertFtsStmt!: Statement<any[]>;
@@ -139,6 +179,18 @@ export class SqliteStore {
     // incremental indexing skip embedding forever once vectors come back.
     if (this.vectorStateChanged()) {
       const mode = this._vectorAvailable ? "vector" : "keyword-only";
+      // A fallback to keyword-only must not cost someone their embeddings.
+      if (this.opts.keywordOnly === "fallback" && !this.opts.readOnly) {
+        this.db.close();
+        throw new KeywordFallbackRefusedError();
+      }
+      if (this.opts.readOnly) {
+        // A reporting command must never destroy what it was asked to describe.
+        this.staleReason = `index was built in a different search mode than this runtime supports (now: ${mode})`;
+        this.ensureSchema();
+        this.prepareStatements();
+        return;
+      }
       console.warn(`Index was built in a different search mode than this runtime supports (now: ${mode}). Recreating the store — a re-index is required.`);
       this.db.close();
       for (const suffix of ["", "-wal", "-shm"]) {
@@ -185,6 +237,19 @@ export class SqliteStore {
     } catch (err) {
       // better-sqlite3 itself failed — nothing can work. Stay fatal.
       throw nativeBindingError(err);
+    }
+    if (this.opts.keywordOnly) {
+      // Chosen, not failed: skip sqlite-vec entirely so no embedding is ever
+      // attempted. Indexing and retrieval already handle this mode.
+      this._vectorAvailable = false;
+      this._vectorDiagnosis = {
+        kind: "keyword_only",
+        title: "Keyword-only search (no embedding provider configured)",
+        message: "Retrieval runs on BM25 keyword ranking. Run 'oce setup' to enable semantic search — free options are available.",
+        recognized: true,
+        raw: "",
+      };
+      return;
     }
     let vecPath: string | null = null;
     let vecErr: unknown = null;
@@ -243,6 +308,12 @@ export class SqliteStore {
     if (stored == null) return false;
     return stored !== (this._vectorAvailable ? "vec" : "fts-only");
   }
+
+  /**
+   * Why this store would need rebuilding, or null when it matches the runtime.
+   * Only ever set under `readOnly` — otherwise the mismatch was repaired on open.
+   */
+  getStaleReason(): string | null { return this.staleReason; }
 
   private maybeMigrateLegacy(): void {
     const legacyFiles = ["store.json", "vectors.json", "state.json"];
@@ -317,11 +388,19 @@ export class SqliteStore {
       // hashes would make an incremental index skip them), leaving a store that
       // returns nothing. Clear them so the next index run repopulates cleanly.
       const reason = dimChanged
-        ? `Embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}`
-        : `Store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
-      console.warn(`${reason}. Clearing existing index — a re-index is required.`);
+        ? `embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}`
+        : `store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
+      if (this.opts.readOnly) {
+        // Report the mismatch and leave the data alone. Stamping the new meta
+        // here would be worse than the wipe: it would claim the store matches
+        // a runtime it does not, and the next indexing run would trust it.
+        this.staleReason = reason;
+        return;
+      }
+      console.warn(`${capitalize(reason)}. Clearing existing index — a re-index is required.`);
       this.db.exec("DELETE FROM chunks; DELETE FROM files; DELETE FROM graph_edges;");
     }
+    if (this.opts.readOnly) return;
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("vector_state", this._vectorAvailable ? "vec" : "fts-only");
     if (this._vectorAvailable) this.setMeta("embedding_dimension", String(this.expectedDim));
@@ -704,6 +783,11 @@ function rowToEdge(r: any): GraphEdge {
     kind: r.kind,
     confidence: r.confidence,
   };
+}
+
+/** Sentence-case a reason that is also used mid-sentence elsewhere. */
+function capitalize(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 export function vectorToBlob(vec: number[]): Buffer {

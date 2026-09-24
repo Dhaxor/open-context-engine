@@ -9,6 +9,7 @@ import { FileWatcher } from "../core/file-watcher";
 import { AuditLogger } from "../core/audit";
 import { renderDefinition, renderReference } from "../agent/agent";
 import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
+import { packageVersion } from "../version";
 
 export interface CreateMCPServerOptions {
   /** When set, every MCP tool invocation is appended to the audit log. */
@@ -16,7 +17,7 @@ export interface CreateMCPServerOptions {
 }
 
 export async function createMCPServer(context: OpenContext, opts: CreateMCPServerOptions = {}): Promise<McpServer> {
-  const server = new McpServer({ name: "open-context-engine", version: "0.1.0" });
+  const server = new McpServer({ name: "open-context-engine", version: packageVersion() });
   const audit = (tool: string, args: Record<string, unknown>) =>
     opts.audit?.log("mcp", { tool, arguments: JSON.stringify(args) });
 

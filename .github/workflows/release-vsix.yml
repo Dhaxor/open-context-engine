@@ -69,11 +69,12 @@ jobs:
             os: ubuntu-22.04
             target_os: linux
             target_arch: x64
-          # macOS x64 — macos-13 is the last Intel runner. When GitHub retires it
-          # (announced for ~2026Q3), switch to macos-latest with --arch=x64 + lipo
-          # verification. See PUBLISHING.md.
+          # macOS x64 — GitHub retired macos-13; macos-15-intel is its Intel
+          # successor on the free runners (macos-26-intel is the next one). A
+          # retired label never fails: the job just queues forever and the
+          # Marketplace publish, which needs every leg, never runs. See PUBLISHING.md.
           - target: darwin-x64
-            os: macos-13
+            os: macos-15-intel
             target_os: darwin
             target_arch: x64
           # macOS arm64 — Apple Silicon majority.

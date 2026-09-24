@@ -29,6 +29,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 🔗 **Symbol Expansion** | Automatically resolves identifiers in search results, pulling in definitions of functions, classes, and types referenced in snippets. |
 | 🎯 **Optional Re-ranking** | Plug in Voyage or Cohere re-rankers to boost result quality for complex queries. |
 | 🕸️ **Code Graph** | A tree-sitter AST pass extracts import/call/definition edges into a queryable graph; top search results are graph-expanded so callers and callees ride along. |
+| 🔭 **Trace** | The agent workspace in your browser, terminal, or desktop: an evidence rail showing what is in the model's context (ranked, pinnable, evictable), checkpoint rewind, approvals with a blast-radius score, watchable sub-agents, and parallel sessions in isolated git worktrees you can review and land. |
 | 🤖 **Agent Harness** | A full tool-use agent with codebase retrieval, file editing, shell execution, and web search — plus parallel read-only tool execution, pre/post tool-call hooks, token-usage accounting, session export/import, model routing, and cross-session memory. |
 | 🔌 **MCP Native** | Exposes retrieval, file, and symbol tools through the Model Context Protocol over stdio or **Streamable HTTP** (shared endpoint with bearer auth). Works with Claude Desktop, Cursor, and any MCP-compatible client. |
 | 🧰 **VS Code Extension** | Sidebar chat grounded in the index, agent edits with per-file diff/undo/redo, live re-indexing on save, and an index-health panel. Ships per-platform with multi-ABI native bindings. |
@@ -36,7 +37,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 🧾 **Tamper-Evident Audit Log** | Hash-chained JSONL of every agent run, tool call, and MCP invocation. `oce audit --verify` detects any alteration, deletion, or reordering. |
 | 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
 | 🚀 **Parallel Indexing** | Worker-thread parse/chunk pool kicks in automatically on large repos; `oce bench` measures throughput on yours. |
-| 🛟 **Degrades, Never Dies** | No sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
+| 🛟 **Degrades, Never Dies** | No embedding key, or no sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
 | 📏 **Measured, Not Guessed** | Retrieval quality is scored against a committed 44-case gold set: **recall@10 0.977 · nDCG@10 0.812 · ctx-recall 0.943** on this repo. Ranking changes ship with before/after deltas. |
 
 ## 🚀 Quick Start
@@ -44,63 +45,102 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 ### 1. Install
 
 ```bash
-npm install -g open-context-engine
-# or locally
-npm install open-context-engine
+npm install -g open-context-engine     # Node 22+
 ```
 
-### 2. Set your API key
+### 2. Pick a model — free options included
 
 ```bash
-# Recommended: Voyage Code-3 (best for code)
-export VOYAGE_API_KEY="your-key"
-
-# Or OpenAI
-export OPENAI_API_KEY="your-key"
-
-# Or run entirely local with Ollama
-export OLLAMA_BASE_URL="http://localhost:11434"
-
-# Or fully local, in-process — no key, no server (models cached in ~/.open-context/models)
-npm install @huggingface/transformers   # optional dep, one time
-oce index --provider local
+oce setup
 ```
 
-### 3. Index your codebase
+`oce setup` checks what you already have (a running Ollama, keys in your
+environment) and lists every way to get a working model, **free ones first**:
+
+| `-p` | Cost | |
+|---|---|---|
+| `ollama` | free, local | Runs on your machine. No key, no quota, works offline. |
+| `google` | free tier | Gemini — the most generous free tier; key at aistudio.google.com/apikey |
+| `groq` | free tier | Very fast; key at console.groq.com/keys |
+| `cerebras` | free tier | Key at cloud.cerebras.ai |
+| `openrouter` | free models | Models ending `:free` cost nothing; key at openrouter.ai/keys |
+| `openai`, `anthropic` | paid | |
+
+`oce setup -p google` records your choice; after that `oce trace` just works.
+
+**No embedding key needed to start.** Retrieval runs on keyword (BM25) search
+out of the box. For semantic ranking on top, pick an embedding provider —
+`oce setup --embeddings ollama` is free and local; `voyage` gives the best code
+retrieval.
+
+### 3. Open Trace
 
 ```bash
-# Full index
-oce index --workspace ./my-project
-
-# Incremental (only changed files)
-oce index --workspace ./my-project --incremental
+oce trace      # the workspace, in your browser
+oce            # the same thing, in your terminal
 ```
 
-### 4. Search
+Both index the current directory on start and keep one conversation going —
+see [Trace](#-trace) below for what makes it different.
+
+### 4. Or search from the command line
 
 ```bash
+oce index                                        # full index (incremental afterwards: --incremental)
 oce search "how does the auth middleware work?"
 ```
 
-### 5. Run the interactive agent
+## 🔭 Trace
 
-```bash
-oce                       # bare `oce` starts the agent in the current directory
-oce agent -w ./my-project # or target a workspace explicitly
-```
+Trace is the agent workspace. Every coding agent shows you what it *did*; Trace
+also shows you what it *knew* — because OCE owns the retrieval, not just the
+chat loop.
 
-```
-Open Context · code-native agent
-model      openai/gpt-5.4
-workspace  /home/you/my-project
-index      12,481 chunks · hybrid
-approvals  suggest
-type a request, or /help for commands · Ctrl+C interrupts
+- **Evidence rail.** What is in the model's context window right now: every
+  retrieved chunk ranked by its fusion score, the graph edge that pulled it in
+  ("called by search.ts"), and a budget meter split into retrieval / files /
+  history / system. **Pin** a chunk and it survives compaction; **evict** one
+  and it is genuinely removed from the next request.
+- **Retrieval readout instead of a spinner** — `retrieved 5 · top 0.94 · graph +2 · 251ms`.
+- **The spine.** A timeline of checkpoints, one per turn, on the same hash chain
+  as the audit log. Click one to rewind: the conversation *and* the files the
+  agent changed roll back — and a file you edited by hand since is left alone.
+- **Approvals with a blast radius.** Every edit and shell command waits for
+  `y` / `a`lways / `n`, showing the diff, a risk score, and how many indexed
+  callers the file has.
+- **Sub-agents you can watch.** Delegated research streams into its own
+  collapsible block instead of going silent for minutes.
+- **Parallel sessions.** In a git repository, each new session gets its own
+  worktree and branch, so agents never edit the same checkout. Review a
+  session's diff and **land** it (commit + `--no-ff` merge) when it's done —
+  uncommitted work is never discarded when you close one.
+- **The composer.** `@path` pins a file into context (fuzzy-matched against
+  the index), `!command` runs a shell command through the same approval flow,
+  and `/command` for everything else — the same in the browser and terminal.
 
-› refactor the user service to use dependency injection
-```
+`oce trace` binds to `127.0.0.1` only and mints a fresh access token each
+launch. Useful flags: `--port`, `--no-open`, `--headless` (API only),
+`--no-parallel`.
 
-The REPL streams styled output, shows each tool call with a live spinner and timing, and — before any file edit or shell command — prints a **diff/command preview and asks for approval** (`y` / `a`lways / `n`). Ctrl+C interrupts the current run without quitting the session.
+### In the terminal
+
+Bare `oce` opens the same workspace full-screen in your terminal: the same
+evidence rail (from 100 columns wide, or <kbd>Ctrl</kbd>+<kbd>R</kbd>), the same
+checkpoint gutter, the same approvals. <kbd>Esc</kbd> or <kbd>Ctrl</kbd>+<kbd>C</kbd>
+interrupts a run; <kbd>Ctrl</kbd>+<kbd>C</kbd> twice or `/exit` quits. Pipes,
+`--print`, and dumb terminals fall back to the classic line-by-line REPL, which
+you can also ask for with `oce --classic`.
+
+### As a desktop app
+
+`desktop/` wraps Trace in an Electron shell that adds desktop notifications
+(only when an approval is waiting, a turn finishes in the background, or
+something fails), an application menu, and `trace://` deep links. It is built
+from a source checkout for now — see [`desktop/README.md`](desktop/README.md).
+
+### The classic REPL
+
+`oce --classic` streams styled output, shows each tool call with a live spinner and timing, and — before any file edit or shell command — prints a **diff/command preview and asks for approval** (`y` / `a`lways / `n`). Ctrl+C interrupts the current run without quitting the session.
 
 **Approval modes** (as in the other leading coding CLIs):
 
@@ -132,7 +172,7 @@ oce --print "list the exported symbols in src/core" --json     # {answer, stats,
 
 The programmatic API mirrors all of this: `defaultAgentTools({ context })` stays read-only unless you pass `includeEdits`/`shell`/`plan`/`delegate`, and `ContextAgent` accepts `hooks` (a `PermissionManager` composes in here), `compaction`, and `environmentProvider`.
 
-### 6. Connect to Claude / Cursor via MCP
+### 5. Connect to Claude / Cursor via MCP
 
 ```bash
 oce mcp --workspace ./my-project
@@ -158,7 +198,7 @@ Then add to your MCP config:
 }
 ```
 
-### 7. Or use the VS Code extension
+### 6. Or use the VS Code extension
 
 The `extension/` folder ships a full VS Code experience on top of the same
 engine: a sidebar **chat** grounded in your index (streaming, markdown,
@@ -518,10 +558,10 @@ Keep your eval sets out of the index by listing their directory in `.contextigno
 
 ## 📦 Requirements
 
-- Node.js 18+
-- For fully-local embeddings: the optional `@huggingface/transformers` package (`--provider local`), or [Ollama](https://ollama.com) running locally
-- For cloud embeddings: API key for Voyage or OpenAI
-- Platforms without a [sqlite-vec](https://github.com/asg017/sqlite-vec) build (e.g. win32-arm64, Alpine) run keyword-only — no API key needed at all in that mode
+- Node.js 22 or newer (22 and 24 LTS install without a compiler; Node 20 is end-of-life and the SQLite binding no longer ships prebuilt binaries for it)
+- A chat model — `oce setup` lists free options (Ollama locally, or a free-tier key from Google, Groq, Cerebras, or OpenRouter)
+- Embeddings are optional: without them, search runs keyword-only (BM25). For semantic ranking use [Ollama](https://ollama.com) (`nomic-embed-text`, free and local), the optional `@huggingface/transformers` package (`--provider local`), or a Voyage / OpenAI key
+- Platforms without a [sqlite-vec](https://github.com/asg017/sqlite-vec) build (e.g. win32-arm64, Alpine) also run keyword-only
 
 ## 📄 License
 

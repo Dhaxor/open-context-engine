@@ -74,8 +74,13 @@ export class OpenContext {
     ctx.embedCache = config.embedCache ? new EmbedCache(typeof config.embedCache === "string" ? config.embedCache : undefined) : null;
     ctx.fileFilter = new FileFilter(config.maxFileSize, ctx.policy?.ignore);
     const storePath = config.storePath || defaultStorePath(config.workspaceRoot);
+    // Provider "none" IS a keyword-only choice, even from a library caller that
+    // did not also set keywordOnly.
+    const keywordOnly = config.keywordOnly ?? (config.embedding.provider === "none" ? "explicit" : undefined);
     ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension(), {
       ...(config.resolveVecPath ? { resolveVecPath: config.resolveVecPath } : {}),
+      ...(config.readOnly ? { readOnly: true } : {}),
+      ...(keywordOnly ? { keywordOnly } : {}),
     });
     await ctx.store.initialize();
     ctx.queryCache = new QueryCache(ctx.searchConfig.queryCacheSize ?? 128);
@@ -412,6 +417,28 @@ export class OpenContext {
     return this.retriever.retrieveDebug(query, { ...retrieveOptions, topK });
   }
 
+  /**
+   * `search()` plus the ranking report that produced it, in one pass.
+   *
+   * The harness needs both: the model gets `output` (byte-identical to what
+   * `search()` returns — the agent's behavior must not change because a UI is
+   * watching), and the UI gets `report` to render the ranked evidence with its
+   * real scores. Formatting goes through the same formatSearchOutput call, so
+   * the two can never drift.
+   */
+  async searchTraced(
+    query: string,
+    maxOutputLength?: number,
+    retrieveOptions?: RetrieveOptions,
+  ): Promise<{ output: string; report: RetrievalDebugReport }> {
+    const report = await this.retriever.retrieveDebug(query, retrieveOptions ?? {});
+    const output = formatSearchOutput(report.finalResults, {
+      ...this.searchConfig,
+      ...(maxOutputLength != null ? { maxOutputLength } : {}),
+    });
+    return { output, report };
+  }
+
   async listFiles(directory?: string, pattern?: string): Promise<string[]> {
     let paths = this.store.getIndexedPaths();
     if (directory) paths = paths.filter(p => p.startsWith(directory));
@@ -449,6 +476,10 @@ export class OpenContext {
 
   getChunkCount(): number { return this.store.getChunkCount(); }
 
+  /** Every indexed path, synchronously. `listFiles` is the filtered, async
+   *  form; autocomplete needs an answer per keystroke without awaiting. */
+  getIndexedPaths(): string[] { return this.store.getIndexedPaths(); }
+
   /** Chunks whose extracted symbol name matches exactly — definition lookup. */
   findSymbolDefinitions(symbol: string, limit = 5): Chunk[] {
     return this.store.getChunksBySymbol(symbol, limit);
@@ -468,8 +499,10 @@ export class OpenContext {
     return state.files.map(f => ({ path: f.path, chunkCount: counts.get(f.path) ?? 0, lastModified: f.lastModified }));
   }
 
-  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string; searchMode: "hybrid" | "keyword-only"; degradedReason?: string } {
+  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string; searchMode: "hybrid" | "keyword-only"; degradedReason?: string; degradedKind?: string; staleReason?: string } {
     const vectorAvailable = this.store.isVectorAvailable();
+    const staleReason = this.store.getStaleReason();
+    const diagnosis = vectorAvailable ? undefined : this.store.getVectorDiagnosis();
     return {
       indexedFiles: this.store.getFileCount(),
       totalChunks: this.store.getChunkCount(),
@@ -477,7 +510,12 @@ export class OpenContext {
       model: this.embedder.getModel(),
       lastSynced: new Date().toISOString(),
       searchMode: vectorAvailable ? "hybrid" : "keyword-only",
-      ...(vectorAvailable ? {} : { degradedReason: this.store.getVectorDiagnosis()?.title }),
+      // `kind` separates a CHOICE (keyword_only) from a failure (sqlite-vec
+      // could not load) — the two need very different messages.
+      ...(diagnosis ? { degradedReason: diagnosis.title, degradedKind: diagnosis.kind } : {}),
+      // Only ever set on a read-only open: the store does not match this
+      // runtime and an indexing run would rebuild it.
+      ...(staleReason ? { staleReason } : {}),
     };
   }
 
