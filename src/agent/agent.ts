@@ -29,7 +29,28 @@ const DEFAULT_SYSTEM_PROMPT = `You are an expert coding assistant with tools to 
 - If a delegate tool is available, hand off broad explorations ("map how X works across the codebase") to it instead of flooding your own context with search results.
 - Do not fabricate file paths or symbols — verify them with the tools first.`;
 
-export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>): ToolDefinition[] {
+/**
+ * What one `codebase-retrieval` call actually did. Emitted only when a caller
+ * asks for it, so the plain agent path costs nothing extra.
+ *
+ * This is the seam the harness is built on: retrieval already computes ranked
+ * evidence with per-chunk scores, and every other coding agent throws it away
+ * before anything can render it.
+ */
+export interface RetrievalObservation {
+  query: string;
+  report: import("../core/retriever").RetrievalDebugReport;
+  durationMs: number;
+  stages: import("../core/retriever").RetrievalStageTiming[];
+}
+
+export type RetrievalObserver = (observation: RetrievalObservation) => void;
+
+export function defaultCodebaseTools(
+  context: OpenContext,
+  retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>,
+  onRetrieval?: RetrievalObserver,
+): ToolDefinition[] {
   return [
     {
       name: "codebase-retrieval",
@@ -41,7 +62,25 @@ export function defaultCodebaseTools(context: OpenContext, retrieveOptions?: () 
         },
         required: ["information_request"],
       },
-      handler: async (args) => context.search(args.information_request, undefined, await retrieveOptions?.()),
+      handler: async (args) => {
+        const opts = await retrieveOptions?.();
+        if (!onRetrieval) return context.search(args.information_request, undefined, opts);
+        // Traced path: same output string, plus the ranking report. Observer
+        // failures are swallowed — a UI must never break the agent's run.
+        const started = Date.now();
+        const stages: import("../core/retriever").RetrievalStageTiming[] = [];
+        const { output, report } = await context.searchTraced(args.information_request, undefined, {
+          ...opts,
+          onStage: (stage, results) => {
+            stages.push({ stage, ms: Date.now() - started, count: results.length });
+            opts?.onStage?.(stage, results);
+          },
+        });
+        try {
+          onRetrieval({ query: args.information_request, report, durationMs: Date.now() - started, stages });
+        } catch {}
+        return output;
+      },
     },
     {
       name: "list-files",
@@ -150,6 +189,10 @@ export interface DefaultToolsOptions {
   shell?: Omit<ShellToolOptions, "workspaceRoot"> | boolean;
   webSearch?: WebSearchOptions | false;
   retrieveOptions?: () => RetrieveOptions | Promise<RetrieveOptions>;
+  /** Observe every codebase-retrieval with its full ranking report. Set by the
+   *  harness to feed the evidence rail; unset elsewhere, so the plain agent
+   *  path keeps the cheaper untraced search. */
+  onRetrieval?: RetrievalObserver;
   /** Policy to enforce. Default: the policy the OpenContext loaded for the
    *  workspace. Pass `false` to skip (tests / embedders that enforce upstream). */
   policy?: EffectivePolicy | false;
@@ -169,7 +212,7 @@ export interface DefaultToolsOptions {
 export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
   // `getPolicy?.` — embedders (and tests) may pass a duck-typed context.
   const policy = opts.policy === false ? undefined : opts.policy ?? opts.context.getPolicy?.() ?? undefined;
-  let tools: ToolDefinition[] = defaultCodebaseTools(opts.context, opts.retrieveOptions);
+  let tools: ToolDefinition[] = defaultCodebaseTools(opts.context, opts.retrieveOptions, opts.onRetrieval);
   if (opts.includeEdits) {
     if (!policyAllowsEdits(policy)) {
       opts.onPolicyBlock?.("edits", "file-editing tools are disabled by policy");
