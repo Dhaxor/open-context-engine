@@ -84,8 +84,9 @@ try {
   let failed = false;
 
   // Exactly this target's prebuild: the package carries all eight platforms,
-  // and scripts/package-vsix.mjs keeps only one. The C++ sources and SQLite
-  // amalgamation are for source builds, which a VSIX never does.
+  // and scripts/package-vsix.mjs keeps only one. The C++ sources, the SQLite
+  // amalgamation and node-gyp's build/ are source-build material; the loader
+  // takes the prebuild whenever it exists.
   const prebuilds = fs.existsSync(path.join(bs3Dir, "prebuilds")) ? fs.readdirSync(path.join(bs3Dir, "prebuilds")) : [];
   if (prebuilds.length !== 1 || prebuilds[0] !== `${target}.node`) {
     console.error(`FAIL  better-sqlite3 prebuilds: expected exactly ${target}.node, found [${prebuilds.join(", ") || "none"}].`);
@@ -93,7 +94,7 @@ try {
   } else {
     console.log(`OK    better-sqlite3 prebuilds: exactly ${target}.node.`);
   }
-  for (const sourceOnly of ["deps", "src", "binding.gyp"]) {
+  for (const sourceOnly of ["deps", "src", "build", "binding.gyp"]) {
     if (fs.existsSync(path.join(bs3Dir, sourceOnly))) {
       console.error(`FAIL  better-sqlite3/${sourceOnly} shipped: source-build input, excluded by .vscodeignore.`);
       failed = true;

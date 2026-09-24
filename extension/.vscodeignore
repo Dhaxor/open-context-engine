@@ -24,10 +24,13 @@ dist-native/**
 # better-sqlite3 13 is Node-API: its package carries a prebuild for all eight
 # platforms, plus the C++ sources and SQLite amalgamation for source builds.
 # A VSIX needs only its own target's prebuild, which scripts/package-vsix.mjs
-# re-includes with a single negation.
+# re-includes with a single negation. build/ is what `npm ci`'s node-gyp step
+# leaves behind: lockfiles don't record the package's `"gypfile": false`, so
+# npm runs it, and binding.gyp turns it into a no-op when a prebuild exists.
 node_modules/better-sqlite3/prebuilds/**
 node_modules/better-sqlite3/deps/**
 node_modules/better-sqlite3/src/**
+node_modules/better-sqlite3/build/**
 node_modules/better-sqlite3/binding.gyp
 
 # Documentation that belongs on GitHub, not in the runtime bundle.

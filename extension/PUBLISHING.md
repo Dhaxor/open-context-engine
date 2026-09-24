@@ -86,6 +86,14 @@ ELECTRON_RUN_AS_NODE=1 npx electron@43.6.0 scripts/smoke-native.cjs .
 F5 (the dev host) needs no native step: `better-sqlite3` loads its prebuild
 straight from `node_modules`.
 
+**Windows without Visual Studio: use `npm ci --ignore-scripts`.** Lockfiles
+don't record better-sqlite3's `"gypfile": false`, so `npm ci` runs
+`node-gyp rebuild` for it. `binding.gyp` makes that a no-op when a prebuild
+exists, but on Windows node-gyp looks for Visual Studio's C++ workload first
+and fails without it. Skipping install scripts loses nothing here: the
+prebuild ships in the package, and esbuild's binary comes from its platform
+package.
+
 ## CI: build all five supported platforms
 
 `.github/workflows/release-vsix.yml` defines a 5-leg matrix. Every leg
