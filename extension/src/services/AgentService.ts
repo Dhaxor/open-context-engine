@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import * as path from "path";
 import * as vscode from "vscode";
 import { ContextService } from "./ContextService";
@@ -153,10 +152,10 @@ export class AgentService {
         // Everything the agent and its tools are built from belongs in the key:
         // anything left out (a narrowed shell allowlist, a rotated key that
         // shares its first characters with the old one) would keep applying the
-        // old value until a reload. The key is fingerprinted, never kept.
-        const keyPrint = createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+        // old value until a reload. The API key itself is compared separately
+        // (below), so it never ends up in a string that could be logged.
         const cacheKey = [
-            provider, model, baseUrl ?? "", keyPrint, `root=${ctx.getWorkspaceRoot()}`,
+            provider, model, baseUrl ?? "", `root=${ctx.getWorkspaceRoot()}`,
             `edits=${includeEdits}`, `sh=${shellEnabled}:${shellAllowlist.join("\u0000")}:${shellTimeoutMs}`,
             `web=${webSearchEnabled && !!webSearchKey}`, `route=${routingEnabled}:${routingFast}:${routingReasoning}`,
             `mem=${memoryEnabled}`, `mt=${maxTokens}`, `steps=${maxSteps}`, `hist=${historyTokenBudget}`,
@@ -165,7 +164,7 @@ export class AgentService {
             // setting changed) needs new ones — the old would query a closed DB.
             `ctx=${svc.getContextGeneration()}`,
         ].join("|");
-        if (this.agent && this.currentProviderKey === cacheKey) {
+        if (this.agent && this.currentProviderKey === cacheKey && this.currentApiKey === apiKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
@@ -218,10 +217,13 @@ export class AgentService {
         }
         this.currentProviderKey = cacheKey;
         this.currentLLMProvider = provider;
+        this.currentApiKey = apiKey;
         return this.agent;
     }
 
     private currentLLMProvider: string | null = null;
+    /** The key the cached agent was built with (the agent itself holds it too). */
+    private currentApiKey: string | null = null;
 
     private editForwarder?: (edit: EditProposal) => void;
     private warned = new Set<string>();
