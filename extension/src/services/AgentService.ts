@@ -164,7 +164,8 @@ export class AgentService {
             // setting changed) needs new ones — the old would query a closed DB.
             `ctx=${svc.getContextGeneration()}`,
         ].join("|");
-        if (this.agent && this.currentProviderKey === cacheKey && this.currentApiKey === apiKey) {
+        if (this.agent && this.currentProviderKey === cacheKey && this.currentApiKey === apiKey
+            && this.currentWebSearchKey === (webSearchKey ?? null)) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
@@ -218,12 +219,15 @@ export class AgentService {
         this.currentProviderKey = cacheKey;
         this.currentLLMProvider = provider;
         this.currentApiKey = apiKey;
+        this.currentWebSearchKey = webSearchKey ?? null;
         return this.agent;
     }
 
     private currentLLMProvider: string | null = null;
-    /** The key the cached agent was built with (the agent itself holds it too). */
+    /** The keys the cached agent and its web-search tool were built with (both
+     *  hold them too); compared directly, never folded into the cache key. */
     private currentApiKey: string | null = null;
+    private currentWebSearchKey: string | null = null;
 
     private editForwarder?: (edit: EditProposal) => void;
     private warned = new Set<string>();

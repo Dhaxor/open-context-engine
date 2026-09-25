@@ -23,12 +23,6 @@ const STORE_SETTINGS = [
     "openContext.chunkOverlap",
     "openContext.autoIndex",
 ];
-/** Changes that switch the store's embedding space, so it must be re-indexed. */
-const EMBEDDING_SETTINGS = [
-    "openContext.embedding.provider",
-    "openContext.embedding.model",
-    "openContext.embedding.apiKey",
-];
 
 /** Show the user a real, actionable error for any failure that initializes the
  *  native SQLite binding (NMV mismatch, glibc skew, wrong arch, etc.). Until
@@ -147,12 +141,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
     context.subscriptions.push({ dispose: () => { if (reindexTimer) clearTimeout(reindexTimer); } });
 
-    context.subscriptions.push(svc.onEmbeddingKeyChanged((hasKey) => {
+    context.subscriptions.push(svc.onEmbeddingKeyChanged(({ hasKey, hadIndex }) => {
         // Every key-save path lands here — the command, the settings panel,
         // the chat's key form. A new key reopens the store empty in vector
-        // mode, so rebuild it now instead of leaving search empty until files
-        // change.
-        if (hasKey) scheduleReindex();
+        // mode; rebuild the index that was there instead of leaving search
+        // empty until files change. A workspace never indexed (indexOnStartup
+        // off) stays that way: nobody asked for a paid index run.
+        if (hasKey && hadIndex) scheduleReindex();
         else void refreshStatus();
     }));
 
@@ -162,7 +157,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     };
 
-    const runIndex = async (label: string, op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<import("../../src/core/types").IndexingResult | void>) => {
+    const runIndex = async (
+        label: string,
+        op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<import("../../src/core/types").IndexingResult | void>,
+        /** The op reopens the store itself (a new index root), so a changed
+         *  generation is not an interruption. */
+        opts: { reopensStore?: boolean } = {},
+    ) => {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: label, cancellable: true },
             async (progress, token) => {
@@ -189,7 +190,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // changed). Not a failure to report: run again once things
                     // settle — the debounce folds this into any run the reopen
                     // itself scheduled.
-                    if (svc.getContextGeneration() !== generation) {
+                    if (!opts.reopensStore && svc.getContextGeneration() !== generation) {
                         scheduleReindex();
                         return;
                     }
@@ -224,6 +225,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 svc.indexDirectory(dir, (status, current, total) => {
                     progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
                 }, token),
+                { reopensStore: true },
             );
             await restartWatching();
             chatView.refreshConfig();
@@ -371,9 +373,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 password: true,
             });
             if (value === undefined) return;
-            // setEmbeddingApiKey fires onEmbeddingKeyChanged, which re-indexes.
-            await svc.setEmbeddingApiKey(value);
-            vscode.window.showInformationMessage(value ? `${label} key saved — re-indexing with semantic search.` : "Embedding API key cleared.");
+            // setEmbeddingApiKey fires onEmbeddingKeyChanged, which re-indexes
+            // when there was an index to rebuild.
+            const hadIndex = await svc.setEmbeddingApiKey(value);
+            vscode.window.showInformationMessage(
+                !value ? "Embedding API key cleared."
+                    : hadIndex ? `${label} key saved — re-indexing with semantic search.`
+                    : `${label} key saved. Run "Open Context: Index Workspace" to build the index.`,
+            );
         }),
 
         vscode.commands.registerCommand("openContext.setLLMApiKey", async () => {
@@ -489,19 +496,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             // store under an index in flight — the model & keys form writes
             // llm.* on every save, right beside the key save that starts one.
             if (!STORE_SETTINGS.some((key) => e.affectsConfiguration(key))) return;
+            // Read before closing: never open a store just to count it, since
+            // opening with the new settings can itself rebuild it.
+            const before = svc.peekIndexedFiles() ?? 0;
             await svc.dispose();
             svc.bindExtensionContext(context);
             if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
                 await svc.startWatching().catch(() => {});
             }
-            // A new embedding provider, model or key reopens the store empty in
-            // the new mode, and the watcher only picks up files as they change.
-            // Any other reopen can land there too — e.g. a key saved in another
-            // window (SecretStorage is shared) takes effect here on this reopen —
-            // so an empty store is rebuilt whatever the setting was.
-            if (EMBEDDING_SETTINGS.some((key) => e.affectsConfiguration(key))) {
-                scheduleReindex();
-            } else {
+            // A reopen in a new embedding space (provider, model, key — or a key
+            // saved in another window, since SecretStorage is shared, taking
+            // effect here) rebuilds the store empty, and the watcher only picks
+            // up files as they change. Rebuild what was there. A store that was
+            // empty before stays empty: that user indexes by hand.
+            if (before > 0) {
                 try {
                     if ((await svc.getStatus()).indexedFiles === 0) scheduleReindex();
                 } catch { /* reported by the index run or the next command */ }

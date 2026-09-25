@@ -55,9 +55,10 @@ export class ContextService implements vscode.Disposable {
     private _onReindex = new vscode.EventEmitter<IndexingResult>();
     private _lastIndexError: string | undefined;
     readonly onReindex = this._onReindex.event;
-    /** Fires after the embedding key is saved (true) or cleared (false), from
-     *  any path: the command, the settings panel, or the chat's key form. */
-    private _onEmbeddingKeyChanged = new vscode.EventEmitter<boolean>();
+    /** Fires after the embedding key is saved or cleared, from any path: the
+     *  command, the settings panel, or the chat's key form. `hadIndex`: the
+     *  store open before the change held an index (which the reopen dropped). */
+    private _onEmbeddingKeyChanged = new vscode.EventEmitter<{ hasKey: boolean; hadIndex: boolean }>();
     readonly onEmbeddingKeyChanged = this._onEmbeddingKeyChanged.event;
     /** Bumped whenever the open contexts are closed. Anything that captured an
      *  OpenContext (the chat agent's tools) compares it to know it is stale. */
@@ -306,18 +307,27 @@ export class ContextService implements vscode.Disposable {
         return legacy || undefined;
     }
 
-    public async setEmbeddingApiKey(value: string): Promise<void> {
-        if (!this._extContext) return;
+    /** Returns whether the store open before the change held an index. */
+    public async setEmbeddingApiKey(value: string): Promise<boolean> {
+        if (!this._extContext) return false;
         if (value) await this._extContext.secrets.store("openContext.embedding.apiKey", value);
         else await this._extContext.secrets.delete("openContext.embedding.apiKey");
         // The key decides between keyword-only and semantic search, so an open
         // context is stale either way — from the command or the settings panel.
+        const hadIndex = (this.peekIndexedFiles() ?? 0) > 0;
         const watching = this._watcher !== null || this._startingWatch !== null;
         await this.dispose();
         if (watching) await this.startWatching().catch(() => {});
-        // The store rebuilds empty in the new mode, so it needs a full index —
-        // the watcher only picks up files as they change.
-        this._onEmbeddingKeyChanged.fire(Boolean(value));
+        // The store rebuilds empty in the new mode; an index that existed needs
+        // rebuilding — the watcher only picks up files as they change.
+        this._onEmbeddingKeyChanged.fire({ hasKey: Boolean(value), hadIndex });
+        return hadIndex;
+    }
+
+    /** Files in the open store's index, or undefined when no store is open.
+     *  Never opens one: opening with changed settings can itself rebuild it. */
+    public peekIndexedFiles(): number | undefined {
+        return this._context?.getStatus().indexedFiles;
     }
 
     public getContextGeneration(): number {

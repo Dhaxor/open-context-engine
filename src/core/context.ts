@@ -79,7 +79,11 @@ export class OpenContext {
     const keywordOnly = config.keywordOnly ?? (config.embedding.provider === "none" ? "explicit" : undefined);
     ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension(), {
       // Provider and model: vectors from different models can't be compared.
-      embeddingModel: `${config.embedder ? "custom" : ctx.embeddingConfig.provider}:${ctx.embedder.getModel()}`,
+      // Taken from the configuration, so an injected embedder standing in for
+      // the configured one (the CLI's `status` / `push-index --no-index`)
+      // carries the same identity as the real provider — anything else would
+      // read as a model change and rebuild the index.
+      embeddingModel: `${ctx.embeddingConfig.provider}:${config.embedder ? config.embedder.getModel() : ctx.embeddingConfig.model}`,
       ...(config.resolveVecPath ? { resolveVecPath: config.resolveVecPath } : {}),
       ...(config.readOnly ? { readOnly: true } : {}),
       ...(keywordOnly ? { keywordOnly } : {}),

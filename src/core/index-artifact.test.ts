@@ -59,6 +59,50 @@ const FILES = {
   "src/billing.ts": "export function charge(amount: number) {\n  return amount * 100;\n}\n",
 };
 
+describe("embedding model identity across real and stand-in embedders", () => {
+  // The CLI's `status` and `push-index --no-index` open the store with a
+  // stand-in embedder for the configured provider. It must carry the same
+  // identity the real provider stamped, or the open reads as a model change:
+  // push-index would wipe the index it was asked to export, and status would
+  // call every index stale.
+  it("a stand-in for the configured provider neither wipes nor flags the index", async () => {
+    const ws = await makeWorkspace(FILES);
+    const built = await makeContext(ws, countingEmbedder().embedder);
+    await built.indexWorkspace();
+    const chunks = built.getStatus().totalChunks;
+    expect(chunks).toBeGreaterThan(0);
+    built.close();
+
+    // The real provider for the same configuration (constructing it makes no
+    // network call).
+    const real = await OpenContext.create({
+      workspaceRoot: ws,
+      storePath: path.join(ws, ".store"),
+      embedding: { provider: "ollama", model: "mock-model", dimension: DIM, batchSize: 32 },
+      policy: false,
+    });
+    expect(real.getStatus().totalChunks).toBe(chunks);
+    real.close();
+
+    const standIn: EmbeddingProvider = {
+      embed: async () => { throw new Error("does not embed"); },
+      getDimension: () => DIM,
+      getModel: () => "mock-model",
+    };
+    const reader = await OpenContext.create({
+      workspaceRoot: ws,
+      storePath: path.join(ws, ".store"),
+      embedding: { provider: "ollama", model: "mock-model", dimension: DIM, batchSize: 32 },
+      embedder: standIn,
+      readOnly: true,
+      policy: false,
+    });
+    expect(reader.getStatus().totalChunks).toBe(chunks);
+    expect(reader.getStatus().staleReason).toBeUndefined();
+    reader.close();
+  });
+});
+
 describe("index artifact export/install", () => {
   it("round-trips: exported index searches identically after install elsewhere", async () => {
     const producer = countingEmbedder();
