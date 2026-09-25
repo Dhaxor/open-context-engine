@@ -56,9 +56,9 @@ export class ContextService implements vscode.Disposable {
     private _lastIndexError: string | undefined;
     readonly onReindex = this._onReindex.event;
     /** Fires after the embedding key is saved or cleared, from any path: the
-     *  command, the settings panel, or the chat's key form. `hadIndex`: the
-     *  store open before the change held an index (which the reopen dropped). */
-    private _onEmbeddingKeyChanged = new vscode.EventEmitter<{ hasKey: boolean; hadIndex: boolean }>();
+     *  command, the settings panel, or the chat's key form. `rebuild`: the
+     *  reopened store should be (re)indexed (see needsRebuild). */
+    private _onEmbeddingKeyChanged = new vscode.EventEmitter<{ hasKey: boolean; rebuild: boolean }>();
     readonly onEmbeddingKeyChanged = this._onEmbeddingKeyChanged.event;
     /** Bumped whenever the open contexts are closed. Anything that captured an
      *  OpenContext (the chat agent's tools) compares it to know it is stale. */
@@ -89,6 +89,10 @@ export class ContextService implements vscode.Disposable {
     public async clearIndexWorkspaceRoot(): Promise<void> {
         await this._extContext?.globalState.update(INDEX_WORKSPACE_ROOT_KEY, undefined);
         await this.dispose();
+        // Another root: its index history is not this one's.
+        this._indexIntent = false;
+        this._indexIncomplete = false;
+        this._lastIndexedFiles = undefined;
     }
 
     public async getContext(): Promise<OpenContext> {
@@ -111,7 +115,12 @@ export class ContextService implements vscode.Disposable {
             this._opening = opening;
             // Cleared on success and failure alike, so a failed open is retried.
             // Registered before any caller awaits, so it runs first.
-            opening.finally(() => { if (this._opening === opening) this._opening = null; }).catch(() => {});
+            opening.finally(() => { if (this._opening === opening) this._opening = null; }).catch((err) => {
+                // A refused keyword fallback means an index exists on disk (built
+                // with a key that isn't set now): the workspace wants one, and it
+                // may be behind by whatever changed meanwhile.
+                if (err?.name === "KeywordFallbackRefusedError") { this._indexIntent = true; this._indexIncomplete = true; }
+            });
         }
         const ctx = await this._opening;
         return ctx ?? this.getContext(); // disposed mid-open: open a current one
@@ -119,33 +128,72 @@ export class ContextService implements vscode.Disposable {
 
     private _opening: Promise<OpenContext | null> | null = null;
 
+    // Whether this workspace should have an index, and whether it is complete.
+    // Row counts alone can't tell: an index refused on open, a first index
+    // still running, or a rebuild that failed all show zero rows.
+    /** An index existed, was built, attempted, or found (refused) this session. */
+    private _indexIntent = false;
+    /** The last full run failed or was cut off, or the store was refused. */
+    private _indexIncomplete = false;
+    /** Files the last completed run left indexed (a workspace with none stays 0). */
+    private _lastIndexedFiles: number | undefined;
+
+    /**
+     * Whether a reopened store should be (re)built: only when this workspace
+     * is meant to have an index — never for one that is indexed by hand and
+     * never was — and it is missing or incomplete.
+     */
+    public needsRebuild(indexedFiles: number): boolean {
+        if (!this._indexIntent) return false;
+        return this._indexIncomplete || (indexedFiles === 0 && this._lastIndexedFiles !== 0);
+    }
+
+    private async trackIndexRun<T extends IndexingResult>(run: () => Promise<T>): Promise<T> {
+        this._indexIntent = true;
+        this._indexIncomplete = true;
+        const result = await run();
+        this._indexIncomplete = false;
+        this._lastIndexedFiles = this.peekIndexedFiles();
+        return result;
+    }
+
     public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
-            const ctx = await this.getContext();
-            const result = await ctx.incrementalIndex((stage, current, total) => {
-                if (token?.isCancellationRequested) throw new vscode.CancellationError();
-                onProgress?.(stage, current, total);
+            return await this.trackIndexRun(async () => {
+                const ctx = await this.getContext();
+                const result = await ctx.incrementalIndex((stage, current, total) => {
+                    if (token?.isCancellationRequested) throw new vscode.CancellationError();
+                    onProgress?.(stage, current, total);
+                });
+                // Partial failures aren't thrown — record them so the health panel shows why.
+                this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
+                return result;
             });
-            // Partial failures aren't thrown — record them so the health panel shows why.
-            this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
-            return result;
         } catch (err: any) {
             this._lastIndexError = err?.message ?? String(err);
             throw err;
         }
     }
 
-    public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
+    /** `onReopened` runs once the new root's store is open — the op's own
+     *  reopen, which callers must not mistake for an interruption. */
+    public async indexDirectory(dirPath: string, onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken, onReopened?: () => void): Promise<IndexingResult> {
         try {
             await this.setIndexWorkspaceRoot(dirPath);
-            const config = await this.getConfigForPath(this.resolveWorkspaceRoot());
-            this._context = await OpenContext.create(config);
-            const result = await this._context.indexWorkspace((stage, current, total) => {
-                if (token?.isCancellationRequested) throw new vscode.CancellationError();
-                onProgress?.(stage, current, total);
+            // A new root starts with no index history of its own.
+            this._indexIntent = false;
+            this._indexIncomplete = false;
+            this._lastIndexedFiles = undefined;
+            return await this.trackIndexRun(async () => {
+                const ctx = await this.getContext();
+                onReopened?.();
+                const result = await ctx.indexWorkspace((stage, current, total) => {
+                    if (token?.isCancellationRequested) throw new vscode.CancellationError();
+                    onProgress?.(stage, current, total);
+                });
+                this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
+                return result;
             });
-            this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
-            return result;
         } catch (err: any) {
             this._lastIndexError = err?.message ?? String(err);
             throw err;
@@ -307,21 +355,27 @@ export class ContextService implements vscode.Disposable {
         return legacy || undefined;
     }
 
-    /** Returns whether the store open before the change held an index. */
+    /** Returns whether the index will be rebuilt for the new key. */
     public async setEmbeddingApiKey(value: string): Promise<boolean> {
         if (!this._extContext) return false;
         if (value) await this._extContext.secrets.store("openContext.embedding.apiKey", value);
         else await this._extContext.secrets.delete("openContext.embedding.apiKey");
         // The key decides between keyword-only and semantic search, so an open
         // context is stale either way — from the command or the settings panel.
-        const hadIndex = (this.peekIndexedFiles() ?? 0) > 0;
-        const watching = this._watcher !== null || this._startingWatch !== null;
+        // Watch whenever autoIndex is on, not only if a watcher was running: a
+        // store refused at startup (no key) never got one.
+        const autoIndex = vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true);
+        const watching = autoIndex || this._watcher !== null || this._startingWatch !== null;
         await this.dispose();
         if (watching) await this.startWatching().catch(() => {});
-        // The store rebuilds empty in the new mode; an index that existed needs
-        // rebuilding — the watcher only picks up files as they change.
-        this._onEmbeddingKeyChanged.fire({ hasKey: Boolean(value), hadIndex });
-        return hadIndex;
+        // The store reopens empty in the new mode (or behind, if it was refused);
+        // the watcher only picks up files as they change.
+        let rebuild = false;
+        if (value) {
+            try { rebuild = this.needsRebuild((await this.getStatus()).indexedFiles); } catch { /* the index run will report it */ }
+        }
+        this._onEmbeddingKeyChanged.fire({ hasKey: Boolean(value), rebuild });
+        return rebuild;
     }
 
     /** Files in the open store's index, or undefined when no store is open.
@@ -435,6 +489,9 @@ export class ContextService implements vscode.Disposable {
     public async dispose(): Promise<void> {
         // First, so anything mid-open or mid-start sees it and backs off.
         this._generation++;
+        // The store about to close held an index: if the reopen drops it, it
+        // is to be rebuilt (needsRebuild).
+        if ((this.peekIndexedFiles() ?? 0) > 0) this._indexIntent = true;
         await this.stopWatching();
         this._context?.close();
         this._context = null;

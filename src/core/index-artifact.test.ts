@@ -178,6 +178,23 @@ describe("index artifact export/install", () => {
       .rejects.toThrow(/built with mock-model \(4d\)/);
   });
 
+  it("refuses an artifact from another provider serving the same model name", async () => {
+    // The store rebuilds on any provider:model difference, so installing it
+    // would only replace the local index with one the next open discards.
+    const ws1 = await makeWorkspace(FILES);
+    const ctx1 = await makeContext(ws1, countingEmbedder().embedder); // ollama:mock-model
+    await ctx1.indexWorkspace();
+    const artifact = path.join(await tmpDir("oce-team-art-"), "index.db.gz");
+    await ctx1.exportIndex(artifact);
+    ctx1.close();
+
+    const store = path.join(await tmpDir("oce-team-ws2-"), ".store");
+    await expect(installArtifact(artifact, store, { provider: "openai", model: "mock-model", dimension: DIM }))
+      .rejects.toThrow(/built with ollama:mock-model \(4d\) but this workspace is configured for openai:mock-model/);
+    await expect(installArtifact(artifact, store, { provider: "ollama", model: "mock-model", dimension: DIM }))
+      .resolves.toMatchObject({ embeddingProvider: "ollama" });
+  });
+
   it("backs up an existing database before install", async () => {
     const producer = countingEmbedder();
     const ws1 = await makeWorkspace(FILES);

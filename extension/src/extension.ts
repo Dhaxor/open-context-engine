@@ -141,13 +141,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
     context.subscriptions.push({ dispose: () => { if (reindexTimer) clearTimeout(reindexTimer); } });
 
-    context.subscriptions.push(svc.onEmbeddingKeyChanged(({ hasKey, hadIndex }) => {
+    context.subscriptions.push(svc.onEmbeddingKeyChanged(({ rebuild }) => {
         // Every key-save path lands here — the command, the settings panel,
         // the chat's key form. A new key reopens the store empty in vector
-        // mode; rebuild the index that was there instead of leaving search
-        // empty until files change. A workspace never indexed (indexOnStartup
-        // off) stays that way: nobody asked for a paid index run.
-        if (hasKey && hadIndex) scheduleReindex();
+        // mode (or behind, if it was refused without one); rebuild what this
+        // workspace is meant to have. One indexed only by hand, and never
+        // indexed, stays that way: nobody asked for a paid index run.
+        if (rebuild) scheduleReindex();
         else void refreshStatus();
     }));
 
@@ -159,17 +159,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const runIndex = async (
         label: string,
-        op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<import("../../src/core/types").IndexingResult | void>,
-        /** The op reopens the store itself (a new index root), so a changed
-         *  generation is not an interruption. */
-        opts: { reopensStore?: boolean } = {},
+        /** `rebase` is for ops that reopen the store themselves (a new index
+         *  root): call it after that reopen so it isn't taken for an
+         *  interruption, while a later, external reopen still is. */
+        op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken, rebase: () => void) => Promise<import("../../src/core/types").IndexingResult | void>,
     ) => {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: label, cancellable: true },
             async (progress, token) => {
-                const generation = svc.getContextGeneration();
+                let generation = svc.getContextGeneration();
+                const rebase = () => { generation = svc.getContextGeneration(); };
                 try {
-                    const result = await op(progress, token);
+                    const result = await op(progress, token, rebase);
                     await refreshStatus();
                     const s = await svc.getStatus();
                     if (result?.failed?.length) {
@@ -190,7 +191,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // changed). Not a failure to report: run again once things
                     // settle — the debounce folds this into any run the reopen
                     // itself scheduled.
-                    if (!opts.reopensStore && svc.getContextGeneration() !== generation) {
+                    if (svc.getContextGeneration() !== generation) {
                         scheduleReindex();
                         return;
                     }
@@ -221,11 +222,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             const dir = picked?.[0]?.fsPath;
             if (!dir) return;
-            await runIndex(`Indexing ${path.basename(dir)}...`, (progress, token) =>
+            await runIndex(`Indexing ${path.basename(dir)}...`, (progress, token, rebase) =>
                 svc.indexDirectory(dir, (status, current, total) => {
                     progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
-                }, token),
-                { reopensStore: true },
+                }, token, rebase),
             );
             await restartWatching();
             chatView.refreshConfig();
@@ -374,11 +374,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             if (value === undefined) return;
             // setEmbeddingApiKey fires onEmbeddingKeyChanged, which re-indexes
-            // when there was an index to rebuild.
-            const hadIndex = await svc.setEmbeddingApiKey(value);
+            // when the workspace is meant to have an index.
+            const rebuilding = await svc.setEmbeddingApiKey(value);
             vscode.window.showInformationMessage(
                 !value ? "Embedding API key cleared."
-                    : hadIndex ? `${label} key saved — re-indexing with semantic search.`
+                    : rebuilding ? `${label} key saved — re-indexing with semantic search.`
                     : `${label} key saved. Run "Open Context: Index Workspace" to build the index.`,
             );
         }),
@@ -433,6 +433,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const cfg = vscode.workspace.getConfiguration("openContext");
     if (cfg.get<boolean>("indexOnStartup", true)) {
         vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: "Indexing workspace..." }, async () => {
+            const generation = svc.getContextGeneration();
             try {
                 const r = await svc.indexWorkspace();
                 await refreshStatus();
@@ -478,6 +479,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
                 }
             } catch (err: any) {
+                // A key or setting saved while the first index ran reopened the
+                // store under it: not a failure — run it again once settled.
+                if (svc.getContextGeneration() !== generation) {
+                    scheduleReindex();
+                    return;
+                }
                 reportIndexingError(err);
             }
         });
@@ -496,9 +503,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             // store under an index in flight — the model & keys form writes
             // llm.* on every save, right beside the key save that starts one.
             if (!STORE_SETTINGS.some((key) => e.affectsConfiguration(key))) return;
-            // Read before closing: never open a store just to count it, since
-            // opening with the new settings can itself rebuild it.
-            const before = svc.peekIndexedFiles() ?? 0;
             await svc.dispose();
             svc.bindExtensionContext(context);
             if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
@@ -507,13 +511,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             // A reopen in a new embedding space (provider, model, key — or a key
             // saved in another window, since SecretStorage is shared, taking
             // effect here) rebuilds the store empty, and the watcher only picks
-            // up files as they change. Rebuild what was there. A store that was
-            // empty before stays empty: that user indexes by hand.
-            if (before > 0) {
-                try {
-                    if ((await svc.getStatus()).indexedFiles === 0) scheduleReindex();
-                } catch { /* reported by the index run or the next command */ }
-            }
+            // up files as they change. Rebuild it when this workspace is meant to
+            // have an index (needsRebuild) — not for one indexed only by hand.
+            try {
+                if (svc.needsRebuild((await svc.getStatus()).indexedFiles)) scheduleReindex();
+            } catch { /* reported by the index run or the next command */ }
             await refreshStatus();
         }),
     );
