@@ -175,31 +175,44 @@ export class ContextService implements vscode.Disposable {
         const ctx = await this.getContext();
         this._runGeneration = this._generation;
         onOpened?.();
-        const result = await run(ctx);
+        let result: T;
+        try {
+            result = await run(ctx);
+        } catch (err) {
+            // Closed under the run: what it threw is the reopen, not a failure.
+            if (this._context !== ctx && !(err instanceof vscode.CancellationError)) throw new IndexRunInterruptedError();
+            throw err;
+        }
         // A reopen mid-run doesn't always make the run throw: writes to the
         // closed store can fail like embed failures and the run returns. Its
         // result describes a store that is gone, so it didn't complete.
         if (this._context !== ctx) throw new IndexRunInterruptedError();
         this._indexIncomplete = false;
         this._lastIndexedFiles = ctx.getStatus().indexedFiles;
+        // Partial failures aren't thrown — record them so the health panel shows why.
+        this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
         return result;
     }
 
     public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
-            return await this.trackIndexRun(async (ctx) => {
-                const result = await ctx.incrementalIndex((stage, current, total) => {
+            return await this.trackIndexRun((ctx) =>
+                ctx.incrementalIndex((stage, current, total) => {
                     if (token?.isCancellationRequested) throw new vscode.CancellationError();
                     onProgress?.(stage, current, total);
-                });
-                // Partial failures aren't thrown — record them so the health panel shows why.
-                this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
-                return result;
-            });
+                }),
+            );
         } catch (err: any) {
-            this._lastIndexError = err?.message ?? String(err);
+            this.recordIndexError(err);
             throw err;
         }
+    }
+
+    /** An interrupted run is rescheduled, not failed: it mustn't overwrite what
+     *  the run on the reopened store (possibly already done) recorded. */
+    private recordIndexError(err: any): void {
+        if (err instanceof IndexRunInterruptedError) return;
+        this._lastIndexError = err?.message ?? String(err);
     }
 
     /** `onReopened` runs once the new root's store is open — the op's own
@@ -211,16 +224,14 @@ export class ContextService implements vscode.Disposable {
             this._indexIntent = false;
             this._indexIncomplete = false;
             this._lastIndexedFiles = undefined;
-            return await this.trackIndexRun(async (ctx) => {
-                const result = await ctx.indexWorkspace((stage, current, total) => {
+            return await this.trackIndexRun((ctx) =>
+                ctx.indexWorkspace((stage, current, total) => {
                     if (token?.isCancellationRequested) throw new vscode.CancellationError();
                     onProgress?.(stage, current, total);
-                });
-                this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
-                return result;
-            }, onReopened);
+                }),
+            onReopened);
         } catch (err: any) {
-            this._lastIndexError = err?.message ?? String(err);
+            this.recordIndexError(err);
             throw err;
         }
     }
