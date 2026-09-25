@@ -190,9 +190,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // The store was reopened under this run (a setting or key
                     // changed). Not a failure to report: run again once things
                     // settle — the debounce folds this into any run the reopen
-                    // itself scheduled.
+                    // itself scheduled, and a run already started on the
+                    // reopened store covers it.
                     if (svc.getContextGeneration() !== generation) {
-                        scheduleReindex();
+                        if (!svc.indexRunSinceReopen()) scheduleReindex();
                         return;
                     }
                     vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
@@ -480,9 +481,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
             } catch (err: any) {
                 // A key or setting saved while the first index ran reopened the
-                // store under it: not a failure — run it again once settled.
+                // store under it: not a failure — run it again once settled,
+                // unless a run already started on the reopened store.
                 if (svc.getContextGeneration() !== generation) {
-                    scheduleReindex();
+                    if (!svc.indexRunSinceReopen()) scheduleReindex();
                     return;
                 }
                 reportIndexingError(err);

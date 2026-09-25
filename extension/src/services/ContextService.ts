@@ -12,6 +12,15 @@ import { resolveEmbeddingModel } from "../shared/model-settings";
 
 export interface LicenseStatusView { valid: boolean; plan: string; reason: string; inGrace: boolean; daysLeft?: number; org?: string; seats?: number; exp?: number; }
 
+/** The store an index run was writing to was closed under it (a settings
+ *  change or key save reopened it). Callers reschedule rather than report. */
+export class IndexRunInterruptedError extends Error {
+    constructor() {
+        super("Indexing was interrupted: the index was reopened with new settings.");
+        this.name = "IndexRunInterruptedError";
+    }
+}
+
 const INDEX_WORKSPACE_ROOT_KEY = "openContext.indexWorkspaceRoot";
 const LLM_SELECTION_KEY = "openContext.llmSelection";
 
@@ -135,7 +144,8 @@ export class ContextService implements vscode.Disposable {
     private _indexIntent = false;
     /** The last full run failed or was cut off, or the store was refused. */
     private _indexIncomplete = false;
-    /** Files the last completed run left indexed (a workspace with none stays 0). */
+    /** Files the store held after the last completed run, or when it was last
+     *  closed holding some (a workspace with none stays 0). */
     private _lastIndexedFiles: number | undefined;
 
     /**
@@ -148,19 +158,36 @@ export class ContextService implements vscode.Disposable {
         return this._indexIncomplete || (indexedFiles === 0 && this._lastIndexedFiles !== 0);
     }
 
-    private async trackIndexRun<T extends IndexingResult>(run: () => Promise<T>): Promise<T> {
+    /** Generation of the store the latest full index run started on. */
+    private _runGeneration = -1;
+
+    /** Whether a full index run has started on the store open now: an
+     *  interrupted run needn't schedule another. */
+    public indexRunSinceReopen(): boolean {
+        return this._runGeneration === this._generation;
+    }
+
+    /** Runs a full index against the open store (opening it first; `onOpened`
+     *  then runs) and records whether it completed against that store. */
+    private async trackIndexRun<T extends IndexingResult>(run: (ctx: OpenContext) => Promise<T>, onOpened?: () => void): Promise<T> {
         this._indexIntent = true;
         this._indexIncomplete = true;
-        const result = await run();
+        const ctx = await this.getContext();
+        this._runGeneration = this._generation;
+        onOpened?.();
+        const result = await run(ctx);
+        // A reopen mid-run doesn't always make the run throw: writes to the
+        // closed store can fail like embed failures and the run returns. Its
+        // result describes a store that is gone, so it didn't complete.
+        if (this._context !== ctx) throw new IndexRunInterruptedError();
         this._indexIncomplete = false;
-        this._lastIndexedFiles = this.peekIndexedFiles();
+        this._lastIndexedFiles = ctx.getStatus().indexedFiles;
         return result;
     }
 
     public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
-            return await this.trackIndexRun(async () => {
-                const ctx = await this.getContext();
+            return await this.trackIndexRun(async (ctx) => {
                 const result = await ctx.incrementalIndex((stage, current, total) => {
                     if (token?.isCancellationRequested) throw new vscode.CancellationError();
                     onProgress?.(stage, current, total);
@@ -184,16 +211,14 @@ export class ContextService implements vscode.Disposable {
             this._indexIntent = false;
             this._indexIncomplete = false;
             this._lastIndexedFiles = undefined;
-            return await this.trackIndexRun(async () => {
-                const ctx = await this.getContext();
-                onReopened?.();
+            return await this.trackIndexRun(async (ctx) => {
                 const result = await ctx.indexWorkspace((stage, current, total) => {
                     if (token?.isCancellationRequested) throw new vscode.CancellationError();
                     onProgress?.(stage, current, total);
                 });
                 this._lastIndexError = result.failed?.length ? result.failedReason : undefined;
                 return result;
-            });
+            }, onReopened);
         } catch (err: any) {
             this._lastIndexError = err?.message ?? String(err);
             throw err;
@@ -490,8 +515,11 @@ export class ContextService implements vscode.Disposable {
         // First, so anything mid-open or mid-start sees it and backs off.
         this._generation++;
         // The store about to close held an index: if the reopen drops it, it
-        // is to be rebuilt (needsRebuild).
-        if ((this.peekIndexedFiles() ?? 0) > 0) this._indexIntent = true;
+        // is to be rebuilt (needsRebuild). The count covers what the watcher
+        // added since the last full run (a folder empty at startup and filled
+        // later is not an empty workspace).
+        const indexed = this.peekIndexedFiles() ?? 0;
+        if (indexed > 0) { this._indexIntent = true; this._lastIndexedFiles = indexed; }
         await this.stopWatching();
         this._context?.close();
         this._context = null;
