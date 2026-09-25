@@ -20,7 +20,7 @@ export interface OpenContextConfigPayload {
 export async function buildConfigPayload(): Promise<OpenContextConfigPayload> {
   const cfg = vscode.workspace.getConfiguration("openContext");
   const provider = cfg.get<string>("llm.provider", "openai");
-  const model = resolveLLMModel(cfg, provider);
+  const model = resolveLLMModel(cfg, provider, ContextService.getInstance().getLLMSelection());
   const baseUrl = cfg.get<string>("llm.baseUrl", "");
   const embeddingProvider = cfg.get<string>("embedding.provider", "voyage");
   const embeddingModel = resolveEmbeddingModel(cfg, embeddingProvider);

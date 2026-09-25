@@ -13,6 +13,7 @@ import { resolveEmbeddingModel } from "../shared/model-settings";
 export interface LicenseStatusView { valid: boolean; plan: string; reason: string; inGrace: boolean; daysLeft?: number; org?: string; seats?: number; exp?: number; }
 
 const INDEX_WORKSPACE_ROOT_KEY = "openContext.indexWorkspaceRoot";
+const LLM_SELECTION_KEY = "openContext.llmSelection";
 
 export interface ContextStatus {
     indexedFiles: number;
@@ -90,12 +91,32 @@ export class ContextService implements vscode.Disposable {
     }
 
     public async getContext(): Promise<OpenContext> {
-        if (!this._context) {
-            const config = await this.getWorkspaceConfig();
-            this._context = await OpenContext.create(config);
+        if (this._context) return this._context;
+        // One open at a time: callers racing here (the watcher starting while an
+        // index command runs) would each create a store, and all but the last
+        // would stay open, untracked, until the window closes.
+        if (!this._opening) {
+            const generation = this._generation;
+            const opening = (async () => {
+                const ctx = await OpenContext.create(await this.getWorkspaceConfig());
+                if (generation !== this._generation) {
+                    // Disposed while opening: built from stale settings.
+                    ctx.close();
+                    return null;
+                }
+                this._context = ctx;
+                return ctx;
+            })();
+            this._opening = opening;
+            // Cleared on success and failure alike, so a failed open is retried.
+            // Registered before any caller awaits, so it runs first.
+            opening.finally(() => { if (this._opening === opening) this._opening = null; }).catch(() => {});
         }
-        return this._context;
+        const ctx = await this._opening;
+        return ctx ?? this.getContext(); // disposed mid-open: open a current one
     }
+
+    private _opening: Promise<OpenContext | null> | null = null;
 
     public async indexWorkspace(onProgress?: (stage: string, current: number, total: number) => void, token?: vscode.CancellationToken): Promise<IndexingResult> {
         try {
@@ -132,10 +153,31 @@ export class ContextService implements vscode.Disposable {
 
     public async startWatching(): Promise<void> {
         if (this._watcher) return;
+        // Concurrent callers for the same context share one start rather than
+        // creating two watchers; a start begun before a dispose is not reused.
+        if (!this._startingWatch || this._startingWatchGeneration !== this._generation) {
+            this._startingWatchGeneration = this._generation;
+            const starting: Promise<void> = this.createWatcher().finally(() => {
+                if (this._startingWatch === starting) this._startingWatch = null;
+            });
+            this._startingWatch = starting;
+        }
+        return this._startingWatch;
+    }
+
+    private _startingWatch: Promise<void> | null = null;
+    private _startingWatchGeneration = -1;
+
+    private async createWatcher(): Promise<void> {
+        const generation = this._generation;
         const ctx = await this.getContext();
         const config = await this.getWorkspaceConfig();
-        this._watcher = new FileWatcher(ctx, config);
-        await this._watcher.start({
+        // Disposed while starting: that context is closed, and whoever disposed
+        // restarts watching on the new one.
+        if (generation !== this._generation) return;
+        const watcher = new FileWatcher(ctx, config);
+        this._watcher = watcher;
+        await watcher.start({
             onReindex: (result) => {
                 // Keep the health panel honest in watch mode: a degraded
                 // provider mid-session shows as warn; a clean reindex clears it.
@@ -144,6 +186,9 @@ export class ContextService implements vscode.Disposable {
             },
             onError: (err) => console.error("[FileWatcher]", err),
         });
+        // Stopped or replaced while it was starting (a stop that lands before
+        // chokidar exists is a no-op): don't leave it running.
+        if (this._watcher !== watcher) await watcher.stop().catch(() => {});
     }
 
     public async stopWatching(): Promise<void> {
@@ -216,8 +261,16 @@ export class ContextService implements vscode.Disposable {
 
     public async setLLMSelection(provider: string, model: string): Promise<void> {
         const cfg = vscode.workspace.getConfiguration("openContext");
+        // Remember which provider this model was picked for, so switching only
+        // llm.provider later (e.g. in settings.json) doesn't send it there.
+        await this._extContext?.globalState.update(LLM_SELECTION_KEY, { provider, model });
         await cfg.update("llm.provider", provider, vscode.ConfigurationTarget.Global);
         await cfg.update("llm.model", model, vscode.ConfigurationTarget.Global);
+    }
+
+    /** The provider/model pair last saved from the model & keys form, if any. */
+    public getLLMSelection(): { provider: string; model: string } | undefined {
+        return this._extContext?.globalState.get<{ provider: string; model: string }>(LLM_SELECTION_KEY);
     }
 
     public async getLLMBaseUrl(): Promise<string> {
@@ -259,7 +312,7 @@ export class ContextService implements vscode.Disposable {
         else await this._extContext.secrets.delete("openContext.embedding.apiKey");
         // The key decides between keyword-only and semantic search, so an open
         // context is stale either way — from the command or the settings panel.
-        const watching = this._watcher !== null;
+        const watching = this._watcher !== null || this._startingWatch !== null;
         await this.dispose();
         if (watching) await this.startWatching().catch(() => {});
         // The store rebuilds empty in the new mode, so it needs a full index —
@@ -370,8 +423,9 @@ export class ContextService implements vscode.Disposable {
     }
 
     public async dispose(): Promise<void> {
-        await this.stopWatching();
+        // First, so anything mid-open or mid-start sees it and backs off.
         this._generation++;
+        await this.stopWatching();
         this._context?.close();
         this._context = null;
         for (const c of this._multiContexts.values()) { try { c.close(); } catch {} }

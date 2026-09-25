@@ -78,6 +78,8 @@ export class OpenContext {
     // did not also set keywordOnly.
     const keywordOnly = config.keywordOnly ?? (config.embedding.provider === "none" ? "explicit" : undefined);
     ctx.store = new SqliteStore(storePath, ctx.embedder.getDimension(), {
+      // Provider and model: vectors from different models can't be compared.
+      embeddingModel: `${config.embedder ? "custom" : ctx.embeddingConfig.provider}:${ctx.embedder.getModel()}`,
       ...(config.resolveVecPath ? { resolveVecPath: config.resolveVecPath } : {}),
       ...(config.readOnly ? { readOnly: true } : {}),
       ...(keywordOnly ? { keywordOnly } : {}),

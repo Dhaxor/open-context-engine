@@ -31,9 +31,20 @@ function explicitSetting(cfg: vscode.WorkspaceConfiguration, key: string): strin
  * default, so cfg.get() would pair any provider picked in settings.json with
  * an OpenAI model. (The chat's model picker writes provider and model together.)
  */
-export function resolveLLMModel(cfg: vscode.WorkspaceConfiguration, provider: string): string {
+export function resolveLLMModel(
+  cfg: vscode.WorkspaceConfiguration,
+  provider: string,
+  /** What the model & keys form last saved (ContextService.getLLMSelection). */
+  formSelection?: { provider: string; model: string },
+): string {
   const set = explicitSetting(cfg, "llm.model");
   if (!set) return defaultModelFor(provider);
+  // Still exactly what the form saved for another provider: a leftover from
+  // switching llm.provider on its own, not a choice (catches custom IDs such
+  // as meta-llama/llama-3-70b that no name pattern can place).
+  if (formSelection && set === formSelection.model && formSelection.provider !== provider) {
+    return defaultModelFor(provider);
+  }
   // A set model that is recognisably another hosted provider's (e.g. gpt-5.4
   // pinned by an earlier save, then llm.provider switched to anthropic) is a
   // leftover, not a choice. `custom` endpoints (OpenRouter and the like) serve

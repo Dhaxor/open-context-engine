@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import * as path from "path";
 import * as vscode from "vscode";
 import { ContextService } from "./ContextService";
@@ -113,11 +114,12 @@ export class AgentService {
     private async ensureAgent(events: AgentEvents): Promise<ContextAgent> {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<LLMProvider>("llm.provider", "openai");
-        // Not cfg.get: package.json's default ("gpt-5.4") would follow the user
-        // into any other provider picked in settings.json.
-        const model = resolveLLMModel(cfg, provider) || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
-        const baseUrl = cfg.get<string>("llm.baseUrl", "") || undefined;
         const svc = ContextService.getInstance();
+        // Not cfg.get: package.json's default ("gpt-5.4"), or a model saved for
+        // another provider, would follow the user into a provider picked in
+        // settings.json.
+        const model = resolveLLMModel(cfg, provider, svc.getLLMSelection()) || DEFAULT_LLM_MODEL[provider] || "gpt-4o";
+        const baseUrl = cfg.get<string>("llm.baseUrl", "") || undefined;
         // Ollama runs locally and needs no key; the SDK just wants a non-empty string.
         const apiKey = (await svc.getLLMApiKey(provider)) || envKey(provider) || (provider === "ollama" ? "ollama" : "");
         if (!apiKey) {
@@ -134,6 +136,10 @@ export class AgentService {
         const routingReasoning = cfg.get<string>("agent.routing.reasoningModel", "");
         const memoryEnabled = cfg.get<boolean>("agent.memory.enabled", true);
         const maxTokens = cfg.get<number>("agent.maxTokens", 4096);
+        const maxSteps = cfg.get<number>("agent.maxSteps", 10);
+        const historyTokenBudget = cfg.get<number>("agent.historyTokenBudget", 120000);
+        const maxToolResultChars = cfg.get<number>("agent.maxToolResultChars", 24000);
+        const maxRetries = cfg.get<number>("agent.maxRetries", 3);
         const ctx = await svc.getContext();
         // Audit: on when the user enabled it (and is entitled), or unconditionally
         // when the workspace/org policy requires it — the policy is the authority.
@@ -144,18 +150,28 @@ export class AgentService {
             if (isEntitled(getLicense(), "audit-log")) auditOn = true;
             else this.warnOnce("openContext.agent.audit.enabled needs an Enterprise license — audit logging stays off. Run 'oce license' to check.");
         }
-        const key = `${provider}|${model}|${baseUrl ?? ""}|${apiKey.slice(0, 6)}|root=${ctx.getWorkspaceRoot()}`;
-        const agentKey = `${key}|edits=${includeEdits}|sh=${shellEnabled}|web=${webSearchEnabled && !!webSearchKey}|route=${routingEnabled}:${routingFast}:${routingReasoning}|mem=${memoryEnabled}|mt=${maxTokens}|audit=${auditOn}`;
-        // The tools capture `ctx`, so a reopened store (an embedding key saved,
-        // settings changed) needs a new agent even when nothing else changed —
-        // the old one would query a closed database and find nothing.
-        const cacheKey = `${agentKey}|ctx=${svc.getContextGeneration()}`;
+        // Everything the agent and its tools are built from belongs in the key:
+        // anything left out (a narrowed shell allowlist, a rotated key that
+        // shares its first characters with the old one) would keep applying the
+        // old value until a reload. The key is fingerprinted, never kept.
+        const keyPrint = createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+        const cacheKey = [
+            provider, model, baseUrl ?? "", keyPrint, `root=${ctx.getWorkspaceRoot()}`,
+            `edits=${includeEdits}`, `sh=${shellEnabled}:${shellAllowlist.join("\u0000")}:${shellTimeoutMs}`,
+            `web=${webSearchEnabled && !!webSearchKey}`, `route=${routingEnabled}:${routingFast}:${routingReasoning}`,
+            `mem=${memoryEnabled}`, `mt=${maxTokens}`, `steps=${maxSteps}`, `hist=${historyTokenBudget}`,
+            `tool=${maxToolResultChars}`, `retry=${maxRetries}`, `audit=${auditOn}`,
+            // The tools capture `ctx`, so a reopened store (a key saved, a
+            // setting changed) needs new ones — the old would query a closed DB.
+            `ctx=${svc.getContextGeneration()}`,
+        ].join("|");
         if (this.agent && this.currentProviderKey === cacheKey) {
             this.editForwarder = events.onEdit;
             return this.agent;
         }
-        // Only the store changed: keep the conversation.
-        const carried = this.agent && this.currentAgentKey === agentKey ? this.agent.exportSession() : undefined;
+        // A rebuild for a settings change keeps the conversation; a different
+        // LLM provider starts fresh.
+        const carried = this.agent && this.currentLLMProvider === provider ? this.agent.exportSession() : undefined;
         let router: ModelRouter | undefined;
         if (routingEnabled && (provider === "openai" || provider === "anthropic")) {
             router = new ModelRouter(defaultRoutingConfig(provider, {
@@ -177,11 +193,11 @@ export class AgentService {
             model,
             apiKey,
             baseUrl,
-            maxSteps: cfg.get<number>("agent.maxSteps", 10),
-            maxTokens: cfg.get<number>("agent.maxTokens", 4096),
-            historyTokenBudget: cfg.get<number>("agent.historyTokenBudget", 120000),
-            maxToolResultChars: cfg.get<number>("agent.maxToolResultChars", 24000),
-            maxRetries: cfg.get<number>("agent.maxRetries", 3),
+            maxSteps,
+            maxTokens,
+            historyTokenBudget,
+            maxToolResultChars,
+            maxRetries,
             router,
             memory,
             memorySource: "vscode-agent",
@@ -201,11 +217,11 @@ export class AgentService {
             try { this.agent.importSession(carried); } catch { /* start fresh rather than fail the turn */ }
         }
         this.currentProviderKey = cacheKey;
-        this.currentAgentKey = agentKey;
+        this.currentLLMProvider = provider;
         return this.agent;
     }
 
-    private currentAgentKey: string | null = null;
+    private currentLLMProvider: string | null = null;
 
     private editForwarder?: (edit: EditProposal) => void;
     private warned = new Set<string>();

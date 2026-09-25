@@ -213,6 +213,8 @@ export class ChatView implements vscode.WebviewViewProvider {
         webviewView.onDidChangeVisibility(() => { if (webviewView.visible) { this._sendModelInfo(); this._sendConfig(); this._sendLicense(); this._sendContext(); } });
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration("openContext.llm")) { this._sendModelInfo(); this._sendConfig(); }
+            // The key form names the embedding provider its key goes to.
+            else if (e.affectsConfiguration("openContext.embedding")) this._sendConfig();
         });
         vscode.window.onDidChangeActiveTextEditor(() => this._sendContext());
         vscode.window.onDidChangeTextEditorSelection(() => this._sendContext());
@@ -311,7 +313,7 @@ export class ChatView implements vscode.WebviewViewProvider {
         if (this._sessionId) return this._sessionId;
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<string>("llm.provider", "openai");
-        const model = resolveLLMModel(cfg, provider);
+        const model = resolveLLMModel(cfg, provider, ContextService.getInstance().getLLMSelection());
         const s = this._history.create(provider, model);
         this._setSessionId(s.id);
         return s.id;
@@ -341,7 +343,7 @@ export class ChatView implements vscode.WebviewViewProvider {
     private _sendModelInfo(): void {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<string>("llm.provider", "openai");
-        const model = resolveLLMModel(cfg, provider);
+        const model = resolveLLMModel(cfg, provider, ContextService.getInstance().getLLMSelection());
         this._view?.webview.postMessage({ type: "model", provider, model });
     }
 

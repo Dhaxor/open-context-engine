@@ -332,6 +332,71 @@ describe("SqliteStore read-only opens never destroy the index", () => {
   });
 });
 
+describe("SqliteStore embedding model identity", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+  });
+  async function tmp(): Promise<string> {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-model-"));
+    dirs.push(dir);
+    return dir;
+  }
+  async function openWith(dir: string, embeddingModel?: string, extra: object = {}): Promise<SqliteStore> {
+    const store = new SqliteStore(dir, DIM, { ...(embeddingModel ? { embeddingModel } : {}), ...extra });
+    await store.initialize();
+    return store;
+  }
+
+  it("rebuilds when the model changes at the same dimension", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "ollama:nomic-embed-text");
+    first.add(makeChunk("a"));
+    first.close();
+
+    // Same dimension, different vector space: keeping the old vectors would
+    // rank the new model's queries against them at random.
+    const switched = await openWith(dir, "ollama:embeddinggemma");
+    expect(switched.getChunkCount()).toBe(0);
+    switched.close();
+  });
+
+  it("keeps the index when the model is unchanged", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "voyage:voyage-code-3");
+    first.add(makeChunk("a"));
+    first.close();
+    const again = await openWith(dir, "voyage:voyage-code-3");
+    expect(again.getChunkCount()).toBe(1);
+    again.close();
+  });
+
+  it("adopts the current model for a store stamped before model identity existed", async () => {
+    const dir = await tmp();
+    const legacy = await openWith(dir); // no model recorded
+    legacy.add(makeChunk("a"));
+    legacy.close();
+    const upgraded = await openWith(dir, "voyage:voyage-code-3");
+    expect(upgraded.getChunkCount()).toBe(1);
+    upgraded.close();
+    // ...and from then on a change is detected.
+    const switched = await openWith(dir, "openai:some-other-1024-model");
+    expect(switched.getChunkCount()).toBe(0);
+    switched.close();
+  });
+
+  it("reports a model change instead of rebuilding when opened read-only", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "ollama:nomic-embed-text");
+    first.add(makeChunk("a"));
+    first.close();
+    const reader = await openWith(dir, "ollama:embeddinggemma", { readOnly: true });
+    expect(reader.getChunkCount()).toBe(1);
+    expect(reader.getStaleReason()).toContain("embedding model changed");
+    reader.close();
+  });
+});
+
 describe("SqliteStore keyword-only by choice", () => {
   const dirs: string[] = [];
   afterEach(() => {

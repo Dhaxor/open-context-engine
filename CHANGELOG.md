@@ -36,13 +36,18 @@ The first version published to npm. Earlier version numbers were internal.
   Cerebras, OpenRouter free models — `oce trace -p groq` just works with a key.
 - **No embedding key required.** With no embedding provider configured, the
   engine runs keyword (BM25) search instead of failing. This fallback refuses
-  to run if it would discard an existing vector index.
+  to run if it would discard an existing vector index — one that actually
+  holds chunks; an empty one left by a failed first index is rebuilt.
 - A missing key now names the free options instead of dead-ending.
 
 ### Fixes
 
 - `oce status` no longer wipes the index when run with a different embedding
   provider than the index was built with; it reports the mismatch instead.
+- Switching to another embedding model of the same dimension (for example two
+  768-dimension Ollama models) now rebuilds the index. Before, the old
+  model's vectors stayed and queries from the new model ranked against them
+  at random. The index records which model built it.
 - Retrieval explanations (`retrieveDebug`) now describe the pipeline production
   actually runs — they previously skipped the score floor and the AST graph
   expander.
