@@ -26,7 +26,7 @@ export function modelKeysFormHtml(): string {
         <div class="panel-section-hdr emb-title">${icon("sparkle")} Embeddings</div>
         <div class="emb-blurb">Powers codebase indexing and semantic search across your workspace.</div>
         <div class="emb-meta muted" id="embeddingMeta">—</div>
-        <div class="row"><label for="embeddingKey">API key</label><input id="embeddingKey" type="password" placeholder="Voyage, OpenAI, etc." /><span id="embeddingStatus" class="key-status"></span></div>
+        <div class="row"><label for="embeddingKey">API key</label><input id="embeddingKey" type="password" placeholder="Embedding API key" /><span id="embeddingStatus" class="key-status"></span></div>
       </div>
       <div class="actions model-keys-actions"><button type="button" id="settingsCancel" class="btn">Close</button><button type="button" id="saveCfg" class="btn primary">Save</button></div>
     </div>`;

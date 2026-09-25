@@ -11,10 +11,10 @@ application menu, `trace://` deep links, and remembered window bounds.
 ## Why Electron
 
 The index is a native SQLite handle (`better-sqlite3` + `sqlite-vec`) that has
-to live in the same process as the server. Electron hosts that directly, and
-this repo already rebuilds `better-sqlite3` against the Electron ABI for the VS
-Code extension. A Rust shell would need Node shipped alongside it as a sidecar
-process purely to hold the database open.
+to live in the same process as the server. Electron hosts that directly — the
+VS Code extension already runs the same `better-sqlite3` inside Electron. A
+Rust shell would need Node shipped alongside it as a sidecar process purely to
+hold the database open.
 
 ## Run it
 
@@ -40,8 +40,9 @@ Rebuild once per Electron version:
 cd desktop && npm install && npm run rebuild
 ```
 
-That runs `electron-rebuild` against the root `node_modules`, the same approach
-`extension/scripts/build-native-local.mjs` uses for the VSIX.
+That runs `electron-rebuild` against the root `node_modules`. (The VS Code
+extension no longer needs this: it ships better-sqlite3 13, whose Node-API
+binary loads in any Electron.)
 
 ## Packaging
 

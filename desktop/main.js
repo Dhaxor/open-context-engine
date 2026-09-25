@@ -6,9 +6,9 @@
 // notify) lives in src/trace/desktop/shell.ts and runs in the normal suite.
 //
 // Why Electron rather than a lighter shell: the index is a native SQLite handle
-// that has to live in the same process as the server, and this repo already
-// rebuilds better-sqlite3 against the Electron ABI for the VS Code extension.
-// A Rust shell would need Node shipped alongside it as a sidecar.
+// that has to live in the same process as the server, and the VS Code extension
+// already runs the same better-sqlite3 inside Electron. A Rust shell would need
+// Node shipped alongside it as a sidecar.
 
 const { app, BrowserWindow, Menu, Notification, dialog, shell } = require("electron");
 const path = require("path");

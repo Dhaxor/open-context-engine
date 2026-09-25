@@ -92,6 +92,13 @@ export interface SqliteStoreOptions {
    *               open refuses with KeywordFallbackRefusedError instead.
    */
   keywordOnly?: "explicit" | "fallback";
+  /**
+   * Which embedding model builds the vectors, e.g. "ollama:nomic-embed-text".
+   * Vectors from two models live in different spaces even at the same
+   * dimension, so a change rebuilds the index exactly as a dimension change
+   * does. Stores stamped before this existed adopt the current model.
+   */
+  embeddingModel?: string;
 }
 
 /** A keyword-only fallback would have wiped a vector index; refused instead. */
@@ -179,8 +186,11 @@ export class SqliteStore {
     // incremental indexing skip embedding forever once vectors come back.
     if (this.vectorStateChanged()) {
       const mode = this._vectorAvailable ? "vector" : "keyword-only";
-      // A fallback to keyword-only must not cost someone their embeddings.
-      if (this.opts.keywordOnly === "fallback" && !this.opts.readOnly) {
+      // A fallback to keyword-only must not cost someone their embeddings. A
+      // vector-stamped store with no chunks has none to lose: the stamp lands
+      // on open, so a first index that failed without a key leaves exactly
+      // that behind, and refusing it would lock the user out of keyword search.
+      if (this.opts.keywordOnly === "fallback" && !this.opts.readOnly && this.hasIndexedChunks()) {
         this.db.close();
         throw new KeywordFallbackRefusedError();
       }
@@ -290,6 +300,16 @@ export class SqliteStore {
     try { sqliteVecExtensionPath(); return true; } catch { return false; }
   }
 
+  /** Whether the store holds any indexed chunk. `chunks` is a plain table, so
+   *  this works whether or not sqlite-vec is loaded. */
+  private hasIndexedChunks(): boolean {
+    try {
+      return this.db.prepare("SELECT 1 FROM chunks LIMIT 1").get() !== undefined;
+    } catch {
+      return false; // no chunks table yet — nothing indexed
+    }
+  }
+
   /** True when the persisted index was built in a different vector/keyword
    *  mode than this runtime provides. Pre-feature DBs have no vector_state
    *  key — they were necessarily vector-built, so default them to "vec". */
@@ -354,7 +374,12 @@ export class SqliteStore {
     // in keyword-only mode would force spurious wipes on provider changes.
     const dimChanged = this._vectorAvailable && storedDim != null && Number(storedDim) !== this.expectedDim;
     const schemaChanged = storedSchema != null && storedSchema !== SCHEMA_VERSION;
-    const needsReindex = dimChanged || schemaChanged;
+    // Same dimension, different model: comparing the new model's query vectors
+    // with the old model's document vectors ranks at random, silently.
+    const storedModel = this.getMeta("embedding_model");
+    const model = this.opts.embeddingModel;
+    const modelChanged = this._vectorAvailable && storedModel != null && model != null && storedModel !== model;
+    const needsReindex = dimChanged || schemaChanged || modelChanged;
     if (needsReindex) {
       // The vector/FTS layout or embedding space changed — drop the derived
       // indexes so they can be recreated with the new definition. chunks_vec
@@ -389,7 +414,9 @@ export class SqliteStore {
       // returns nothing. Clear them so the next index run repopulates cleanly.
       const reason = dimChanged
         ? `embedding dimension changed from ${Number(storedDim)} to ${this.expectedDim}`
-        : `store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
+        : modelChanged
+          ? `embedding model changed from ${storedModel} to ${model}`
+          : `store schema upgraded from v${storedSchema} to v${SCHEMA_VERSION}`;
       if (this.opts.readOnly) {
         // Report the mismatch and leave the data alone. Stamping the new meta
         // here would be worse than the wipe: it would claim the store matches
@@ -404,6 +431,7 @@ export class SqliteStore {
     this.setMeta("schema_version", SCHEMA_VERSION);
     this.setMeta("vector_state", this._vectorAvailable ? "vec" : "fts-only");
     if (this._vectorAvailable) this.setMeta("embedding_dimension", String(this.expectedDim));
+    if (this._vectorAvailable && model != null) this.setMeta("embedding_model", model);
   }
 
   private prepareStatements(): void {

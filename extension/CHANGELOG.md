@@ -1,6 +1,13 @@
 # Change Log
 
-## Unreleased
+## 0.4.0
+
+- **Works on VS Code 1.139, and on every Electron after it.** VS Code 1.139 moved to Electron 43, and the per-ABI SQLite bindings this extension shipped (up to Electron 42) did not match it. The extension now uses better-sqlite3 13, a Node-API addon: one binary per platform loads in every Electron VS Code runs extensions in, and in plain Node on remote hosts (SSH, WSL, Codespaces). A new Electron in VS Code no longer needs a new extension build.
+- **Works with no embedding key.** A fresh install indexes with keyword search and says so once, instead of failing with a misleading native-binding error. Saving a Voyage or OpenAI key — from the command, the settings panel, or the chat — rebuilds the index with semantic search, and the chat keeps its conversation. An index built with a key that is later removed is kept, not wiped, and the extension asks for the key.
+- **Picking a provider picks its model.** Switching `openContext.embedding.provider` or `openContext.llm.provider` in settings now uses that provider's default model, instead of carrying over `voyage-code-3` or `gpt-5.4`.
+- **Six more languages get AST-aware chunking in the extension.** The C, C++, Ruby, PHP, Kotlin, and Swift grammars now ship in the VSIX. The engine supported them, but the extension left their grammars out and fell back to line-based chunking.
+- **Linux needs glibc 2.34+** (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer), the floor of the new binding's prebuild. On an older host, activation says so instead of failing mid-index.
+- **A smaller VSIX:** one native SQLite binding per platform instead of five.
 
 - **Security hardening.** Every agent-reachable filesystem/exec surface is now workspace-contained (`read-file`, edit tools, shell `cwd` — `../../etc/passwd` and absolute-path escapes are refused); shell commands run with a **scrubbed environment** (API keys/tokens/secrets never reach child processes); the credential blocklist now covers `.env*`, `.npmrc`, `.netrc`, `.git-credentials`, `secrets.*`, tfstate, and everything under `.aws/`/`.ssh/`/`.kube/`/`.gnupg/`, and `read-file` refuses credential-like files outright.
 - **Google + Ollama agent LLMs.** Selecting Google no longer throws at runtime — a native Gemini streaming caller (tools, usage) ships; new `ollama` provider runs the agent fully offline against a local model. History budgets now derive from each model's real context window.
@@ -9,7 +16,7 @@
 - **Real streaming retrieval.** `StreamingRetriever.retrieveWithStages` now yields stages as they happen — BM25 results arrive before the query embedding round-trip even starts.
 - **CLI: config file + new commands.** `~/.open-context/config.json` and `<ws>/.open-context/config.json` (flags/env still win; API keys in files are rejected); `oce status`, `oce clean --yes`, `oce search --json`; `--store-path/--chunk-size/--chunk-overlap/--max-file-size` are now real flags on every store command. Fixed: `oce agent -p anthropic` no longer crashes (LLM vs embedding provider fully separated; new `--embedding-provider/--embedding-model`).
 - **Structured logging.** `OCE_LOG=debug|info|error|silent` (+ `OCE_LOG_FORMAT=json`) replaces silent `catch {}` swallows in graph extraction, git state, grammar loading, and reranker fallback. Local stderr only — still zero telemetry.
-- **CI/release.** Tests now run on Linux/macOS/Windows × Node 20/22; Dependabot + CodeQL enabled; npm publishing automated on version tags.
+- **CI/release.** Tests now run on Linux/macOS/Windows on Node 22, plus Node 24 on Linux; Dependabot + CodeQL enabled; npm publishing automated on version tags.
 
 - **Reworked `oce` CLI into an interactive coding agent.** Bare `oce` now launches a full REPL: streamed styled output, live tool-call lines with timing, inline diff/command previews with `y`/`a`/`n` approvals, and slash commands (`/help` `/compact` `/plan` `/diff` `/usage` `/mode` `/sessions` `/resume` …). Approval modes `--auto-edit` / `--full-auto`, session persistence with `--continue` / `--resume`, and `--print [--json]` for scripting.
 - **Harness upgraded toward best-in-class:** model-summarized history compaction (with drop-oldest fallback), a live plan/todo tool, sub-agent delegation for broad explorations, environment context (platform/git/index) in the system prompt, and a composable permission system (suggest / auto-edit / full-auto).
@@ -23,9 +30,7 @@
 - **Embedding cache (on by default).** Vectors are cached by content hash in `~/.open-context/embed-cache.db`, shared across repos and branches — identical code never embeds (or bills) twice. Disable with `openContext.embedding.cache.enabled`.
 - **Team index sync (Team license, CLI).** `oce push-index` publishes the index as an artifact; `oce pull-index` installs it and re-embeds only the local diff. Pairs with the embedding cache for a one-embedding-bill-per-team story.
 
-- **Electron 42 (ABI 146) is now bundled.** VS Code 1.122+ / current Cursor builds that report the Electron ABI can load `better-sqlite3` again. Requires `better-sqlite3@^12.11.1` (V8 14 / Electron 42 compile fixes).
-
-- **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.35 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
+- **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.34 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
 
 ## 0.2.0
 

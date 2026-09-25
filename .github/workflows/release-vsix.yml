@@ -1,23 +1,23 @@
 # Release workflow for the VS Code extension.
 #
-# Why this exists: better-sqlite3 ships a native .node compiled for a specific
-# Node ABI, and each Electron major has its own ABI — one binary can't span
-# them. Each platform VSIX therefore bundles ONE binding per supported
-# Electron ABI under dist-native/abi-<N>/ (built by the BINDING_TARGETS loop
-# below); at activation the extension copies the binding matching the running
-# VS Code's ABI into place (extension/src/services/NativeBindingSelector.ts).
+# The extension's one native dependency with a Node binding is better-sqlite3.
+# Since 0.4 it is on better-sqlite3 13, a Node-API addon: a single prebuilt
+# binary per platform, shipped inside its npm package, loads in every Electron
+# VS Code runs extensions in (37 in 1.103 through 43 in 1.139) and in plain Node
+# on remote hosts (SSH, WSL, Codespaces). Before 0.4 each VSIX carried one
+# binary per Electron ABI, and every Electron bump in VS Code broke the
+# extension until a rebuild shipped. Nothing here compiles native code now.
 #
-# BINDING_TARGETS — "<runtime>:<version>" pairs covering every ABI a real
-# VS Code 1.103+ runtime may request (see the env block for the full
-# reasoning). VS Code Electron map (release branches' .npmrc "target"):
-# 1.103-1.106 -> Electron 37.x; 1.107-1.121 -> 39.x; 1.122+ -> 42.x.
-# Bundled Node: 22.x through 1.121, 24.x from 1.122. ABI numbers come from
-# node-abi at build time — never hardcoded.
+# Each leg packages its platform's VSIX (scripts/package-vsix.mjs keeps only
+# that platform's prebuild), then proves it: verify-vsix.mjs checks the
+# binaries' architecture and runs a real store through the unpacked VSIX
+# under Node, and the Electron step repeats that under the oldest and newest
+# Electron VS Code ships.
 #
 # Triggers:
-#  - push to a tag like v0.1.1 → build all platforms + publish to Marketplace.
+#  - push to a tag like v0.4.0 → build all platforms + publish to Marketplace.
 #  - workflow_dispatch → build only (no publish). Useful for local sanity.
-#  - pull_request touching extension/ → build linux-x64 only as a smoke test.
+#  - pull_request touching extension/ → build all platforms as a smoke test.
 
 name: Release VSIX
 
@@ -44,18 +44,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # ABI targets as "<runtime>:<version>" pairs. Two conventions are covered
-  # deliberately: the original field crash demanded NODE_MODULE_VERSION 137 —
-  # which is Node 24's ABI, NOT any Electron's (37->136, 38->139, 39->140,
-  # 42->146 per node-abi) — strong evidence VS Code's runtime reports the
-  # BUNDLED NODE's ABI. Node prebuilds (22->127, 24->137) cover that world
-  # with better-sqlite3's official binaries; Electron rebuilds (37->136,
-  # 39->140, 42->146) cover the classic convention. Order matters only for
-  # the default binary left in node_modules: keep node:24 last (most likely
-  # runtime).
-  BINDING_TARGETS: "electron:37.2.3 electron:39.8.8 electron:42.3.0 node:22.16.0 node:24.15.0"
-
 jobs:
   build:
     name: Build (${{ matrix.target }})
@@ -63,40 +51,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x64 — build on ubuntu-22.04 to keep glibc symbol floor at 2.35
-          # rather than ubuntu-24.04's 2.39, which would break RHEL 8 / Debian 11.
+          # Linux legs run on ubuntu-22.04 (glibc 2.35), just above the
+          # better-sqlite3 prebuild's floor of glibc 2.34, so the native smoke
+          # below runs on the oldest glibc family we claim to support.
           - target: linux-x64
             os: ubuntu-22.04
-            target_os: linux
-            target_arch: x64
+          # Linux arm64 — GitHub's native arm64 runner.
+          - target: linux-arm64
+            os: ubuntu-22.04-arm
           # macOS x64 — GitHub retired macos-13; macos-15-intel is its Intel
           # successor on the free runners (macos-26-intel is the next one). A
           # retired label never fails: the job just queues forever and the
-          # Marketplace publish, which needs every leg, never runs. See PUBLISHING.md.
+          # Marketplace publish, which needs every leg, never runs.
           - target: darwin-x64
             os: macos-15-intel
-            target_os: darwin
-            target_arch: x64
           # macOS arm64 — Apple Silicon majority.
           - target: darwin-arm64
             os: macos-latest
-            target_os: darwin
-            target_arch: arm64
           # Windows x64. win32-arm64 is intentionally skipped — there is no
           # sqlite-vec-windows-arm64 npm package, so the VSIX would ship
           # without vector search. See PUBLISHING.md ("Unsupported platforms").
           - target: win32-x64
             os: windows-latest
-            target_os: win32
-            target_arch: x64
-          # Linux arm64 — GitHub's native arm64 runner. ubuntu-22.04-arm keeps
-          # the glibc floor at 2.35, matching the x64 leg. No cross-compiling:
-          # the host arch matches the target, so electron-rebuild and npm's
-          # optional-dep platform filter (sqlite-vec-linux-arm64) just work.
-          - target: linux-arm64
-            os: ubuntu-22.04-arm
-            target_os: linux
-            target_arch: arm64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -106,93 +82,48 @@ jobs:
         uses: actions/setup-node@v6
         with:
           # Pinned exact: setup-node's "22.x" floats with new releases, which
-          # broke deterministic builds before. Bump in lockstep with @electron/
-          # rebuild's minimum Node requirement.
+          # broke deterministic builds before.
           node-version: "22.16.0"
-
-      - name: Print runtime versions (debug)
-        shell: bash
-        run: |
-          node -v
-          npm -v
-          echo "platform=${{ runner.os }} target=${{ matrix.target }}"
 
       - name: Install core deps (repo root)
         run: npm ci
 
+      # --ignore-scripts: lockfiles don't record better-sqlite3's
+      # "gypfile": false, so a plain `npm ci` runs `node-gyp rebuild` for it.
+      # That build is a no-op (the prebuild ships in the package), but node-gyp
+      # still has to find a compiler first, and on windows-latest it cannot
+      # recognise Visual Studio 18. No extension dependency needs an install
+      # script: esbuild's binary comes from its platform package.
       - name: Install extension deps
         working-directory: extension
-        run: npm ci
-
-      - name: Build better-sqlite3 for every supported ABI
-        working-directory: extension
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf dist-native
-          for T in $BINDING_TARGETS; do
-            KIND="${T%%:*}"; VER="${T##*:}"
-            ABI=$(node -p "require('node-abi').getAbi('$VER','$KIND')")
-            echo "::group::better-sqlite3 for $KIND $VER (ABI $ABI)"
-            # Clean slate per target: a stale config.gypi from the previous
-            # iteration would defeat the ABI assertion below.
-            rm -rf node_modules/better-sqlite3/build
-            # Official upstream prebuilds exist for BOTH conventions (the
-            # v12.11 release ships electron ABIs 136/139/140/143/145/146 and node
-            # 127/137/141/147) — download first, compile only as fallback.
-            # On the node-convention fallback, --target is load-bearing: a
-            # bare build-release compiles against the RUNNER's Node and
-            # silently mislabels the ABI (the config.gypi assertion below
-            # would catch it, but better to never produce it).
-            if [ "$KIND" = "electron" ]; then
-              (cd node_modules/better-sqlite3 && npx prebuild-install -r electron -t "$VER" -f --verbose) \
-                || npx electron-rebuild -f -w better-sqlite3 -v "$VER"
-            else
-              (cd node_modules/better-sqlite3 && (npx prebuild-install -r node -t "$VER" -f --verbose || npm run build-release -- --target="$VER"))
-            fi
-            # If this target went through a source build, config.gypi records
-            # which headers were used — assert they match the ABI we are
-            # about to label this binary with. Prebuilds skip this (no
-            # config.gypi; the download is keyed on the exact ABI already).
-            GYPI=node_modules/better-sqlite3/build/config.gypi
-            if [ -f "$GYPI" ] && ! grep -Eq "\"node_module_version\": $ABI\b" "$GYPI"; then
-              echo "::error::ABI mismatch for $T: built $(grep -Eo '"node_module_version": [0-9]+' "$GYPI"), wanted $ABI"
-              exit 1
-            fi
-            mkdir -p "dist-native/abi-$ABI"
-            cp node_modules/better-sqlite3/build/Release/better_sqlite3.node "dist-native/abi-$ABI/"
-            echo "::endgroup::"
-          done
-          ls -la dist-native/*/
-
-      - name: Verify rebuilt bindings match target arch
-        working-directory: extension
-        shell: bash
-        run: |
-          for BIN in dist-native/abi-*/better_sqlite3.node; do
-            if [ ! -f "$BIN" ]; then echo "::error::no bindings built"; exit 1; fi
-            echo "--- $BIN"
-            file "$BIN" || true
-            head -c 4 "$BIN" | od -An -tx1 | tr -d ' \n'; echo
-          done
+        run: npm ci --ignore-scripts
 
       - name: Package VSIX (${{ matrix.target }})
         working-directory: extension
-        # vsce does not create the --out directory; without the mkdir it
-        # falls back to treating "../artifacts/" as a literal file path and
-        # dies with ENOTDIR. bash shell so mkdir -p works on the win32 leg.
-        shell: bash
-        run: |
-          mkdir -p ../artifacts
-          npx vsce package --target ${{ matrix.target }} --out ../artifacts/
+        run: node scripts/package-vsix.mjs ${{ matrix.target }} ../artifacts
 
-      - name: Verify VSIX contents
+      - name: Verify VSIX contents and run it under Node
         working-directory: extension
         shell: bash
         run: |
           VSIX=$(ls ../artifacts/*-${{ matrix.target }}-*.vsix)
           echo "Verifying $VSIX"
           node ./scripts/verify-vsix.mjs "$VSIX" "${{ matrix.target }}"
+
+      # Desktop VS Code runs extensions inside Electron, not Node. Load the same
+      # binary under the Electron of VS Code 1.103 (the engines floor) and of
+      # the current stable. Skipped on linux-arm64, whose runner image lacks
+      # Electron's desktop libraries; the binary is the same Node-API build.
+      - name: Run it under Electron (VS Code 1.103 and current stable)
+        if: matrix.target != 'linux-arm64'
+        working-directory: extension
+        shell: bash
+        env:
+          ELECTRON_RUN_AS_NODE: "1"
+        run: |
+          for V in 37.2.3 43.6.0; do
+            npx --yes "electron@$V" scripts/smoke-native.cjs .
+          done
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7

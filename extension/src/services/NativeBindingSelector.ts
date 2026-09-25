@@ -1,70 +1,82 @@
 import * as fs from "fs";
 import * as path from "path";
+import { classifyNativeBindingError } from "../../../src/core/native-binding-error";
 
 /**
- * Multi-ABI native-binding selector.
+ * Native SQLite binding check at activation.
  *
- * The packaged VSIX ships one better_sqlite3.node per supported Electron ABI
- * under dist-native/abi-<N>/ (built by the release workflow's
- * ELECTRON_TARGETS loop). better-sqlite3 itself always loads from
- * node_modules/better-sqlite3/build/Release/better_sqlite3.node, so at
- * activation we copy the binding matching THIS VS Code's ABI
- * (process.versions.modules) into that location — once, marker-guarded.
+ * better-sqlite3 13 is a Node-API addon, so there is no binding to select for
+ * the running Electron ABI any more: one prebuilt binary per platform loads in
+ * every Electron VS Code ships (37 in 1.103 through 43 in 1.139) and in plain
+ * Node on remote hosts (SSH, WSL, Codespaces). Until 0.4 the VSIX carried one
+ * binary per ABI and copied the matching one into place here — and every new
+ * Electron in VS Code broke the extension until a rebuild shipped.
  *
- * This is what lets one VSIX span VS Code 1.103 → current instead of pinning
- * engines.vscode to a single Electron line and stranding everyone else.
+ * What remains worth doing at activation is proving the binding loads, so a
+ * host it can't run on (musl, a glibc older than the prebuild's, a wrong-arch
+ * install) gets a clear error before anything touches the store.
  */
+
+/** The --target values the release workflow publishes (scripts/package-vsix.mjs). */
+const PUBLISHED_TARGETS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
 
 export interface BindingSelection {
   ok: boolean;
-  /** What happened: "single-abi-build" (dev/F5, no dist-native), "already-current",
-   *  "selected" (copied), or an error reason when ok=false. */
+  /** "loaded" on success; otherwise the user-facing reason. */
   detail: string;
   abi: string;
+  /** On failure, the loader's own error and stack, for the Output channel. */
+  raw?: string;
 }
 
-export function ensureNativeBinding(extensionRoot: string): BindingSelection {
+export function ensureNativeBinding(): BindingSelection {
   const abi = process.versions.modules;
-  const nativeDir = path.join(extensionRoot, "dist-native");
-  // Dev builds (F5) and tests run straight from node_modules with whatever
-  // ABI the local rebuild produced — nothing to select.
-  if (!fs.existsSync(nativeDir)) return { ok: true, detail: "single-abi-build", abi };
-
-  const candidate = path.join(nativeDir, `abi-${abi}`, "better_sqlite3.node");
-  if (!fs.existsSync(candidate)) {
-    let shipped: string[] = [];
-    try { shipped = fs.readdirSync(nativeDir).filter(n => n.startsWith("abi-")).map(n => n.slice(4)); } catch {}
-    return {
-      ok: false,
-      abi,
-      detail:
-        `This VS Code's Electron uses Node ABI ${abi}, but this build ships bindings for ABI ${shipped.join(", ") || "(none)"} only. ` +
-        `Update VS Code (or the extension) to a matching version — see PUBLISHING.md for the supported range.`,
-    };
-  }
-
-  const targetDir = path.join(extensionRoot, "node_modules", "better-sqlite3", "build", "Release");
-  const target = path.join(targetDir, "better_sqlite3.node");
-  const marker = path.join(targetDir, ".abi");
-
   try {
-    if (fs.existsSync(target) && fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim() === abi) {
-      return { ok: true, detail: "already-current", abi };
+    // External to the bundle, so this resolves from the extension's own
+    // node_modules — the same module the store loads.
+    const Database = require("better-sqlite3");
+    new Database(":memory:").close();
+    return { ok: true, detail: "loaded", abi };
+  } catch (err) {
+    const diagnosis = classifyNativeBindingError(err);
+    const raw = diagnosis.raw || String(err);
+    const mismatch = hostMismatch();
+    if (mismatch) return { ok: false, abi, detail: mismatch, raw };
+    const firstLine = (err instanceof Error ? err.message : String(err)).split("\n")[0];
+    // An unrecognized failure's canned message points at the Output channel;
+    // lead with the real error so the toast alone says something useful.
+    const detail = diagnosis.recognized ? diagnosis.message : `${firstLine} — ${diagnosis.message}`;
+    return { ok: false, abi, detail, raw };
+  }
+}
+
+/**
+ * better-sqlite3 13 only ever loads prebuilds/<platform>-<arch>.node (linuxmusl-*
+ * on musl) and otherwise falls back to a source build, which a VSIX never has —
+ * so a host the package has no binary for fails with "Cannot find module".
+ * That reads as a broken install; say what is actually wrong.
+ */
+function hostMismatch(): string | undefined {
+  try {
+    const dir = path.join(path.dirname(require.resolve("better-sqlite3/package.json")), "prebuilds");
+    const shipped = fs.readdirSync(dir).filter(f => f.endsWith(".node")).map(f => f.slice(0, -".node".length));
+    const report = (process as any).report?.getReport?.();
+    const musl = process.platform === "linux" && report && !report.header?.glibcVersionRuntime;
+    const host = `${musl ? "linuxmusl" : process.platform}-${process.arch}`;
+    if (!shipped.length || shipped.includes(host)) return undefined;
+    if (musl) {
+      return "Alpine / musl Linux isn't supported yet. Use a glibc-based image (Debian, Ubuntu, Fedora) for this workspace.";
     }
-    fs.mkdirSync(targetDir, { recursive: true });
-    // Copy to a temp name then rename: another VS Code window activating
-    // concurrently must never observe a half-written .node.
-    const tmp = target + `.tmp-${process.pid}`;
-    fs.copyFileSync(candidate, tmp);
-    fs.renameSync(tmp, target);
-    fs.writeFileSync(marker, abi);
-    return { ok: true, detail: "selected", abi };
-  } catch (err: any) {
-    return {
-      ok: false,
-      abi,
-      detail: `Failed to install the ABI-${abi} binding: ${err?.message ?? String(err)}. ` +
-        `The extension directory may be read-only; try reinstalling the extension.`,
-    };
+    // Only point at the Marketplace when it actually has a build for this host.
+    if (PUBLISHED_TARGETS.includes(host)) {
+      return `This copy of the extension is built for ${shipped.join(", ")}, but this machine is ${host}. ` +
+        "Install the build for this platform from the Marketplace (reinstall the extension and let VS Code pick it).";
+    }
+    if (host === "win32-arm64") {
+      return "There is no Windows-on-ARM build yet. Run the x64 build of VS Code (Windows runs it under emulation) and install the extension there, or open the folder through WSL.";
+    }
+    return `${host} isn't supported yet; the extension ships for ${PUBLISHED_TARGETS.join(", ")}.`;
+  } catch {
+    return undefined;
   }
 }

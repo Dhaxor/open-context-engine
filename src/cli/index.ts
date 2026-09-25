@@ -811,7 +811,11 @@ program.command("pull-index <src>").description("Install a team index artifact, 
       await pullArtifact(src, artifactFile, { token: opts.token || process.env.OCE_INDEX_TOKEN });
     }
     try {
-      const manifest = await installArtifact(artifactFile, storeDir, { model: config.embedding.model, dimension: config.embedding.dimension });
+      const manifest = await installArtifact(artifactFile, storeDir, {
+        provider: config.embedding.provider,
+        model: config.embedding.model,
+        dimension: config.embedding.dimension,
+      });
       outputText(`Installed team index: ${manifest.chunkCount} chunks, ${manifest.fileCount} files, built ${manifest.createdAt.slice(0, 19)}${manifest.git?.commit ? ` at commit ${manifest.git.commit.slice(0, 8)}` : ""}.`);
       if (reconcile) {
         const ctx = await OpenContext.create(config);

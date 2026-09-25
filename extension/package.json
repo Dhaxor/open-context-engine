@@ -2,7 +2,7 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "open-context",
   "license": "MIT",
   "icon": "icon.png",
@@ -532,23 +532,20 @@
     "build": "node build.js",
     "watch": "node build.js --watch",
     "lint": "tsc --noEmit",
-    "rebuild": "node ./scripts/build-native-local.mjs",
-    "package": "npm run rebuild && vsce package",
-    "verify-vsix": "node ./scripts/verify-vsix.mjs"
+    "package": "node ./scripts/package-vsix.mjs",
+    "verify-vsix": "node ./scripts/verify-vsix.mjs",
+    "smoke-native": "node ./scripts/smoke-native.cjs"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.103.0",
     "@vscode/vsce": "^3.6.0",
-    "electron": "42.3.0",
     "esbuild": "^0.24.0",
-    "node-abi": "^4.12.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^4.0.3",
     "highlight.js": "^11.11.1",
     "ignore": "^6.0.0",

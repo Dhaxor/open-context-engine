@@ -90,7 +90,7 @@ export function classifyNativeBindingError(err: unknown): NativeBindingDiagnosis
       title: "Open Context Engine: system glibc too old",
       message:
         `The native SQLite binding requires a newer glibc than this Linux distribution provides. ` +
-        `This extension's Linux builds target glibc 2.35+ (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer). ` +
+        `This extension's Linux builds need glibc 2.34+ (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer). ` +
         `Please upgrade your distribution or run the CLI/MCP variant of Open Context Engine on a newer host.`,
       recognized: true,
       raw,

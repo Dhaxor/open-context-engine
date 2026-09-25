@@ -15,18 +15,44 @@ import { classifyNativeBindingError } from "../../src/core/native-binding-error"
 let statusBarItem: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel | undefined;
 
+/** Settings the store is built from (ContextService.getConfigForPath, the watcher). */
+const STORE_SETTINGS = [
+    "openContext.embedding",
+    "openContext.search",
+    "openContext.chunkSize",
+    "openContext.chunkOverlap",
+    "openContext.autoIndex",
+];
+
 /** Show the user a real, actionable error for any failure that initializes the
  *  native SQLite binding (NMV mismatch, glibc skew, wrong arch, etc.). Until
  *  v0.1.1 the startup-index catch site swallowed these with a console.error
  *  the user could never see, which is why "indexing silently failed" was the
  *  first-run experience for paying customers on mismatched VS Code builds. */
 function reportIndexingError(err: unknown): void {
+  if (err instanceof Error && err.name === "KeywordFallbackRefusedError") {
+    // The store holds embeddings built with a key that is no longer set. The
+    // core refuses to wipe them for a keyword-only fallback; its message names
+    // CLI commands, so say it the extension's way.
+    outputChannel?.appendLine(`[${new Date().toISOString()}] ${err.message}`);
+    vscode.window.showWarningMessage(
+      "Open Context: this workspace's index was built with semantic search, but no embedding API key is set. Set the key it was built with to keep using it.",
+      "Set API Key",
+    ).then((pick) => {
+      if (pick === "Set API Key") void vscode.commands.executeCommand("openContext.setEmbeddingApiKey");
+    });
+    return;
+  }
   const diag = classifyNativeBindingError(err);
   outputChannel?.appendLine("");
   outputChannel?.appendLine(`[${new Date().toISOString()}] ${diag.title}`);
   outputChannel?.appendLine(diag.raw);
   if (!diag.recognized) {
-    vscode.window.showErrorMessage(`Open Context Engine: indexing failed — ${diag.title}`, "Open Output").then((pick) => {
+    // Not a native-binding failure the classifier knows, so its generic title
+    // ("failed to load native SQLite binding") would misdiagnose it. Say what
+    // actually failed.
+    const reason = (err instanceof Error ? err.message : String(err)).split("\n")[0];
+    vscode.window.showErrorMessage(`Open Context Engine: indexing failed — ${reason}`, "Open Output").then((pick) => {
       if (pick === "Open Output") outputChannel?.show(true);
     });
     return;
@@ -41,11 +67,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     outputChannel = vscode.window.createOutputChannel("Open Context Engine");
     context.subscriptions.push(outputChannel);
 
-    // Select the better-sqlite3 binding matching THIS VS Code's Electron ABI
-    // before anything can touch the store. Packaged builds ship one binding
-    // per supported ABI; dev builds (no dist-native/) skip this entirely.
-    const binding = ensureNativeBinding(context.extensionUri.fsPath);
+    // Prove the native SQLite binding loads before anything can touch the
+    // store: one Node-API binary serves every Electron ABI, so a failure here
+    // is the host (musl, old glibc, wrong arch), and it deserves a clear error.
+    const binding = ensureNativeBinding();
     outputChannel.appendLine(`[${new Date().toISOString()}] native binding: ${binding.detail} (ABI ${binding.abi})`);
+    // The loader's own error (dlopen text, .node path, stack): what anyone
+    // debugging an inert extension actually needs.
+    if (binding.raw) outputChannel.appendLine(binding.raw);
     if (!binding.ok) {
         vscode.window.showErrorMessage(`Open Context Engine cannot start — ${binding.detail}`, "Open Output").then((pick) => {
             if (pick === "Open Output") outputChannel?.show(true);
@@ -86,7 +115,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const rootName = path.basename(s.workspaceRoot) || s.workspaceRoot;
             const modeSuffix = s.searchMode === "keyword-only" ? " · keyword-only" : "";
             statusBarItem.text = `$(database) Open Context: ${rootName} · ${s.indexedFiles} files${modeSuffix}`;
-            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks${s.searchMode === "keyword-only" ? `\nKeyword-only (BM25) search — sqlite-vec unavailable on this platform.` : ""}`;
+            const keywordOnlyWhy = s.degradedKind === "keyword_only" ? "no embedding API key set" : "sqlite-vec unavailable on this platform";
+            statusBarItem.tooltip = `Open Context index: ${s.workspaceRoot}\n${s.totalChunks} chunks${s.searchMode === "keyword-only" ? `\nKeyword-only (BM25) search — ${keywordOnlyWhy}.` : ""}`;
             treeProvider.refresh();
         } catch {}
     };
@@ -98,6 +128,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
         void refreshStatus();
     }));
+    // One debounced re-index for every change that reopens the store in a new
+    // embedding space. Settling first matters: a second change moments later
+    // would close the store under a run the first one started.
+    let reindexTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleReindex = () => {
+        if (reindexTimer) clearTimeout(reindexTimer);
+        reindexTimer = setTimeout(() => {
+            reindexTimer = undefined;
+            void vscode.commands.executeCommand("openContext.indexWorkspace");
+        }, 1500);
+    };
+    context.subscriptions.push({ dispose: () => { if (reindexTimer) clearTimeout(reindexTimer); } });
+
+    context.subscriptions.push(svc.onEmbeddingKeyChanged(({ rebuild }) => {
+        // Every key-save path lands here — the command, the settings panel,
+        // the chat's key form. A new key reopens the store empty in vector
+        // mode (or behind, if it was refused without one); rebuild what this
+        // workspace is meant to have. One indexed only by hand, and never
+        // indexed, stays that way: nobody asked for a paid index run.
+        if (rebuild) scheduleReindex();
+        else void refreshStatus();
+    }));
 
     const restartWatching = async () => {
         if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
@@ -105,12 +157,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     };
 
-    const runIndex = async (label: string, op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<import("../../src/core/types").IndexingResult | void>) => {
+    const runIndex = async (
+        label: string,
+        /** `rebase` is for ops that reopen the store themselves (a new index
+         *  root): call it after that reopen so it isn't taken for an
+         *  interruption, while a later, external reopen still is. */
+        op: (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken, rebase: () => void) => Promise<import("../../src/core/types").IndexingResult | void>,
+    ) => {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: label, cancellable: true },
             async (progress, token) => {
+                let generation = svc.getContextGeneration();
+                const rebase = () => { generation = svc.getContextGeneration(); };
                 try {
-                    const result = await op(progress, token);
+                    const result = await op(progress, token, rebase);
                     await refreshStatus();
                     const s = await svc.getStatus();
                     if (result?.failed?.length) {
@@ -123,7 +183,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         vscode.window.showInformationMessage(`Indexed ${path.basename(s.workspaceRoot)}: ${s.indexedFiles} files (${s.totalChunks} chunks)`);
                     }
                 } catch (err: any) {
+                    // The run may have rebuilt the store before failing; don't
+                    // leave the status bar showing the old count.
+                    await refreshStatus();
                     if (err instanceof vscode.CancellationError) return;
+                    // The store was reopened under this run (a setting or key
+                    // changed). Not a failure to report: run again once things
+                    // settle — the debounce folds this into any run the reopen
+                    // itself scheduled, and a run already started on the
+                    // reopened store covers it.
+                    if (svc.getContextGeneration() !== generation) {
+                        if (!svc.indexRunSinceReopen()) scheduleReindex();
+                        return;
+                    }
                     vscode.window.showErrorMessage(`Indexing failed: ${err.message}`);
                 }
             },
@@ -151,10 +223,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             const dir = picked?.[0]?.fsPath;
             if (!dir) return;
-            await runIndex(`Indexing ${path.basename(dir)}...`, (progress, token) =>
+            await runIndex(`Indexing ${path.basename(dir)}...`, (progress, token, rebase) =>
                 svc.indexDirectory(dir, (status, current, total) => {
                     progress.report({ message: total > 0 ? `${status}: ${current}/${total}` : status });
-                }, token),
+                }, token, rebase),
             );
             await restartWatching();
             chatView.refreshConfig();
@@ -294,11 +366,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.setEmbeddingApiKey", async () => {
-            const value = await vscode.window.showInputBox({ prompt: "Embedding API key (stored securely via VS Code SecretStorage)", password: true });
+            // The key belongs to whichever provider is selected, so name it.
+            const provider = vscode.workspace.getConfiguration("openContext").get<string>("embedding.provider", "voyage");
+            const label = ({ voyage: "Voyage", openai: "OpenAI" } as Record<string, string>)[provider] ?? provider;
+            const value = await vscode.window.showInputBox({
+                prompt: `${label} embedding API key (stored in VS Code SecretStorage). To use another provider, change openContext.embedding.provider first.`,
+                password: true,
+            });
             if (value === undefined) return;
-            await svc.setEmbeddingApiKey(value);
-            await svc.dispose();
-            vscode.window.showInformationMessage(value ? "Embedding API key saved." : "Embedding API key cleared.");
+            // setEmbeddingApiKey fires onEmbeddingKeyChanged, which re-indexes
+            // when the workspace is meant to have an index.
+            const rebuilding = await svc.setEmbeddingApiKey(value);
+            vscode.window.showInformationMessage(
+                !value ? "Embedding API key cleared."
+                    : rebuilding ? `${label} key saved — re-indexing with semantic search.`
+                    : `${label} key saved. Run "Open Context: Index Workspace" to build the index.`,
+            );
         }),
 
         vscode.commands.registerCommand("openContext.setLLMApiKey", async () => {
@@ -351,23 +434,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const cfg = vscode.workspace.getConfiguration("openContext");
     if (cfg.get<boolean>("indexOnStartup", true)) {
         vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: "Indexing workspace..." }, async () => {
+            const generation = svc.getContextGeneration();
             try {
                 const r = await svc.indexWorkspace();
                 await refreshStatus();
                 // One-time keyword-only notice: persistent signal lives in the
                 // status bar + health panel, so don't toast on every command.
                 const status = await svc.getStatus();
-                if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                if (status.searchMode === "keyword-only" && status.degradedKind === "keyword_only") {
+                    // No embedding key yet — the first run for most installs. Keyword
+                    // search works; say so once and offer the way to semantic search.
+                    if (!context.globalState.get<boolean>("openContext.noKeyNoticeShown")) {
+                        await context.globalState.update("openContext.noKeyNoticeShown", true);
+                        // Only Voyage and OpenAI need a key, so the keyless fallback means one of them.
+                        const chosen = vscode.workspace.getConfiguration("openContext").get<string>("embedding.provider", "voyage") === "openai" ? "OpenAI" : "Voyage";
+                        const other = chosen === "OpenAI" ? "Voyage" : "OpenAI";
+                        vscode.window.showInformationMessage(
+                            `Open Context: indexed with keyword search. For semantic search, set a ${chosen} API key, or choose another embedding provider — ${other}, or Ollama for free local embeddings.`,
+                            "Set API Key",
+                            "Choose Provider",
+                        ).then((pick) => {
+                            if (pick === "Set API Key") void vscode.commands.executeCommand("openContext.setEmbeddingApiKey");
+                            else if (pick === "Choose Provider") void vscode.commands.executeCommand("workbench.action.openSettings", "openContext.embedding");
+                        });
+                    }
+                } else if (status.searchMode === "keyword-only" && !context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
                     await context.globalState.update("openContext.keywordOnlyNoticeShown", true);
                     outputChannel?.appendLine(`[${new Date().toISOString()}] keyword-only mode: ${status.degradedReason ?? "sqlite-vec unavailable"}`);
                     vscode.window.showWarningMessage(
                         "Open Context: semantic search is unavailable on this platform — running keyword-only (BM25) search. Indexing and search still work.",
                         "Open Output",
                     ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
-                } else if (status.searchMode === "hybrid" && context.globalState.get<boolean>("openContext.keywordOnlyNoticeShown")) {
+                } else if (status.searchMode === "hybrid") {
                     // Healthy again — re-arm so a future degraded period gets
                     // its one toast instead of being suppressed forever.
-                    await context.globalState.update("openContext.keywordOnlyNoticeShown", undefined);
+                    for (const flag of ["openContext.keywordOnlyNoticeShown", "openContext.noKeyNoticeShown"]) {
+                        if (context.globalState.get<boolean>(flag)) await context.globalState.update(flag, undefined);
+                    }
                 }
                 if (r.failed?.length) {
                     outputChannel?.appendLine(`[${new Date().toISOString()}] startup index: ${r.failed.length} file(s) failed to embed (will retry on next index). ${r.failedReason ?? ""}`);
@@ -377,6 +480,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     ).then((pick) => { if (pick === "Open Output") outputChannel?.show(true); });
                 }
             } catch (err: any) {
+                // A key or setting saved while the first index ran reopened the
+                // store under it: not a failure — run it again once settled,
+                // unless a run already started on the reopened store.
+                if (svc.getContextGeneration() !== generation) {
+                    if (!svc.indexRunSinceReopen()) scheduleReindex();
+                    return;
+                }
                 reportIndexingError(err);
             }
         });
@@ -390,12 +500,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (!e.affectsConfiguration("openContext")) return;
+            // Reopen the store only for settings it is built from. Chat and agent
+            // settings are read per turn; reopening for them would close the
+            // store under an index in flight — the model & keys form writes
+            // llm.* on every save, right beside the key save that starts one.
+            if (!STORE_SETTINGS.some((key) => e.affectsConfiguration(key))) return;
             await svc.dispose();
             svc.bindExtensionContext(context);
             if (vscode.workspace.getConfiguration("openContext").get<boolean>("autoIndex", true)) {
-                svc.startWatching().catch(() => {});
+                await svc.startWatching().catch(() => {});
             }
+            // A reopen in a new embedding space (provider, model, key — or a key
+            // saved in another window, since SecretStorage is shared, taking
+            // effect here) rebuilds the store empty, and the watcher only picks
+            // up files as they change. Rebuild it when this workspace is meant to
+            // have an index (needsRebuild) — not for one indexed only by hand.
+            try {
+                if (svc.needsRebuild((await svc.getStatus()).indexedFiles)) scheduleReindex();
+            } catch { /* reported by the index run or the next command */ }
+            await refreshStatus();
         }),
     );
 

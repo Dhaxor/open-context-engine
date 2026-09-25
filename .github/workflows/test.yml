@@ -47,6 +47,26 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx vitest run
 
+  core-on-extension-sqlite:
+    # The extension ships better-sqlite3 13 (Node-API, one binary for every
+    # Electron) while the npm package stays on 12, whose prebuilds still load
+    # on glibc < 2.34. Both run the same core code, so the core suite runs on
+    # the extension's driver too. ubuntu-22.04's glibc 2.35 meets 13's floor.
+    name: Core suite on the extension's SQLite driver
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.16.0"
+      - run: npm ci
+      - name: Swap in the extension's better-sqlite3
+        run: |
+          VERSION=$(node -p "require('./extension/package-lock.json').packages['node_modules/better-sqlite3'].version")
+          npm install --no-save "better-sqlite3@$VERSION"
+          node -p "'better-sqlite3 ' + require('better-sqlite3/package.json').version"
+      - run: npx vitest run
+
   extension-types:
     name: Extension typecheck
     runs-on: ubuntu-22.04
@@ -58,7 +78,9 @@ jobs:
       # Extension tsc resolves imports from BOTH dependency trees: it
       # imports ../src (root deps) and its own node_modules.
       - run: npm ci
-      - run: npm ci
+      # --ignore-scripts skips a no-op node-gyp step for better-sqlite3; see
+      # the "Install extension deps" step in release-vsix.yml.
+      - run: npm ci --ignore-scripts
         working-directory: extension
       - run: npx tsc --noEmit
         working-directory: extension
