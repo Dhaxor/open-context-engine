@@ -1,0 +1,24 @@
+{
+  "//": "Typecheck only. Trace Studio is bundled by build-studio.js (esbuild); nothing here is emitted by tsc.",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    // protocol.ts type-imports from the agent, so this project's type graph
+    // reaches Node modules and needs their declarations to check. It does not
+    // let Studio USE them: the imports are `import type` and esbuild targets the
+    // browser, so a real Node import would fail the bundle immediately.
+    "types": ["node"]
+  },
+  "include": ["src/trace/studio/**/*"],
+  "exclude": ["src/trace/studio/**/*.test.ts", "src/trace/studio/**/*.test.tsx"]
+}

@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -33,7 +34,9 @@ export class SessionStore {
   newId(): string {
     const t = new Date();
     const stamp = t.toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
-    return `${stamp}-${Math.random().toString(36).slice(2, 6)}`;
+    // Trace addresses sessions by this id (`?session=`), so the suffix comes
+    // from the CSPRNG rather than Math.random.
+    return `${stamp}-${randomBytes(3).toString("hex")}`;
   }
 
   save(id: string, title: string, exportedSession: string, turns: number): void {

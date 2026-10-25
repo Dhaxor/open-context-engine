@@ -62,7 +62,8 @@ export interface FreshnessReport {
   reasons: string[];
   git: { indexed?: GitState; current: GitState; changed: boolean };
 }
-export interface EmbeddingConfig { provider: "openai" | "voyage" | "ollama" | "local"; model: string; apiKey?: string; baseUrl?: string; dimension: number; batchSize: number; }
+/** `none` = keyword-only (BM25) search, no embeddings at all. */
+export interface EmbeddingConfig { provider: "openai" | "voyage" | "ollama" | "local" | "none"; model: string; apiKey?: string; baseUrl?: string; dimension: number; batchSize: number; }
 export interface RerankerConfig { provider: "voyage" | "cohere" | "local" | "none"; model?: string; apiKey?: string; baseUrl?: string; }
 export interface SearchConfig {
   topK: number;
@@ -92,6 +93,12 @@ export interface OpenContextConfig {
   /** Advanced/test seam: override how the sqlite-vec extension path is
    *  resolved. Pointing at a nonexistent path forces keyword-only mode. */
   resolveVecPath?: () => string;
+  /** Never rebuild or clear the index on open — for commands that only report
+   *  (`status`, `audit`, `policy`). See SqliteStoreOptions.readOnly. */
+  readOnly?: boolean;
+  /** Keyword-only search, chosen (`explicit`) or because nothing better is
+   *  configured (`fallback`). See SqliteStoreOptions.keywordOnly. */
+  keywordOnly?: "explicit" | "fallback";
   /** Policy controls. Default (undefined): load from the standard policy files
    *  (user + workspace + org lock — see core/policy.ts). Pass an
    *  EffectivePolicy to inject one, or `false` to skip policy loading entirely.
@@ -127,4 +134,5 @@ export const DEFAULT_MODEL_FOR_PROVIDER: Record<EmbeddingConfig["provider"], str
   openai: "text-embedding-3-small",
   ollama: "nomic-embed-text",
   local: "jina-embeddings-v2-base-code",
+  none: "none",
 };

@@ -47,6 +47,17 @@ export function wireModelKeysForm(opts: ModelKeysFormOptions): ModelKeysFormCont
   let uiHasKey: Record<string, boolean> = {};
   let uiHasTavily = false;
   let uiHasEmbedding = false;
+  let uiEmbeddingProvider = "voyage";
+  // The chat selection as last loaded, so Save writes llm.* only when it changed.
+  let savedProvider = "";
+  let savedModel = "";
+
+  /** The embedding key belongs to whichever provider is selected in settings. */
+  function embeddingKeyHint(): string {
+    if (uiEmbeddingProvider === "openai") return "OpenAI key (sk-…)";
+    if (uiEmbeddingProvider === "voyage") return "Voyage key (pa-…)";
+    return `Not needed for ${uiEmbeddingProvider}`;
+  }
 
   if (cancelBtn) cancelBtn.hidden = opts.showCancel === false;
 
@@ -78,7 +89,7 @@ export function wireModelKeysForm(opts: ModelKeysFormOptions): ModelKeysFormCont
       embeddingStatus.textContent = uiHasEmbedding ? "set" : "not set";
     }
     if (embeddingKey) {
-      embeddingKey.placeholder = uiHasEmbedding ? "•••••• (blank = keep)" : "Voyage, OpenAI, etc.";
+      embeddingKey.placeholder = uiHasEmbedding ? "•••••• (blank = keep)" : embeddingKeyHint();
       embeddingKey.value = "";
     }
   }
@@ -99,6 +110,9 @@ export function wireModelKeysForm(opts: ModelKeysFormOptions): ModelKeysFormCont
     uiHasKey = (m.hasKey as Record<string, boolean>) || {};
     uiHasTavily = !!m.hasWebSearchKey;
     uiHasEmbedding = !!m.hasEmbeddingKey;
+    uiEmbeddingProvider = String(m.embeddingProvider || "voyage");
+    savedProvider = String(m.provider || "");
+    savedModel = String(m.model || "");
     setProviderUI(String(m.provider || "openai"));
     if (m.provider === "custom") {
       if (modelCustom) modelCustom.value = String(m.model || "");
@@ -130,7 +144,11 @@ export function wireModelKeysForm(opts: ModelKeysFormOptions): ModelKeysFormCont
       opts.notice("Enter a base URL for custom endpoints");
       return;
     }
-    opts.post({ type: "setLLMSelection", provider: uiProvider, model });
+    // Only when it changed: writing it anyway would pin llm.model in the
+    // user's settings on a save that was only meant to store a key.
+    if (uiProvider !== savedProvider || model !== savedModel) {
+      opts.post({ type: "setLLMSelection", provider: uiProvider, model });
+    }
     if (isCustom) opts.post({ type: "setLLMBaseUrl", baseUrl: baseUrl?.value.trim() || "" });
     if (apiKey?.value) {
       opts.post({ type: "saveLLMKey", provider: uiProvider, apiKey: apiKey.value });

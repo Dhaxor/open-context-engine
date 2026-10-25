@@ -59,6 +59,50 @@ const FILES = {
   "src/billing.ts": "export function charge(amount: number) {\n  return amount * 100;\n}\n",
 };
 
+describe("embedding model identity across real and stand-in embedders", () => {
+  // The CLI's `status` and `push-index --no-index` open the store with a
+  // stand-in embedder for the configured provider. It must carry the same
+  // identity the real provider stamped, or the open reads as a model change:
+  // push-index would wipe the index it was asked to export, and status would
+  // call every index stale.
+  it("a stand-in for the configured provider neither wipes nor flags the index", async () => {
+    const ws = await makeWorkspace(FILES);
+    const built = await makeContext(ws, countingEmbedder().embedder);
+    await built.indexWorkspace();
+    const chunks = built.getStatus().totalChunks;
+    expect(chunks).toBeGreaterThan(0);
+    built.close();
+
+    // The real provider for the same configuration (constructing it makes no
+    // network call).
+    const real = await OpenContext.create({
+      workspaceRoot: ws,
+      storePath: path.join(ws, ".store"),
+      embedding: { provider: "ollama", model: "mock-model", dimension: DIM, batchSize: 32 },
+      policy: false,
+    });
+    expect(real.getStatus().totalChunks).toBe(chunks);
+    real.close();
+
+    const standIn: EmbeddingProvider = {
+      embed: async () => { throw new Error("does not embed"); },
+      getDimension: () => DIM,
+      getModel: () => "mock-model",
+    };
+    const reader = await OpenContext.create({
+      workspaceRoot: ws,
+      storePath: path.join(ws, ".store"),
+      embedding: { provider: "ollama", model: "mock-model", dimension: DIM, batchSize: 32 },
+      embedder: standIn,
+      readOnly: true,
+      policy: false,
+    });
+    expect(reader.getStatus().totalChunks).toBe(chunks);
+    expect(reader.getStatus().staleReason).toBeUndefined();
+    reader.close();
+  });
+});
+
 describe("index artifact export/install", () => {
   it("round-trips: exported index searches identically after install elsewhere", async () => {
     const producer = countingEmbedder();
@@ -132,6 +176,23 @@ describe("index artifact export/install", () => {
     const store = path.join(await tmpDir("oce-team-store-"), ".store");
     await expect(installArtifact(artifact, store, { model: "voyage-code-3", dimension: 1024 }))
       .rejects.toThrow(/built with mock-model \(4d\)/);
+  });
+
+  it("refuses an artifact from another provider serving the same model name", async () => {
+    // The store rebuilds on any provider:model difference, so installing it
+    // would only replace the local index with one the next open discards.
+    const ws1 = await makeWorkspace(FILES);
+    const ctx1 = await makeContext(ws1, countingEmbedder().embedder); // ollama:mock-model
+    await ctx1.indexWorkspace();
+    const artifact = path.join(await tmpDir("oce-team-art-"), "index.db.gz");
+    await ctx1.exportIndex(artifact);
+    ctx1.close();
+
+    const store = path.join(await tmpDir("oce-team-ws2-"), ".store");
+    await expect(installArtifact(artifact, store, { provider: "openai", model: "mock-model", dimension: DIM }))
+      .rejects.toThrow(/built with ollama:mock-model \(4d\) but this workspace is configured for openai:mock-model/);
+    await expect(installArtifact(artifact, store, { provider: "ollama", model: "mock-model", dimension: DIM }))
+      .resolves.toMatchObject({ embeddingProvider: "ollama" });
   });
 
   it("backs up an existing database before install", async () => {

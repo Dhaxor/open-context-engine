@@ -13,7 +13,13 @@ export function getFileRecencyScores(workspaceRoot: string, windowDays = 30): Re
     const since = `${windowDays} days ago`;
     const raw = execSync(
       `git log --name-only --format=%at --since="${since}"`,
-      { cwd: workspaceRoot, encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 15000 },
+      {
+        cwd: workspaceRoot, encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 15000,
+        // stderr is swallowed: a workspace that is not a git repository is an
+        // expected case (handled below), and inheriting stderr printed git's
+        // "fatal: not a git repository" on every command a new user ran.
+        stdio: ["ignore", "pipe", "ignore"],
+      },
     );
     const now = Date.now() / 1000;
     let currentTimestamp = 0;
