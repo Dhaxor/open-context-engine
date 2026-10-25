@@ -7,7 +7,7 @@ vi.mock("../../../src/agent/agent", () => ({
   defaultAgentTools: vi.fn((opts) => [{ name: "tool", opts }]),
   ContextAgent: class { constructor(public opts: any) { constructed.push(opts); } run = vi.fn(async (q, opts) => runImpl?.(q, opts)); reset = vi.fn(); },
 }));
-vi.mock("./ContextService", () => ({ ContextService: { getInstance: () => ({ getLLMApiKey: async () => "key", getWebSearchApiKey: async () => "web", getContext: async () => ({ getWorkspaceRoot: () => "/tmp/root", getPolicy: () => undefined }), getIdeRetrieveOptionsForCurrentContext: async () => ({}) }) } }));
+vi.mock("./ContextService", () => ({ ContextService: { getInstance: () => ({ getLLMApiKey: async () => "key", getWebSearchApiKey: async () => "web", getLLMSelection: () => undefined, getContextGeneration: () => 1, getContext: async () => ({ getWorkspaceRoot: () => "/tmp/root", getPolicy: () => undefined }), getIdeRetrieveOptionsForCurrentContext: async () => ({}) }) } }));
 vi.mock("../../../src/agent/session-memory", () => ({ SessionMemory: class { clearAll() { return 3; } } }));
 vi.mock("../../../src/agent/model-router", () => ({ ModelRouter: class { constructor(public c: any) {} }, defaultRoutingConfig: (provider: string, cfg: any) => ({ provider, ...cfg }) }));
 vi.mock("../../../src/core/license", () => ({ getLicense: () => ({}), isEntitled: () => false }));

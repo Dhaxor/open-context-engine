@@ -44,7 +44,9 @@ jobs:
           # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
           node-version: ${{ matrix.node }}
       - run: npm ci
-      - run: npx tsc --noEmit
+      # core + Studio typecheck: TS 7 needs the css.d.ts declaration, and only
+      # this composed script checks Studio — plain `tsc --noEmit` missed it once.
+      - run: npm run typecheck:core
       - run: npx vitest run
 
   core-on-extension-sqlite:
@@ -56,7 +58,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.16.0"
       - run: npm ci
@@ -71,7 +73,7 @@ jobs:
     name: Extension typecheck
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "22.16.0"
@@ -83,4 +85,21 @@ jobs:
       - run: npm ci --ignore-scripts
         working-directory: extension
       - run: npx tsc --noEmit
+        working-directory: extension
+
+  extension-tests:
+    name: Extension vitest
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+      # Extension tests import ../src, so both dependency trees must be present
+      # (same install pattern as extension-types). --ignore-scripts skips a
+      # no-op node-gyp step; better-sqlite3 13 prebuilds load without it.
+      - run: npm ci
+      - run: npm ci --ignore-scripts
+        working-directory: extension
+      - run: npx vitest run
         working-directory: extension

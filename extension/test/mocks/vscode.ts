@@ -18,7 +18,13 @@ export enum ConfigurationTarget { Global = 1 }
 export const workspace: any = {
   workspaceFolders: [], textDocuments: [], visibleTextEditors: [],
   _config: new Map<string, any>(), _providers: new Map<string, any>(), _files: new Map<string, string>(), _stats: new Set<string>(),
-  getConfiguration: () => ({ get: (k: string, d?: any) => workspace._config.has(k) ? workspace._config.get(k) : d, update: async (k: string, v: any) => workspace._config.set(k, v) }),
+  getConfiguration: () => ({
+    get: (k: string, d?: any) => workspace._config.has(k) ? workspace._config.get(k) : d,
+    has: (k: string) => workspace._config.has(k),
+    // model-settings.ts explicitSetting() reads inspect() — flat values act as workspace-level
+    inspect: (k: string) => (workspace._config.has(k) ? { key: k, workspaceValue: workspace._config.get(k) } : undefined),
+    update: async (k: string, v: any) => workspace._config.set(k, v),
+  }),
   registerTextDocumentContentProvider: (scheme: string, provider: any) => { workspace._providers.set(scheme, provider); return { dispose() { workspace._providers.delete(scheme); } }; },
   fs: {
     readFile: async (uri: Uri) => new TextEncoder().encode(workspace._files.get(uri.fsPath) ?? ""),
