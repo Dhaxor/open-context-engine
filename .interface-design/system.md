@@ -21,7 +21,8 @@ over adjectives. Dark-only, committed.
 `:root` block that `build-studio.js` inlines into the Studio shell, and it maps
 the same values to 24-bit ANSI for the TUI. One file, two renderers — there is
 no second copy of a colour anywhere. `web/oce.css` predates it and holds the
-same values by hand; keep them in step.
+same values by hand; `src/trace/tokens.drift.test.ts` fails the suite if the
+two ever disagree on a shared token.
 
 - Surfaces (one hue, lightness steps only): `--void #0a0d12` page · `--panel #10151c` · `--lift #161c25` · `--overlay #1b222d`
 - Edges: `--edge rgba(219,230,242,.08)` · `--edge-hi .16` · `--edge-faint .05`
