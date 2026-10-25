@@ -60,8 +60,11 @@ step "install globally into a throwaway prefix"
 PREFIX="$WORK/global"
 npm install -g --prefix "$PREFIX" --silent "$TARBALL" >/dev/null 2>"$WORK/install.log" \
   || { cat "$WORK/install.log"; fail "npm install -g failed"; }
+# POSIX prefixes expose the bin at $PREFIX/bin/oce; Windows npm puts the shim
+# at the prefix root ($PREFIX/oce) next to oce.cmd.
 OCE="$PREFIX/bin/oce"
-[ -x "$OCE" ] || fail "no oce binary at $OCE"
+[ -x "$OCE" ] || OCE="$PREFIX/oce"
+[ -x "$OCE" ] || fail "no oce binary under $PREFIX"
 pass "installed"
 
 # Run as a new user would: no keys of any kind in the environment.
