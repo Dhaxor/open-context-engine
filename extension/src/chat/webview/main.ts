@@ -353,7 +353,7 @@ function addEdit(e: any) {
   sealBubble();
   const el = document.createElement("div"); el.className = "card edit open"; el.dataset.editId = e.id; el._diff = e.diff;
   const title = e.kind === "create" ? "Created" : e.kind === "remove" ? "Deleted" : "Edited";
-  const kind = e.kind === "create" || e.kind === "remove" ? e.kind : "edit";
+  const kind = e.kind === "create" ? "create" : e.kind === "remove" ? "remove" : "edit";
   const count = e.replacedOccurrences ? ` (${esc(String(e.replacedOccurrences))})` : "";
   const openBtn = e.kind === "remove" ? "" : `<button class="mini" data-open="${esc(e.path)}">${icon("open")} Open</button>`;
   el.innerHTML = `<div class="chead"><span class="kind ${kind}">${kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
