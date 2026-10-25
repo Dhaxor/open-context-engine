@@ -554,13 +554,12 @@
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "chokidar": "^4.0.3",
+    "chokidar": "^6.0.0",
     "highlight.js": "^11.12.0",
     "ignore": "^6.0.0",
     "markdown-it": "^14.2.0",
     "minimatch": "^10.2.6",
-    "openai": "^4.70.0",
-    "sqlite-vec": "^0.1.9",
+    "openai": "^7.41.0",    "sqlite-vec": "^0.1.9",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "~0.25.10"
   }
