@@ -1,6 +1,7 @@
 import "../../chat/webview/styles.css";
 import "./styles.css";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
+import { wireIndexingForm } from "../../shared/indexing-form";
 import { renderAccountSection, type LicenseStatus } from "../../shared/account-section";
 
 declare function acquireVsCodeApi(): { postMessage(m: unknown): void };
@@ -25,6 +26,8 @@ const form = wireModelKeysForm({
   showCancel: false,
 });
 
+const indexingForm = wireIndexingForm({ $: (id) => $(id), post });
+
 let license: LicenseStatus = { plan: "free", valid: false };
 const accountBody = $("accountBody");
 function renderAccount() {
@@ -33,12 +36,12 @@ function renderAccount() {
 
 const sections: Record<string, HTMLElement | null> = {
   "model-keys": $("section-model-keys"),
-  account: $("section-account"),
   indexing: $("section-indexing"),
+  account: $("section-account"),
 };
 
 function showSection(id: string) {
-  document.querySelectorAll(".nav-item:not(.soon)").forEach((btn) => {
+  document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.classList.toggle("active", (btn as HTMLElement).dataset.section === id);
   });
   Object.entries(sections).forEach(([key, el]) => {
@@ -48,7 +51,7 @@ function showSection(id: string) {
 }
 
 document.querySelector(".settings-nav-list")?.addEventListener("click", (e) => {
-  const btn = (e.target as HTMLElement).closest(".nav-item:not(.soon):not([disabled])") as HTMLElement | null;
+  const btn = (e.target as HTMLElement).closest(".nav-item") as HTMLElement | null;
   if (btn?.dataset.section) showSection(btn.dataset.section);
 });
 
@@ -59,6 +62,9 @@ window.addEventListener("message", (e) => {
   switch (m.type) {
     case "config":
       form.applyConfig(m);
+      break;
+    case "indexingSettings":
+      indexingForm.apply(m);
       break;
     case "license":
       license = m.status || { plan: "free", valid: false };
@@ -71,3 +77,4 @@ window.addEventListener("message", (e) => {
 });
 
 post({ type: "ready" });
+post({ type: "getIndexingSettings" });

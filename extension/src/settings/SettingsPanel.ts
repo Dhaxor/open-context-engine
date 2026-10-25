@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import { settingsBody } from "./settings-html";
 import { buildConfigPayload, handleConfigMessage } from "../shared/open-context-config";
+import { coerceIndexingSetting, readIndexingSettings } from "../shared/indexing-settings";
 import { ContextService } from "../services/ContextService";
 
 function getNonce(): string {
@@ -78,6 +79,27 @@ export class SettingsPanel {
       case "openExternal":
         if (msg.url) await vscode.env.openExternal(vscode.Uri.parse(String(msg.url)));
         break;
+      case "getIndexingSettings":
+        await this.sendIndexingSettings();
+        break;
+      case "setIndexingSetting": {
+        // Validate before writing: a webview bug (or a crafted message) must
+        // not be able to corrupt chunking config. Same target the rest of the
+        // extension writes.
+        try {
+          const { key, value } = coerceIndexingSetting(String(msg.key ?? ""), msg.value);
+          await vscode.workspace.getConfiguration("openContext").update(key, value, vscode.ConfigurationTarget.Global);
+          await this.sendIndexingSettings();
+        } catch (err) {
+          vscode.window.showErrorMessage(`Could not save setting: ${err instanceof Error ? err.message : String(err)}`);
+          await this.sendIndexingSettings(); // re-send so the UI snaps back to truth
+        }
+        break;
+      }
+      case "reindex":
+        await vscode.commands.executeCommand("openContext.indexWorkspace");
+        await this.sendIndexingSettings();
+        break;
       default:
         await handleConfigMessage(msg, {
           onModelChange: () => { /* model badge lives in chat view */ },
@@ -88,6 +110,23 @@ export class SettingsPanel {
 
   private async sendConfig(): Promise<void> {
     this.panel.webview.postMessage(await buildConfigPayload());
+  }
+
+  private async sendIndexingSettings(): Promise<void> {
+    const status = await ContextService.getInstance().getStatus();
+    this.panel.webview.postMessage({
+      type: "indexingSettings",
+      settings: readIndexingSettings(vscode.workspace.getConfiguration("openContext")),
+      status: {
+        workspaceRoot: status.workspaceRoot,
+        indexedFiles: status.indexedFiles,
+        totalChunks: status.totalChunks,
+        searchMode: status.searchMode,
+        ...(status.degradedReason ? { degradedReason: status.degradedReason } : {}),
+        embeddingProvider: status.embeddingProvider,
+        embeddingModel: status.embeddingModel,
+      },
+    });
   }
 
   private sendLicense(): void {

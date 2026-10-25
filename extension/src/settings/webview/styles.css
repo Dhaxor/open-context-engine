@@ -142,3 +142,11 @@ body {
   .settings-page { grid-template-columns: 1fr; }
   .settings-nav { border-right: none; border-bottom: 1px solid var(--oc-border, var(--vscode-panel-border)); }
 }
+
+/* Indexing section */
+.idx-status { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 12px; }
+.idx-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.idx-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--vscode-descriptionForeground); }
+.idx-value { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--vscode-editor-font-family, monospace); }
+.idx-actions { margin-top: 4px; }
+.row.idx-toggle { align-items: center; }

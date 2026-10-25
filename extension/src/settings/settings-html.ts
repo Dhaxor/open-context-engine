@@ -1,5 +1,6 @@
 import { icon } from "../chat/webview/icons";
 import { modelKeysFormHtml } from "../shared/model-keys-form-html";
+import { indexingFormHtml } from "../shared/indexing-form-html";
 
 export const settingsBody = `
 <div class="settings-page">
@@ -7,8 +8,8 @@ export const settingsBody = `
     <div class="settings-brand">${icon("sparkle")}<span>Open Context</span></div>
     <nav class="settings-nav-list">
       <button type="button" class="nav-item active" data-section="model-keys">${icon("key")}<span>Model &amp; API keys</span></button>
+      <button type="button" class="nav-item" data-section="indexing">${icon("repos")}<span>Indexing</span></button>
       <button type="button" class="nav-item" data-section="account">${icon("account")}<span>Account &amp; License</span></button>
-      <button type="button" class="nav-item soon" data-section="indexing" disabled>${icon("repos")}<span>Indexing</span><em class="soon-tag">Soon</em></button>
     </nav>
     <button type="button" class="nav-link" id="openVscodeSettings">${icon("open")}<span>Advanced (VS Code settings)</span></button>
   </aside>
@@ -20,19 +21,19 @@ export const settingsBody = `
       </header>
       ${modelKeysFormHtml()}
     </section>
+    <section id="section-indexing" class="settings-section" hidden>
+      <header class="section-head">
+        <h1>Indexing</h1>
+        <p class="section-desc">Index behaviour, chunking, and live status for the semantic code index.</p>
+      </header>
+      ${indexingFormHtml()}
+    </section>
     <section id="section-account" class="settings-section" hidden>
       <header class="section-head">
         <h1>Account &amp; License</h1>
         <p class="section-desc">View your plan, activate a Team license, and unlock multi-repo search.</p>
       </header>
       <div id="accountBody" class="account-section"></div>
-    </section>
-    <section id="section-indexing" class="settings-section" hidden>
-      <header class="section-head">
-        <h1>Indexing</h1>
-        <p class="section-desc">Index behavior and embedding options — coming soon.</p>
-      </header>
-      <div class="placeholder-card">More settings will appear here in a future update.</div>
     </section>
   </main>
 </div>
