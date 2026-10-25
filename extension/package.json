@@ -213,7 +213,9 @@
               "image": "media/walkthrough/chat.svg",
               "altText": "Open Context chat panel"
             },
-            "completionEvents": ["onView:openContext.chat"]
+            "completionEvents": [
+              "onView:openContext.chat"
+            ]
           },
           {
             "id": "indexWorkspace",
@@ -223,7 +225,9 @@
               "image": "media/walkthrough/index.svg",
               "altText": "Index workspace command"
             },
-            "completionEvents": ["onCommand:openContext.indexWorkspace"]
+            "completionEvents": [
+              "onCommand:openContext.indexWorkspace"
+            ]
           },
           {
             "id": "configureKeys",
@@ -233,7 +237,9 @@
               "image": "media/walkthrough/settings.svg",
               "altText": "Open Context settings"
             },
-            "completionEvents": ["onCommand:openContext.openSettings"]
+            "completionEvents": [
+              "onCommand:openContext.openSettings"
+            ]
           },
           {
             "id": "browseIndexedFiles",
@@ -243,7 +249,9 @@
               "image": "media/walkthrough/files.svg",
               "altText": "Indexed files tree view"
             },
-            "completionEvents": ["onView:indexedFiles"]
+            "completionEvents": [
+              "onView:indexedFiles"
+            ]
           }
         ]
       }
@@ -539,7 +547,7 @@
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.140.0",
+    "@types/vscode": "~1.103.0",
     "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.28.2",
     "typescript": "^5.6.0"
@@ -554,6 +562,6 @@
     "openai": "^4.70.0",
     "sqlite-vec": "^0.1.9",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.27.1"
+    "web-tree-sitter": "~0.25.10"
   }
 }
