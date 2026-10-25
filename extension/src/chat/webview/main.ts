@@ -358,7 +358,7 @@ function addEdit(e: any) {
   const openBtn = e.kind === "remove" ? "" : `<button class="mini" data-open="${esc(e.path)}">${icon("open")} Open</button>`;
   el.innerHTML = `<div class="chead"><span class="kind ${kind}">${kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody"><div class="diff">${fmtDiff(e.diff)}</div></div>` +
-    `<div class="acts"><button class="mini" data-diff="${e.id}">${icon("diff")} Diff</button>${openBtn}<span class="spacer"></span><button class="mini undo" data-undo="${e.id}">${icon("undo")} Undo</button></div>`;
+    `<div class="acts"><button class="mini" data-diff="${esc(e.id)}">${icon("diff")} Diff</button>${openBtn}<span class="spacer"></span><button class="mini undo" data-undo="${esc(e.id)}">${icon("undo")} Undo</button></div>`;
   el?.querySelector?.(".chead")?.addEventListener("click", () => el.classList.toggle("open"));
   edits[e.id] = el; msgs.appendChild(el); scroll();
 }
