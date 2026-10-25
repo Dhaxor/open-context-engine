@@ -1,7 +1,7 @@
 {
   "name": "open-context-engine",
   "version": "0.4.0",
-  "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
+  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -67,11 +67,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "better-sqlite3": "^12.11.1",
-    "chokidar": "^5.0.0",
+    "chokidar": "^6.0.0",
     "commander": "^12.0.0",
-    "ignore": "^6.0.0",
+    "ignore": "^7.0.14",
     "minimatch": "^10.2.6",
-    "openai": "^4.70.0",
+    "openai": "^7.43.0",
     "sqlite-vec": "^0.1.9",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "~0.25.10",
@@ -100,6 +100,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5",
     "wrangler": "^4.151.3"
   }

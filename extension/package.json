@@ -220,7 +220,7 @@
           {
             "id": "indexWorkspace",
             "title": "Index your workspace",
-            "description": "Build a local semantic index of your codebase. Indexing runs on your machine \u2014 your code never leaves your device.\n\n[Index Workspace](command:openContext.indexWorkspace)",
+            "description": "Build a local semantic index of your codebase. Indexing runs on your machine — your code never leaves your device.\n\n[Index Workspace](command:openContext.indexWorkspace)",
             "media": {
               "image": "media/walkthrough/index.svg",
               "altText": "Index workspace command"
@@ -344,7 +344,7 @@
             "OpenAI embeddings",
             "Voyage AI embeddings (recommended for code, supports voyage-code-3)",
             "Ollama local embeddings (requires a running Ollama server)",
-            "In-process local embeddings (ONNX \u2014 no API key, no server; needs the optional @huggingface/transformers package)"
+            "In-process local embeddings (ONNX — no API key, no server; needs the optional @huggingface/transformers package)"
           ],
           "default": "voyage",
           "description": "Embedding provider (voyage-code-3 recommended for code)",
@@ -365,8 +365,8 @@
             "OpenAI text-embedding-3-large (3072 dim)",
             "OpenAI text-embedding-3-small (1536 dim)",
             "Nomic embed text via Ollama (768 dim)",
-            "Jina embeddings v2 base code \u2014 in-process local, code-tuned (768 dim)",
-            "all-MiniLM-L6-v2 \u2014 in-process local, small and fast (384 dim)"
+            "Jina embeddings v2 base code — in-process local, code-tuned (768 dim)",
+            "all-MiniLM-L6-v2 — in-process local, small and fast (384 dim)"
           ],
           "default": "voyage-code-3",
           "description": "Embedding model name",
@@ -375,7 +375,7 @@
         "openContext.embedding.cache.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Cache embeddings by content hash in `~/.open-context/embed-cache.db`, shared across repos and branches on this machine \u2014 identical code never embeds (or bills) twice.",
+          "markdownDescription": "Cache embeddings by content hash in `~/.open-context/embed-cache.db`, shared across repos and branches on this machine — identical code never embeds (or bills) twice.",
           "order": 3
         },
         "openContext.embedding.apiKey": {
@@ -398,7 +398,7 @@
             "OpenAI (GPT-5.4, GPT-5 Codex, GPT-5)",
             "Anthropic (Claude Opus 4.7, Sonnet 4.6, Haiku 4.5)",
             "Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5)",
-            "Ollama \u2014 fully local, no API key (llama3.1, qwen2.5-coder, \u2026)",
+            "Ollama — fully local, no API key (llama3.1, qwen2.5-coder, …)",
             "Custom OpenAI-compatible endpoint (OpenRouter, LM Studio, etc.)"
           ],
           "default": "openai",
@@ -457,7 +457,7 @@
         "openContext.agent.shell.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Give the agent a `run-command` tool to execute non-interactive shell commands in the workspace root. **Off by default** \u2014 enabling it lets the model run arbitrary commands on your machine unless you also set `#openContext.agent.shell.allowlist#`."
+          "markdownDescription": "Give the agent a `run-command` tool to execute non-interactive shell commands in the workspace root. **Off by default** — enabling it lets the model run arbitrary commands on your machine unless you also set `#openContext.agent.shell.allowlist#`."
         },
         "openContext.agent.shell.allowlist": {
           "type": "array",
@@ -480,7 +480,7 @@
         "openContext.agent.routing.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable \u2014 your configured `openContext.llm.model` is the standard tier."
+          "markdownDescription": "Route each query to a cost-appropriate model tier: cheap lookups go to a fast model, multi-file/analytical work to the strongest one. Off by default so model usage stays predictable — your configured `openContext.llm.model` is the standard tier."
         },
         "openContext.agent.routing.fastModel": {
           "type": "string",
@@ -548,7 +548,6 @@
     "verify": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
-    "@types/markdown-it": "^14.1.2",
     "@types/node": "^26.6.5",
     "@types/vscode": "~1.103.0",
     "@vscode/vsce": "^4.0.0",
