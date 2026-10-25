@@ -1,7 +1,7 @@
 {
   "name": "open-context-engine",
   "version": "0.4.0",
-  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
+  "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -92,7 +92,7 @@
     "esbuild": "^0.28.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "typescript": "^5.6.0",
+    "typescript": "^7.0.2",
     "vitest": "^1.6.1",
     "wrangler": "^4.136.3"
   }
