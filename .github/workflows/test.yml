@@ -38,7 +38,7 @@ jobs:
           - os: ubuntu-22.04
             node: "24"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
@@ -55,7 +55,7 @@ jobs:
     name: Core suite on the extension's SQLite driver
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "22.16.0"
