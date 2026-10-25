@@ -14,7 +14,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 cleanup() {
   [ -n "${TRACE_PID:-}" ] && kill "$TRACE_PID" 2>/dev/null || true
-  rm -rf "$WORK"
+  # Give the killed trace server a beat to release its SQLite handles, or the
+  # rm below loses a race with the OS on Windows and prints noise after a pass.
+  sleep 1
+  rm -rf "$WORK" 2>/dev/null || true
 }
 trap cleanup EXIT
 
