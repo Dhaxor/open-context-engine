@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { SqliteStore } from "./sqlite-store";
+import { KeywordFallbackRefusedError, SqliteStore } from "./sqlite-store";
 import { Chunk } from "./types";
 
 const DIM = 4;
@@ -253,6 +253,264 @@ describe("SqliteStore", () => {
       const hits = store.bm25Search("limiting agent tool steps", 5);
       expect(hits.some(h => h.chunk.symbolName === "StepBudget")).toBe(true);
     });
+  });
+});
+
+describe("SqliteStore read-only opens never destroy the index", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  /** A populated store at `dim`, closed and left on disk. */
+  async function seeded(dim: number): Promise<string> {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-ro-"));
+    dirs.push(dir);
+    const store = new SqliteStore(dir, dim);
+    await store.initialize();
+    store.add(makeChunk("a", { vector: makeVec(1, dim) }));
+    store.upsertFile("src/a.ts", "hash-a");
+    store.close();
+    return dir;
+  }
+
+  it("keeps the data when the embedding dimension no longer matches", async () => {
+    const dir = await seeded(4);
+    // This is the `oce status` bug: opening with a different provider's
+    // dimension used to delete every chunk as a side effect of reporting.
+    const reader = new SqliteStore(dir, 8, { readOnly: true });
+    await reader.initialize();
+
+    expect(reader.getChunkCount()).toBe(1);
+    expect(reader.getFileCount()).toBe(1);
+    expect(reader.getStaleReason()).toContain("embedding dimension changed from 4 to 8");
+    reader.close();
+  });
+
+  it("leaves the store openable at its original dimension afterwards", async () => {
+    const dir = await seeded(4);
+    const reader = new SqliteStore(dir, 8, { readOnly: true });
+    await reader.initialize();
+    reader.close();
+
+    // The read must not have stamped the mismatched dimension into meta —
+    // that would make the next real open trust a store it should rebuild.
+    const original = new SqliteStore(dir, 4);
+    await original.initialize();
+    expect(original.getChunkCount()).toBe(1);
+    expect(original.getStaleReason()).toBeNull();
+    original.close();
+  });
+
+  it("still rebuilds on a normal (writable) open", async () => {
+    const dir = await seeded(4);
+    const writer = new SqliteStore(dir, 8);
+    await writer.initialize();
+    // Indexing runs still need the destructive path to reach a consistent state.
+    expect(writer.getChunkCount()).toBe(0);
+    expect(writer.getStaleReason()).toBeNull();
+    writer.close();
+  });
+
+  it("reports no stale reason when everything matches", async () => {
+    const dir = await seeded(4);
+    const reader = new SqliteStore(dir, 4, { readOnly: true });
+    await reader.initialize();
+    expect(reader.getStaleReason()).toBeNull();
+    expect(reader.getChunkCount()).toBe(1);
+    reader.close();
+  });
+
+  it("opens a fresh store read-only without complaint", async () => {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-ro-"));
+    dirs.push(dir);
+    const reader = new SqliteStore(dir, 4, { readOnly: true });
+    await reader.initialize();
+    expect(reader.getChunkCount()).toBe(0);
+    expect(reader.getStaleReason()).toBeNull();
+    reader.close();
+  });
+});
+
+describe("SqliteStore embedding model identity", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+  });
+  async function tmp(): Promise<string> {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-model-"));
+    dirs.push(dir);
+    return dir;
+  }
+  async function openWith(dir: string, embeddingModel?: string, extra: object = {}): Promise<SqliteStore> {
+    const store = new SqliteStore(dir, DIM, { ...(embeddingModel ? { embeddingModel } : {}), ...extra });
+    await store.initialize();
+    return store;
+  }
+
+  it("rebuilds when the model changes at the same dimension", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "ollama:nomic-embed-text");
+    first.add(makeChunk("a"));
+    first.close();
+
+    // Same dimension, different vector space: keeping the old vectors would
+    // rank the new model's queries against them at random.
+    const switched = await openWith(dir, "ollama:embeddinggemma");
+    expect(switched.getChunkCount()).toBe(0);
+    switched.close();
+  });
+
+  it("keeps the index when the model is unchanged", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "voyage:voyage-code-3");
+    first.add(makeChunk("a"));
+    first.close();
+    const again = await openWith(dir, "voyage:voyage-code-3");
+    expect(again.getChunkCount()).toBe(1);
+    again.close();
+  });
+
+  it("adopts the current model for a store stamped before model identity existed", async () => {
+    const dir = await tmp();
+    const legacy = await openWith(dir); // no model recorded
+    legacy.add(makeChunk("a"));
+    legacy.close();
+    const upgraded = await openWith(dir, "voyage:voyage-code-3");
+    expect(upgraded.getChunkCount()).toBe(1);
+    upgraded.close();
+    // ...and from then on a change is detected.
+    const switched = await openWith(dir, "openai:some-other-1024-model");
+    expect(switched.getChunkCount()).toBe(0);
+    switched.close();
+  });
+
+  it("reports a model change instead of rebuilding when opened read-only", async () => {
+    const dir = await tmp();
+    const first = await openWith(dir, "ollama:nomic-embed-text");
+    first.add(makeChunk("a"));
+    first.close();
+    const reader = await openWith(dir, "ollama:embeddinggemma", { readOnly: true });
+    expect(reader.getChunkCount()).toBe(1);
+    expect(reader.getStaleReason()).toContain("embedding model changed");
+    reader.close();
+  });
+});
+
+describe("SqliteStore keyword-only by choice", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  async function tmp(): Promise<string> {
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sqlite-store-kw-"));
+    dirs.push(dir);
+    return dir;
+  }
+
+  it("runs keyword-only without loading sqlite-vec", async () => {
+    const store = new SqliteStore(await tmp(), DIM, { keywordOnly: "fallback" });
+    await store.initialize();
+    expect(store.isVectorAvailable()).toBe(false);
+    expect(store.getVectorDiagnosis()?.kind).toBe("keyword_only");
+    store.close();
+  });
+
+  it("indexes and finds by keyword in that mode", async () => {
+    const store = new SqliteStore(await tmp(), DIM, { keywordOnly: "fallback" });
+    await store.initialize();
+    store.add(makeChunk("parser", { contents: "function parseConfigFile() { return tokens; }", vector: undefined }));
+    const hits = store.bm25Search("parseConfigFile", 5);
+    expect(hits.map(h => h.chunk.id)).toEqual(["parser"]);
+    store.close();
+  });
+
+  it("refuses a fallback that would wipe an existing vector index", async () => {
+    const dir = await tmp();
+    const vectors = new SqliteStore(dir, DIM);
+    await vectors.initialize();
+    vectors.add(makeChunk("a"));
+    vectors.close();
+
+    // "I opened a shell without my API key" is not a request to throw away
+    // embeddings that cost money to build.
+    const fallback = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await expect(fallback.initialize()).rejects.toThrow(KeywordFallbackRefusedError);
+
+    const intact = new SqliteStore(dir, DIM);
+    await intact.initialize();
+    expect(intact.getChunkCount()).toBe(1);
+    intact.close();
+  });
+
+  it("explains how to recover in the refusal", async () => {
+    const dir = await tmp();
+    const vectors = new SqliteStore(dir, DIM);
+    await vectors.initialize();
+    vectors.add(makeChunk("a"));
+    vectors.close();
+    const fallback = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await expect(fallback.initialize()).rejects.toThrow(/oce setup/);
+  });
+
+  it("rebuilds a vector-stamped store with no chunks — there are no embeddings to lose", async () => {
+    const dir = await tmp();
+    // The mode is stamped on open, so a first index that failed for want of a
+    // key leaves a vector-stamped but empty store behind.
+    const failedFirstRun = new SqliteStore(dir, DIM);
+    await failedFirstRun.initialize();
+    failedFirstRun.close();
+
+    const fallback = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await fallback.initialize();
+    expect(fallback.isVectorAvailable()).toBe(false);
+    fallback.add(makeChunk("parser", { contents: "function parseConfigFile() {}", vector: undefined }));
+    expect(fallback.bm25Search("parseConfigFile", 5).map(h => h.chunk.id)).toEqual(["parser"]);
+    fallback.close();
+  });
+
+  it("lets an explicit choice transition a vector index like any mode change", async () => {
+    const dir = await tmp();
+    const vectors = new SqliteStore(dir, DIM);
+    await vectors.initialize();
+    vectors.add(makeChunk("a"));
+    vectors.close();
+
+    // The user asked for keyword-only; that is a deliberate rebuild.
+    const explicit = new SqliteStore(dir, DIM, { keywordOnly: "explicit" });
+    await explicit.initialize();
+    expect(explicit.isVectorAvailable()).toBe(false);
+    expect(explicit.getChunkCount()).toBe(0);
+    explicit.close();
+  });
+
+  it("reopens a keyword-only index as keyword-only without complaint", async () => {
+    const dir = await tmp();
+    const first = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await first.initialize();
+    first.add(makeChunk("a", { vector: undefined }));
+    first.close();
+
+    const again = new SqliteStore(dir, DIM, { keywordOnly: "fallback" });
+    await again.initialize();
+    expect(again.getChunkCount()).toBe(1);
+    again.close();
+  });
+
+  it("reports rather than refuses when opened read-only", async () => {
+    const dir = await tmp();
+    const vectors = new SqliteStore(dir, DIM);
+    await vectors.initialize();
+    vectors.add(makeChunk("a"));
+    vectors.close();
+
+    // `oce status` must describe the mismatch, not throw on it.
+    const reader = new SqliteStore(dir, DIM, { keywordOnly: "fallback", readOnly: true });
+    await reader.initialize();
+    expect(reader.getChunkCount()).toBe(1);
+    expect(reader.getStaleReason()).toContain("different search mode");
+    reader.close();
   });
 });
 

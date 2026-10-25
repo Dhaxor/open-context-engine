@@ -85,6 +85,14 @@ describe("MCP server tools", () => {
     expect(text).toContain("src/main.ts");
   });
 
+
+  it("marks path escapes as read-file errors", async () => {
+    const client = await connectedClient();
+    const res: any = await client.callTool({ name: "read-file", arguments: { path: "../outside" } });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/path is outside the workspace/);
+  });
+
   it("index-status reports mode and chunk count", async () => {
     const client = await connectedClient();
     const res: any = await client.callTool({ name: "index-status", arguments: {} });

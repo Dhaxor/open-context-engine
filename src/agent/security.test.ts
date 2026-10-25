@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { isKeyishPath, resolveInside } from "../core/utils";
+import { isKeyishPath, resolveWorkspacePath } from "../core/utils";
 import { FsEditApplier } from "./edit-tools";
 import { shellTool, scrubbedEnv } from "./extra-tools";
 import { OpenContext } from "../core/context";
@@ -22,22 +22,34 @@ afterEach(async () => {
   await fs.promises.rm(ws, { recursive: true, force: true });
 });
 
-describe("resolveInside", () => {
+describe("resolveWorkspacePath", () => {
   it("allows relative paths that stay inside", () => {
-    expect(resolveInside(ws, "a/b.txt")).toBe(path.resolve(ws, "a/b.txt"));
-    expect(resolveInside(ws, "./x/../y.txt")).toBe(path.resolve(ws, "y.txt"));
-    expect(resolveInside(ws, "")).toBe(path.resolve(ws));
+    expect(resolveWorkspacePath(ws, "a/b.txt")).toBe(path.resolve(ws, "a/b.txt"));
+    expect(resolveWorkspacePath(ws, "nested/valid/y.txt")).toBe(path.resolve(ws, "nested/valid/y.txt"));
+    expect(resolveWorkspacePath(ws, "")).toBe(path.resolve(ws));
   });
 
-  it("throws on .. escapes and absolute paths outside the root", () => {
-    expect(() => resolveInside(ws, "../outside.txt")).toThrow(/escapes/);
-    expect(() => resolveInside(ws, "a/../../outside.txt")).toThrow(/escapes/);
-    expect(() => resolveInside(ws, os.tmpdir())).toThrow(/escapes/);
-    expect(() => resolveInside(ws, "/etc/passwd")).toThrow(/escapes/);
+  it("throws on .. traversal and absolute paths", () => {
+    expect(() => resolveWorkspacePath(ws, "../outside.txt")).toThrow(/outside workspace/);
+    expect(() => resolveWorkspacePath(ws, "a/../../outside.txt")).toThrow(/outside workspace/);
+    expect(() => resolveWorkspacePath(ws, "./x/../y.txt")).toThrow(/outside workspace/);
+    expect(() => resolveWorkspacePath(ws, os.tmpdir())).toThrow(/outside workspace/);
+    expect(() => resolveWorkspacePath(ws, "/etc/passwd")).toThrow(/outside workspace/);
   });
 
-  it("accepts absolute paths that are inside the root", () => {
-    expect(resolveInside(ws, path.join(ws, "inside.txt"))).toBe(path.resolve(ws, "inside.txt"));
+  it("rejects absolute paths even when they point inside the root", () => {
+    expect(() => resolveWorkspacePath(ws, path.join(ws, "inside.txt"))).toThrow(/outside workspace/);
+  });
+
+  it("rejects symlink escapes when the target exists", async () => {
+    const outside = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-outside-"));
+    try {
+      await fs.promises.writeFile(path.join(outside, "secret.txt"), "secret");
+      await fs.promises.symlink(outside, path.join(ws, "link-out"), "dir");
+      expect(() => resolveWorkspacePath(ws, "link-out/secret.txt")).toThrow(/outside workspace/);
+    } finally {
+      await fs.promises.rm(outside, { recursive: true, force: true });
+    }
   });
 });
 
@@ -95,9 +107,9 @@ describe("OpenContext.readFile containment", () => {
 describe("FsEditApplier containment", () => {
   it("cannot read or write outside the workspace", async () => {
     const applier = new FsEditApplier(ws);
-    expect(await applier.readFile("../somewhere.txt")).toBeNull();
-    await expect(applier.writeFile("../evil.txt", "x")).rejects.toThrow(/escapes/);
-    await expect(applier.writeFile("/tmp/evil-abs.txt", "x")).rejects.toThrow(/escapes/);
+    await expect(applier.readFile("../somewhere.txt")).rejects.toThrow(/outside workspace/);
+    await expect(applier.writeFile("../evil.txt", "x")).rejects.toThrow(/outside workspace/);
+    await expect(applier.writeFile("/tmp/evil-abs.txt", "x")).rejects.toThrow(/outside workspace/);
     // Inside still works.
     await applier.writeFile("ok.txt", "fine");
     expect(await applier.readFile("ok.txt")).toBe("fine");

@@ -1,13 +1,22 @@
 {
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
-  "description": "AI-powered codebase indexing, semantic search, and context-aware chat",
-  "version": "0.2.0",
+  "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
+  "version": "0.4.0",
   "publisher": "open-context",
   "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0A0D12",
+    "theme": "dark"
+  },
+  "homepage": "https://opencontextengine.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/Dhaxor/open-context-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dhaxor/open-context-engine/issues"
   },
   "engines": {
     "vscode": "^1.103.0"
@@ -22,7 +31,10 @@
     "code indexing",
     "AI",
     "embeddings",
-    "RAG"
+    "RAG",
+    "mcp",
+    "copilot alternative",
+    "local-first"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -201,7 +213,9 @@
               "image": "media/walkthrough/chat.svg",
               "altText": "Open Context chat panel"
             },
-            "completionEvents": ["onView:openContext.chat"]
+            "completionEvents": [
+              "onView:openContext.chat"
+            ]
           },
           {
             "id": "indexWorkspace",
@@ -211,7 +225,9 @@
               "image": "media/walkthrough/index.svg",
               "altText": "Index workspace command"
             },
-            "completionEvents": ["onCommand:openContext.indexWorkspace"]
+            "completionEvents": [
+              "onCommand:openContext.indexWorkspace"
+            ]
           },
           {
             "id": "configureKeys",
@@ -221,7 +237,9 @@
               "image": "media/walkthrough/settings.svg",
               "altText": "Open Context settings"
             },
-            "completionEvents": ["onCommand:openContext.openSettings"]
+            "completionEvents": [
+              "onCommand:openContext.openSettings"
+            ]
           },
           {
             "id": "browseIndexedFiles",
@@ -231,7 +249,9 @@
               "image": "media/walkthrough/files.svg",
               "altText": "Indexed files tree view"
             },
-            "completionEvents": ["onView:indexedFiles"]
+            "completionEvents": [
+              "onView:indexedFiles"
+            ]
           }
         ]
       }
@@ -520,31 +540,27 @@
     "build": "node build.js",
     "watch": "node build.js --watch",
     "lint": "tsc --noEmit",
-    "rebuild": "node ./scripts/build-native-local.mjs",
-    "package": "npm run rebuild && vsce package",
-    "verify-vsix": "node ./scripts/verify-vsix.mjs"
+    "package": "node ./scripts/package-vsix.mjs",
+    "verify-vsix": "node ./scripts/verify-vsix.mjs",
+    "smoke-native": "node ./scripts/smoke-native.cjs"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.103.0",
+    "@types/vscode": "~1.103.0",
     "@vscode/vsce": "^3.6.0",
-    "electron": "42.3.0",
-    "esbuild": "^0.24.0",
-    "node-abi": "^4.12.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
-    "chokidar": "^4.0.3",
-    "highlight.js": "^11.11.1",
+    "better-sqlite3": "^13.0.3",
+    "chokidar": "^6.0.0",
+    "highlight.js": "^11.12.0",
     "ignore": "^6.0.0",
     "markdown-it": "^14.2.0",
-    "minimatch": "^10.0.0",
-    "openai": "^4.70.0",
-    "sqlite-vec": "^0.1.9",
+    "minimatch": "^10.2.6",
+    "openai": "^7.41.0",    "sqlite-vec": "^0.1.9",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.25.10"
+    "web-tree-sitter": "~0.25.10"
   }
 }

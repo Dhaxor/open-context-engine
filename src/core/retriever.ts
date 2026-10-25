@@ -26,6 +26,16 @@ export interface RetrieveOptions {
   onStage?: (stage: "bm25" | "vector" | "fused" | "reranked", results: SearchResult[]) => void;
 }
 
+export type RetrievalStageName = "bm25" | "vector" | "fused" | "reranked" | "expanded";
+
+/** When a pipeline stage landed and how many candidates it held. Consumers use
+ *  this to show retrieval progressing instead of an opaque spinner. */
+export interface RetrievalStageTiming {
+  stage: RetrievalStageName;
+  ms: number;
+  count: number;
+}
+
 export interface RetrievalDebugItem {
   rank: number;
   path: string;
@@ -38,6 +48,16 @@ export interface RetrievalDebugItem {
   rerankScore?: number;
   reason?: string;
   preview: string;
+}
+
+/** Every candidate list one ranking run produced, kept so `retrieveDebug` can
+ *  report on the same run `retrieve` returned. */
+export interface RankedStages {
+  vectorHits: SearchResult[];
+  bm25Hits: SearchResult[];
+  fused: SearchResult[];
+  results: SearchResult[];
+  finalK: number;
 }
 
 export interface RetrievalDebugReport {
@@ -83,14 +103,34 @@ export class HybridRetriever {
   }
 
   async retrieve(query: string, opts: RetrieveOptions = {}): Promise<SearchResult[]> {
+    const { expansion } = await this.runPipeline(query, opts);
+    return expansion.results;
+  }
+
+  /**
+   * The one retrieval pipeline. `retrieve` projects its results; `retrieveDebug`
+   * builds a report from the same run. They MUST NOT diverge — an explanation
+   * that describes a pipeline production never ran is worse than no explanation,
+   * and the harness renders this report as evidence to the user.
+   */
+  private async runPipeline(query: string, opts: RetrieveOptions): Promise<{
+    ranked: RankedStages;
+    trimmed: SearchResult[];
+    expansion: { results: SearchResult[]; reasons: Map<string, string> };
+  }> {
     const ranked = await this.rank(query, opts);
     const trimmed = this.applyMinScore(ranked.results).slice(0, ranked.finalK);
-    if (!(opts.expandSymbols ?? this.search.expandSymbols ?? true)) return trimmed;
-    if (this.graphExpander) {
-      const { results } = this.graphExpander.expand(trimmed, query);
-      return results;
+    return { ranked, trimmed, expansion: this.expandFor(trimmed, query, opts) };
+  }
+
+  /** Graph expansion when the AST code graph is available, symbol/proximity
+   *  expansion otherwise, and neither when the caller opted out. */
+  private expandFor(trimmed: SearchResult[], query: string, opts: RetrieveOptions): { results: SearchResult[]; reasons: Map<string, string> } {
+    if (!(opts.expandSymbols ?? this.search.expandSymbols ?? true)) {
+      return { results: trimmed, reasons: new Map<string, string>() };
     }
-    return this.expandResults(trimmed, query).results;
+    if (this.graphExpander) return this.graphExpander.expand(trimmed, query);
+    return this.expandResults(trimmed, query);
   }
 
   /**
@@ -111,9 +151,7 @@ export class HybridRetriever {
   }
 
   async retrieveDebug(query: string, opts: RetrieveOptions = {}): Promise<RetrievalDebugReport> {
-    const ranked = await this.rank(query, opts);
-    const trimmed = ranked.results.slice(0, ranked.finalK);
-    const expanded = (opts.expandSymbols ?? this.search.expandSymbols ?? true) ? this.expandResults(trimmed, query) : { results: trimmed, reasons: new Map<string, string>() };
+    const { ranked, trimmed, expansion: expanded } = await this.runPipeline(query, opts);
     const packed = packSearchResults(expanded.results, { maxTotalChars: this.search.maxOutputLength });
     return {
       query,
@@ -134,7 +172,7 @@ export class HybridRetriever {
     };
   }
 
-  private async rank(query: string, opts: RetrieveOptions = {}): Promise<{ vectorHits: SearchResult[]; bm25Hits: SearchResult[]; fused: SearchResult[]; results: SearchResult[]; finalK: number }> {
+  private async rank(query: string, opts: RetrieveOptions = {}): Promise<RankedStages> {
     const candidateK = opts.topK != null ? Math.max(opts.topK * 4, 40) : (this.search.candidateK ?? 60);
     const finalK = opts.topK ?? this.search.topK;
 

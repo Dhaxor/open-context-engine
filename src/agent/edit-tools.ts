@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { OpenContext } from "../core/context";
 import { unifiedDiff, countOccurrences, replaceAll } from "../core/diff";
-import { resolveInside } from "../core/utils";
+import { PathOutsideWorkspaceError, resolveWorkspacePath } from "../core/utils";
 import { EditProposal, ToolDefinition } from "./types";
 
 export interface EditApplier {
@@ -15,12 +15,13 @@ export interface EditApplier {
 
 export class FsEditApplier implements EditApplier {
   constructor(private workspaceRoot: string) {}
-  // Containment: model-supplied paths must stay inside the workspace —
-  // resolveInside throws on `..`/absolute escapes, which surfaces to the
-  // model as a tool error instead of writing outside the repo.
-  private abs(p: string): string { return resolveInside(this.workspaceRoot, p); }
+  // Containment: model-supplied paths must stay inside the workspace.
+  private abs(p: string): string { return resolveWorkspacePath(this.workspaceRoot, p); }
   async readFile(rel: string): Promise<string | null> {
-    try { return await fs.promises.readFile(this.abs(rel), "utf8"); } catch { return null; }
+    try { return await fs.promises.readFile(this.abs(rel), "utf8"); } catch (err) {
+      if (err instanceof PathOutsideWorkspaceError) throw err;
+      return null;
+    }
   }
   async writeFile(rel: string, contents: string): Promise<void> {
     const abs = this.abs(rel);
@@ -28,10 +29,16 @@ export class FsEditApplier implements EditApplier {
     await fs.promises.writeFile(abs, contents, "utf8");
   }
   async removeFile(rel: string): Promise<boolean> {
-    try { await fs.promises.unlink(this.abs(rel)); return true; } catch { return false; }
+    try { await fs.promises.unlink(this.abs(rel)); return true; } catch (err) {
+      if (err instanceof PathOutsideWorkspaceError) throw err;
+      return false;
+    }
   }
   async fileExists(rel: string): Promise<boolean> {
-    try { await fs.promises.access(this.abs(rel)); return true; } catch { return false; }
+    try { await fs.promises.access(this.abs(rel)); return true; } catch (err) {
+      if (err instanceof PathOutsideWorkspaceError) throw err;
+      return false;
+    }
   }
 }
 
@@ -72,7 +79,11 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
         const oldStr = String(args.old_str);
         const newStr = String(args.new_str ?? "");
         if (!oldStr) return "Error: old_str must be non-empty";
-        const current = await applier.readFile(rel);
+        let current: string | null;
+        try { current = await applier.readFile(rel); } catch (err) {
+          if (err instanceof PathOutsideWorkspaceError) return `Error: path outside workspace: ${rel}`;
+          throw err;
+        }
         if (current == null) return `Error: file not found: ${rel}`;
         const occurrences = countOccurrences(current, oldStr);
         if (occurrences === 0) return `Error: old_str not found in ${rel}`;
@@ -101,7 +112,12 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
       handler: async (args) => {
         const rel = String(args.path);
         const contents = String(args.contents ?? "");
-        if (await applier.fileExists(rel)) return `Error: file already exists: ${rel}`;
+        try {
+          if (await applier.fileExists(rel)) return `Error: file already exists: ${rel}`;
+        } catch (err) {
+          if (err instanceof PathOutsideWorkspaceError) return `Error: path outside workspace: ${rel}`;
+          throw err;
+        }
         const diff = unifiedDiff("", contents, { fromLabel: "/dev/null", toLabel: rel });
         await applier.writeFile(rel, contents);
         const edit: EditProposal = { id: mkEditId(), kind: "create", path: rel, oldContents: "", newContents: contents, diff };
@@ -121,7 +137,11 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
       },
       handler: async (args) => {
         const rel = String(args.path);
-        const current = await applier.readFile(rel);
+        let current: string | null;
+        try { current = await applier.readFile(rel); } catch (err) {
+          if (err instanceof PathOutsideWorkspaceError) return `Error: path outside workspace: ${rel}`;
+          throw err;
+        }
         if (current == null) return `Error: file not found: ${rel}`;
         const diff = unifiedDiff(current, "", { fromLabel: rel, toLabel: "/dev/null" });
         const removed = await applier.removeFile(rel);
@@ -146,7 +166,11 @@ export function editTools(opts: EditToolsOptions): ToolDefinition[] {
       },
       handler: async (args) => {
         const rel = String(args.path);
-        const full = await applier.readFile(rel);
+        let full: string | null;
+        try { full = await applier.readFile(rel); } catch (err) {
+          if (err instanceof PathOutsideWorkspaceError) return `Error: path outside workspace: ${rel}`;
+          throw err;
+        }
         if (full == null) return `Error: file not found: ${rel}`;
         const lines = full.split("\n");
         const s = Math.max(1, Number(args.start_line ?? 1));

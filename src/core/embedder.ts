@@ -309,12 +309,27 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
   getModel(): string { return this.model; }
 }
 
+/**
+ * Keyword-only mode's embedder. The store never loads sqlite-vec in this mode,
+ * so indexing and retrieval never reach embed(); if something does, that is a
+ * bug worth a loud error rather than a silent zero vector.
+ */
+export class NullEmbeddingProvider implements EmbeddingProvider {
+  constructor(private config: EmbeddingConfig) {}
+  async embed(): Promise<number[][]> {
+    throw new Error("Keyword-only mode has no embedding provider — this call should not happen.");
+  }
+  getDimension(): number { return this.config.dimension; }
+  getModel(): string { return "none"; }
+}
+
 export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvider {
   switch (config.provider) {
     case "openai": return new OpenAIEmbeddingProvider(config);
     case "voyage": return new VoyageEmbeddingProvider(config);
     case "ollama": return new OllamaEmbeddingProvider(config);
     case "local": return new LocalEmbeddingProvider(config);
+    case "none": return new NullEmbeddingProvider(config);
     default: throw new Error(`Unknown embedding provider: ${(config as any).provider}`);
   }
 }

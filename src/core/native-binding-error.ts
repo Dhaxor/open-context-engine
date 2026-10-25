@@ -20,6 +20,7 @@ export type NativeBindingErrorKind =
   | "wrong_arch"              // ELF class / Mach-O magic mismatch (e.g. arm64 binary on x64 host)
   | "sqlite_vec_platform"     // sqlite-vec's per-OS optional dep is missing for this host
   | "missing_module"          // require/import couldn't resolve the package at all
+  | "keyword_only"            // not a failure: keyword-only search was chosen or fallen back to
   | "unknown";                // didn't match any known pattern — show raw message
 
 export interface NativeBindingDiagnosis {
@@ -89,7 +90,7 @@ export function classifyNativeBindingError(err: unknown): NativeBindingDiagnosis
       title: "Open Context Engine: system glibc too old",
       message:
         `The native SQLite binding requires a newer glibc than this Linux distribution provides. ` +
-        `This extension's Linux builds target glibc 2.35+ (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer). ` +
+        `This extension's Linux builds need glibc 2.34+ (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer). ` +
         `Please upgrade your distribution or run the CLI/MCP variant of Open Context Engine on a newer host.`,
       recognized: true,
       raw,

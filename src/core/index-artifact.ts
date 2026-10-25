@@ -88,7 +88,10 @@ export async function packArtifact(snapshotDb: string, destFile: string): Promis
 export async function installArtifact(
   artifactFile: string,
   storeDir: string,
-  expected: { model: string; dimension: number },
+  /** `provider`, when given, must match exactly along with the model: the
+   *  store rebuilds on any provider:model difference, so accepting a looser
+   *  match would install an artifact only to discard it on the next open. */
+  expected: { model: string; dimension: number; provider?: string },
 ): Promise<IndexArtifactManifest> {
   const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "oce-artifact-"));
   const unpacked = path.join(tmp, "context.db");
@@ -102,9 +105,14 @@ export async function installArtifact(
     // relative to local queries. Model names may differ in registry alias vs
     // fully-qualified id, so compare the tail segment case-insensitively.
     const norm = (m: string) => m.split("/").pop()!.toLowerCase();
-    if (manifest.dimension !== expected.dimension || norm(manifest.embeddingModel) !== norm(expected.model)) {
+    const sameSpace = expected.provider !== undefined
+      ? manifest.embeddingProvider === expected.provider && manifest.embeddingModel === expected.model
+      : norm(manifest.embeddingModel) === norm(expected.model);
+    if (manifest.dimension !== expected.dimension || !sameSpace) {
+      const theirs = expected.provider !== undefined ? `${manifest.embeddingProvider}:${manifest.embeddingModel}` : manifest.embeddingModel;
+      const ours = expected.provider !== undefined ? `${expected.provider}:${expected.model}` : expected.model;
       throw new Error(
-        `Artifact was built with ${manifest.embeddingModel} (${manifest.dimension}d) but this workspace is configured for ${expected.model} (${expected.dimension}d). ` +
+        `Artifact was built with ${theirs} (${manifest.dimension}d) but this workspace is configured for ${ours} (${expected.dimension}d). ` +
         `Align your embedding settings with the team's, or rebuild the artifact.`,
       );
     }

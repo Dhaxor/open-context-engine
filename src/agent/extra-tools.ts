@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { resolveInside } from "../core/utils";
+import { resolveWorkspacePath } from "../core/utils";
 import { ToolDefinition } from "./types";
 
 export interface ShellToolOptions {
@@ -56,7 +56,7 @@ export function shellTool(opts: ShellToolOptions): ToolDefinition {
       // paths would silently run the command elsewhere).
       let cwd: string;
       try {
-        cwd = args.cwd ? resolveInside(opts.workspaceRoot, String(args.cwd)) : opts.workspaceRoot;
+        cwd = args.cwd ? resolveWorkspacePath(opts.workspaceRoot, String(args.cwd)) : opts.workspaceRoot;
       } catch {
         return `Error: cwd '${args.cwd}' is outside the workspace.`;
       }

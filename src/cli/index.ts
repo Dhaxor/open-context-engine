@@ -4,12 +4,9 @@ import { OpenContext } from "../core/context";
 import { SqliteStore } from "../core/sqlite-store";
 import { OpenContextConfig, EMBEDDING_MODELS, DEFAULT_MODEL_FOR_PROVIDER } from "../core/types";
 import { runMCPServer } from "../mcp/server";
-import { ContextAgent, defaultAgentTools, defaultCodebaseTools, LLMProvider } from "../agent/agent";
-import { AgentPlan } from "../agent/plan";
-import { PermissionManager } from "../agent/permissions";
-import { SessionStore } from "../agent/session-store";
-import { environmentProvider } from "../agent/env";
 import { runRepl } from "./repl";
+import { buildSession, keywordOnlyWarning } from "./session";
+import { packageVersion } from "../version";
 import { getLicense, verifyLicenseToken, saveLicenseToken, clearLicense, loadEnterpriseEdition, isEntitled, checkOrgDomainBinding } from "../core/license";
 
 /** Best-effort local identity for SSO-lite activation checks. */
@@ -24,8 +21,22 @@ function resolveActivationEmail(): string | null {
 import { loadPolicy, describePolicy, policyRequiresAudit } from "../core/policy";
 import { AuditLogger, defaultAuditDir, readAuditEvents, verifyAuditChain } from "../core/audit";
 import { loadFileConfig } from "./config-file";
+import { createCliHumanDiagnostics, createCliJsonDiagnostics, Diagnostics } from "../core/diagnostics";
 
 const program = new Command();
+const humanDiagnostics = createCliHumanDiagnostics();
+const jsonDiagnostics = createCliJsonDiagnostics();
+const outputJson = (value: unknown) => process.stdout.write(JSON.stringify(value, null, 2) + "\n");
+const outputText = (message: string) => humanDiagnostics.progress(message.endsWith("\n") ? message : message + "\n");
+const diagnosticsFor = (opts: { json?: boolean }): Diagnostics => opts.json ? jsonDiagnostics : humanDiagnostics;
+/** Report a misconfiguration and stop. Passed to buildSession so wiring code
+ *  stays free of CLI exit policy. */
+// Explicitly typed so TypeScript treats a call as terminating control flow and
+// narrows afterwards; an inferred `never` return does not qualify.
+const cliFatal: (message: string) => never = (message) => {
+  humanDiagnostics.error(message);
+  process.exit(1);
+};
 
 function validateConfig(config: OpenContextConfig): void {
   const { provider, apiKey, baseUrl } = config.embedding;
@@ -51,8 +62,12 @@ function resolveConfig(opts: any, o: { requireCreds?: boolean } = {}): OpenConte
   // File config: user (~/.open-context/config.json) then workspace
   // (.open-context/config.json). Flags and env vars always win over files.
   const { config: file, warnings } = loadFileConfig(workspace);
-  for (const w of warnings) process.stderr.write(`⚠ config: ${w}\n`);
-  const provider = (opts.provider || process.env.OCE_EMBEDDING_PROVIDER || file.embedding?.provider || "voyage") as OpenContextConfig["embedding"]["provider"];
+  for (const w of warnings) diagnosticsFor(opts).warn(`⚠ config: ${w}`);
+  // Whether anyone actually CHOSE an embedding provider, as opposed to getting
+  // the default. The difference decides between a clear error and a working
+  // keyword-only fallback below.
+  const chosenProvider = opts.provider || process.env.OCE_EMBEDDING_PROVIDER || file.embedding?.provider;
+  const provider = (chosenProvider || "voyage") as OpenContextConfig["embedding"]["provider"];
   const modelKey = opts.model || file.embedding?.model || DEFAULT_MODEL_FOR_PROVIDER[provider] || "voyage-code-3";
   const modelInfo = EMBEDDING_MODELS[modelKey];
   // The registry may map a short key to a fully-qualified model id (e.g.
@@ -77,11 +92,29 @@ function resolveConfig(opts: any, o: { requireCreds?: boolean } = {}): OpenConte
     // Cache is on for the CLI (commander's --no-embed-cache sets false).
     embedCache: opts.embedCache !== false && (file.embedCache ?? true),
   };
+  if (provider === "none") {
+    config.keywordOnly = "explicit";
+  } else if (!chosenProvider && !config.embedding.apiKey && SqliteStore.sqliteVecResolvable()) {
+    // Nothing chosen and no key for the default provider. This is where every
+    // new user starts — including everyone following `oce setup` with a free
+    // LLM key — and crashing here meant the product did not work at all until
+    // they paid for embeddings. Keyword-only (BM25) search works right now;
+    // semantic ranking is one `oce setup` away. The store refuses this
+    // fallback if it would cost an existing vector index (see keywordOnly).
+    config.keywordOnly = "fallback";
+    if (!keywordNoticeShown) {
+      keywordNoticeShown = true;
+      diagnosticsFor(opts).warn("ⓘ No embedding provider configured — using keyword search. Run 'oce setup' to enable semantic search (free options available).");
+    }
+  }
   // requireCreds false = the command won't embed (e.g. exporting an existing
   // index) — don't demand API keys it will never use.
-  if (o.requireCreds !== false) validateConfig(config);
+  if (o.requireCreds !== false && !config.keywordOnly) validateConfig(config);
   return config;
 }
+
+/** The fallback notice is printed once per process, not once per resolve. */
+let keywordNoticeShown = false;
 
 /** The flags every store-touching command shares. */
 function withStoreOptions(cmd: import("commander").Command): import("commander").Command {
@@ -105,23 +138,22 @@ function staticEmbedder(embedding: OpenContextConfig["embedding"]): NonNullable<
 function requireTeamIndex(command: string): void {
   const license = getLicense();
   if (!isEntitled(license, "team-index")) {
-    console.error(`'oce ${command}' is a Team feature. Activate a license with 'oce activate <key>' (status: 'oce license').`);
+    humanDiagnostics.error(`'oce ${command}' is a Team feature. Activate a license with 'oce activate <key>' (status: 'oce license').`);
     process.exit(1);
   }
 }
 
-program.name("oce").description("Open Context Engine").version("0.1.0");
+program.name("oce").description("Open Context Engine").version(packageVersion());
 
 withStoreOptions(program.command("index").description("Index workspace").option("-w, --workspace <path>", "Workspace root", process.cwd()).option("-p, --provider <provider>", "Embedding provider").option("-m, --model <model>", "Embedding model").option("--api-key <key>", "API key").option("--incremental", "Incremental").option("--no-embed-cache", "Disable the shared embedding cache")).action(async (opts) => {
   const ctx = await OpenContext.create(resolveConfig(opts));
-  console.log("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}`));
-  console.log(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
-  if (ctx.getStatus().searchMode === "keyword-only") {
-    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking. ${ctx.getStatus().degradedReason ?? ""}`);
-  }
+  outputText("Indexing..."); const r = opts.incremental ? await ctx.incrementalIndex((s,c,t) => t > 0 && humanDiagnostics.progress(`\r[${s}] ${c}/${t}`)) : await ctx.indexWorkspace((s,c,t) => t > 0 && humanDiagnostics.progress(`\r[${s}] ${c}/${t}`));
+  outputText(`\nDone in ${r.duration}ms | New: ${r.newlyIndexed.length} | Existing: ${r.alreadyIndexed.length} | Removed: ${r.removed.length} | Chunks: ${ctx.getChunkCount()}`);
+  const degraded = keywordOnlyWarning(ctx.getStatus());
+  if (degraded) humanDiagnostics.error(degraded);
   if (r.failed?.length) {
-    console.error(`\n⚠ ${r.failed.length} file(s) failed to embed and will be retried on the next index run.`);
-    if (r.failedReason) console.error(`  Reason: ${r.failedReason}`);
+    humanDiagnostics.error(`\n⚠ ${r.failed.length} file(s) failed to embed and will be retried on the next index run.`);
+    if (r.failedReason) humanDiagnostics.error(`  Reason: ${r.failedReason}`);
     process.exitCode = 1;
   }
 });
@@ -131,7 +163,7 @@ withStoreOptions(program.command("search <query>").description("Search codebase"
   try {
     if (opts.json) {
       const results = await ctx.searchRaw(query, opts.topK ? Number(opts.topK) : undefined);
-      console.log(JSON.stringify(results.map(r => ({
+      outputJson(results.map(r => ({
         path: r.chunk.path,
         startLine: r.chunk.startLine,
         endLine: r.chunk.endLine,
@@ -140,9 +172,9 @@ withStoreOptions(program.command("search <query>").description("Search codebase"
         rerankScore: r.rerankScore,
         symbol: r.chunk.symbolName,
         snippet: r.chunk.contents.slice(0, 400),
-      })), null, 2));
+      })));
     } else {
-      console.log(await ctx.search(query));
+      outputText(await ctx.search(query));
     }
   } finally {
     ctx.close();
@@ -178,16 +210,15 @@ withStoreOptions(program.command("mcp").description("Run MCP server (stdio by de
 withStoreOptions(program.command("watch").description("Index the workspace and keep it live as files change").option("-w, --workspace <path>", "Workspace", process.cwd()).option("-p, --provider <provider>", "Provider").option("-m, --model <model>", "Model").option("--api-key <key>", "API key").option("--no-embed-cache", "Disable the shared embedding cache")).action(async (opts) => {
   const config = resolveConfig(opts);
   const { createLiveContext } = await import("../core/live-index");
-  console.log(`Indexing ${config.workspaceRoot} ...`);
+  outputText(`Indexing ${config.workspaceRoot} ...`);
   const handle = await createLiveContext(config, {
-    onProgress: (s, c, t) => t > 0 && process.stdout.write(`\r[${s}] ${c}/${t}   `),
-    onReindex: (r) => console.log(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks${r.failed?.length ? ` | ⚠ ${r.failed.length} failed (will retry)` : ""}`),
-    onError: (e) => console.error(`\n[watch error] ${e.message}`),
+    onProgress: (s, c, t) => t > 0 && humanDiagnostics.progress(`\r[${s}] ${c}/${t}   `),
+    onReindex: (r) => outputText(`\n[reindex] +${r.newlyIndexed.length} new, ${r.removed.length} removed (${r.duration}ms) | ${handle.context.getChunkCount()} chunks${r.failed?.length ? ` | ⚠ ${r.failed.length} failed (will retry)` : ""}`),
+    onError: (e) => humanDiagnostics.error(`\n[watch error] ${e.message}`),
   });
-  if (handle.context.getStatus().searchMode === "keyword-only") {
-    console.error(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.`);
-  }
-  console.log(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
+  const degraded = keywordOnlyWarning(handle.context.getStatus());
+  if (degraded) humanDiagnostics.error(degraded);
+  outputText(`\nWatching for changes — ${handle.context.getChunkCount()} chunks indexed. Press Ctrl+C to stop.`);
   const stop = async () => { await handle.stop(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
@@ -218,145 +249,20 @@ withStoreOptions(program.command("agent", { isDefault: true }).description("Inte
   .option("--memory", "Remember codebase insights across sessions (.open-context/memories.json)")
   .option("--audit", "Append runs and tool calls to the tamper-evident audit log (.open-context/audit/)")
   .option("--no-embed-cache", "Disable the shared embedding cache")
+  .option("--classic", "Use the line-printer REPL instead of the full-screen Trace interface")
   .action(async (opts) => {
   const interactive = !opts.print;
-  // LLM settings resolve flags → config file → defaults. The LLM provider is
-  // DISTINCT from the embedding provider: `-p anthropic` used to leak into the
-  // embedding config and crash with "Unknown embedding provider".
-  const fileCfg = loadFileConfig(opts.workspace || process.cwd()).config;
-  const provider = (opts.provider || fileCfg.llm?.provider || "openai") as LLMProvider;
-  // The file's model/baseUrl only apply when the file's provider is in effect —
-  // `-p anthropic` must not inherit an Ollama model name from the file.
-  const fileLlmApplies = !opts.provider || opts.provider === fileCfg.llm?.provider;
-  opts.llmModel = opts.llmModel || (fileLlmApplies ? fileCfg.llm?.model : undefined);
-  opts.llmBaseUrl = opts.llmBaseUrl || (fileLlmApplies ? fileCfg.llm?.baseUrl : undefined);
-  // Routing config is validated up front — before the (potentially long)
-  // index run — so `-p google --route` fails in milliseconds, not minutes.
-  let router: import("../agent/model-router").ModelRouter | undefined;
-  if (opts.route) {
-    try {
-      const { ModelRouter, defaultRoutingConfig } = await import("../agent/model-router");
-      // No commander default for --llm-model: only an EXPLICIT model should
-      // override the routed standard tier (a hardcoded gpt-4o default used to
-      // silently hijack the anthropic standard tier).
-      router = new ModelRouter(defaultRoutingConfig(provider, { apiKey: opts.apiKey, standardModel: opts.llmModel }));
-    } catch (e: any) {
-      console.error(`--route: ${e?.message ?? e}`);
-      process.exit(1);
-    }
-  }
-  // Embedding config comes from its own flags/env/file — NOT from -p (which
-  // is the LLM provider) and NOT from --api-key (which is the LLM key).
-  const config = resolveConfig({ ...opts, provider: opts.embeddingProvider, model: opts.embeddingModel, apiKey: undefined });
-  const ctx = await OpenContext.create(config);
-  if (ctx.getStatus().searchMode === "keyword-only") {
-    process.stderr.write(`⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.\n`);
-  }
-  let watcher: import("../core/file-watcher").FileWatcher | null = null;
-  if (opts.index !== false) {
-    const { liveIndex } = await import("../core/live-index");
-    process.stderr.write("Indexing workspace...\n");
-    const { result, watcher: w } = await liveIndex(ctx, config, {
-      watch: !!opts.watch,
-      onProgress: (s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `),
-      onReindex: (r) => { if (r.failed?.length) process.stderr.write(`\n[watch] ⚠ ${r.failed.length} file(s) failed to embed (will retry on next index): ${r.failedReason ?? ""}\n`); },
-      onError: (e) => process.stderr.write(`\n[watch error] ${e.message}\n`),
-    });
-    watcher = w;
-    process.stderr.write(`\rIndexed ${ctx.getChunkCount()} chunks (+${result.newlyIndexed.length} new)${watcher ? "; watching for changes" : ""}.\n`);
-    if (result.failed?.length) {
-      process.stderr.write(`⚠ ${result.failed.length} file(s) failed to embed — answers may miss context until the next index retries them. ${result.failedReason ?? ""}\n`);
-    }
-  }
-  let memory: import("../agent/session-memory").SessionMemory | undefined;
-  if (opts.memory) {
-    const { SessionMemory } = await import("../agent/session-memory");
-    const pathMod = await import("path");
-    memory = new SessionMemory({ storePath: config.storePath || pathMod.join(config.workspaceRoot, ".open-context") });
-  }
-  const FALLBACK_MODEL: Record<string, string> = { openai: "gpt-4o", anthropic: "claude-sonnet-4-6", google: "gemini-3-flash", ollama: "llama3.1" };
-  const model = opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o";
-
-  // Approvals: interactive sessions get edits+shell BEHIND the approval flow
-  // (suggest mode asks per mutation, like the other leading CLIs); --print
-  // has no approver, so tools stay opt-in via the explicit flags.
-  const permissions = new PermissionManager({
-    mode: opts.fullAuto ? "full-auto" : opts.autoEdit ? "auto-edit" : interactive ? "suggest" : "full-auto",
+  const diag = diagnosticsFor(opts);
+  // The full-screen interface needs a real terminal and the retrieval
+  // telemetry; --print, a pipe, or a dumb terminal falls back to the REPL,
+  // which stays a first-class path rather than a legacy one.
+  const useTui = interactive && !opts.classic && !!process.stdout.isTTY && process.env.TERM !== "dumb";
+  const built = await buildSession({
+    opts, diag, interactive, traced: useTui,
+    resolveConfig: (o) => resolveConfig(o),
+    fatal: cliFatal,
   });
-  const plan = new AgentPlan();
-  const editLog: import("../agent/types").EditProposal[] = [];
-
-  // Policy can strip capabilities the flags asked for — say so up front
-  // instead of letting the agent discover missing tools mid-run.
-  const policyBlocks: string[] = [];
-  const tools = defaultAgentTools({
-    context: ctx,
-    includeEdits: interactive ? true : !!opts.allowEdits,
-    shell: interactive ? true : !!opts.allowShell,
-    onEdit: (e) => editLog.push(e),
-    plan: opts.plan !== false ? plan : undefined,
-    delegate: opts.delegate !== false ? {
-      makeAgent: () => new ContextAgent({
-        provider, model, apiKey: opts.apiKey, baseUrl: opts.llmBaseUrl, router,
-        tools: defaultCodebaseTools(ctx),
-        maxSteps: 8, compaction: "drop",
-        systemPrompt: "You are a codebase research sub-agent. Investigate the brief thoroughly with your tools, then reply with a single, complete report (file paths + line ranges + key excerpts). Your reply goes to another agent, not a human.",
-      }),
-    } : undefined,
-    onPolicyBlock: (cap, reason) => policyBlocks.push(`${cap}: ${reason}`),
-  });
-  for (const b of policyBlocks) process.stderr.write(`⚠ policy: ${b}\n`);
-  permissions.registerMutatingTools(tools.filter(t => t.mutates).map(t => t.name));
-
-  // Audit: explicit --audit needs the audit-log entitlement; a policy that
-  // REQUIRES audit always wins (the signed policy is the org's authority).
-  let audit: AuditLogger | undefined;
-  const wsPolicy = ctx.getPolicy();
-  if (opts.audit || (wsPolicy && policyRequiresAudit(wsPolicy))) {
-    if (!opts.audit || isEntitled(getLicense(), "audit-log") || policyRequiresAudit(wsPolicy ?? undefined)) {
-      audit = new AuditLogger({ dir: defaultAuditDir(config.workspaceRoot, config.storePath) });
-      process.stderr.write(`Audit log: ${audit.getFilePath()}\n`);
-    } else {
-      console.error(`--audit requires an Enterprise license ('oce license' to check). Workspace policies can also require audit.`);
-      process.exit(1);
-    }
-  }
-
-  const agent = new ContextAgent({
-    provider,
-    model,
-    apiKey: opts.apiKey,
-    baseUrl: opts.llmBaseUrl,
-    tools,
-    router,
-    memory,
-    memorySource: "cli-agent",
-    audit,
-    hooks: permissions.asHooks(),
-    environmentProvider: opts.env !== false
-      ? environmentProvider(config.workspaceRoot, () => ({ chunks: ctx.getChunkCount(), searchMode: ctx.getStatus().searchMode }))
-      : undefined,
-  });
-
-  // Sessions: every conversation persists; --continue / --resume restore one.
-  const sessionStore = SessionStore.forWorkspace(config.workspaceRoot, config.storePath);
-  let sessionId = sessionStore.newId();
-  if (opts.continue || opts.resume) {
-    const saved = opts.resume ? sessionStore.load(String(opts.resume)) : sessionStore.latest();
-    if (saved) {
-      try {
-        agent.importSession(saved.session);
-        sessionId = saved.id;
-        process.stderr.write(`Resumed session '${saved.title}' (${saved.turns} turns).\n`);
-      } catch (e: any) {
-        console.error(`Could not resume session: ${e?.message ?? e}`);
-        process.exit(1);
-      }
-    } else if (opts.resume) {
-      console.error(`No session '${opts.resume}' — run /sessions in the REPL or check .open-context/sessions/.`);
-      process.exit(1);
-    }
-  }
+  const { ctx, config, agent, plan, permissions, sessionStore, sessionId, editLog, audit, memory, model, provider, close } = built;
 
   if (opts.print) {
     const toolCallLog: { name: string; ok: boolean }[] = [];
@@ -366,26 +272,33 @@ withStoreOptions(program.command("agent", { isDefault: true }).description("Inte
         return; // JSON mode: stdout carries exactly one JSON document
       }
       if (ev.type === "text") process.stdout.write(ev.text);
-      else if (ev.type === "model_selected") process.stderr.write(`[routed: ${ev.tier.name} → ${ev.tier.model}]\n`);
-      else if (ev.type === "tool_call") process.stderr.write(`[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);
-      else if (ev.type === "tool_result") process.stderr.write(`[tool ${ev.toolResult.name} result: ${ev.toolResult.result.length} chars]\n`);
-      else if (ev.type === "retry") process.stderr.write(`[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);
-      else if (ev.type === "history_compacted") process.stderr.write(`[compacted ${ev.droppedMessages} messages]\n`);
+      else if (ev.type === "model_selected") humanDiagnostics.progress(`[routed: ${ev.tier.name} → ${ev.tier.model}]\n`);
+      else if (ev.type === "tool_call") humanDiagnostics.progress(`[tool ${ev.toolCall.name}] ${JSON.stringify(ev.toolCall.arguments)}\n`);
+      else if (ev.type === "tool_result") humanDiagnostics.progress(`[tool ${ev.toolResult.name} result: ${ev.toolResult.result.length} chars]\n`);
+      else if (ev.type === "retry") humanDiagnostics.progress(`[retry attempt ${ev.retryAttempt} in ${ev.retryDelayMs}ms: ${ev.retryReason}]\n`);
+      else if (ev.type === "history_compacted") humanDiagnostics.progress(`[compacted ${ev.droppedMessages} messages]\n`);
       else if (ev.type === "run_end" && ev.stats) {
         const s = ev.stats;
         const tokens = s.usage.inputTokens || s.usage.outputTokens ? `, ${s.usage.inputTokens} in / ${s.usage.outputTokens} out tokens` : "";
-        process.stderr.write(`\n[${s.steps} step${s.steps === 1 ? "" : "s"}, ${s.toolCalls} tool call${s.toolCalls === 1 ? "" : "s"}${s.toolErrors ? ` (${s.toolErrors} errored)` : ""}${tokens}, ${(s.durationMs / 1000).toFixed(1)}s]\n`);
+        humanDiagnostics.progress(`\n[${s.steps} step${s.steps === 1 ? "" : "s"}, ${s.toolCalls} tool call${s.toolCalls === 1 ? "" : "s"}${s.toolErrors ? ` (${s.toolErrors} errored)` : ""}${tokens}, ${(s.durationMs / 1000).toFixed(1)}s]\n`);
       }
     };
     const answer = await agent.run(opts.print, { onStream: stream });
     if (opts.json) {
-      console.log(JSON.stringify({ answer, stats: agent.getLastRunStats(), toolCalls: toolCallLog }, null, 2));
+      outputJson({ answer, stats: agent.getLastRunStats(), toolCalls: toolCallLog });
     } else {
       process.stdout.write("\n");
     }
     try { sessionStore.save(sessionId, opts.print, agent.exportSession(), 1); } catch {}
-    await watcher?.stop();
-    ctx.close();
+    await close();
+    return;
+  }
+
+  if (useTui && built.trace) {
+    // Lazy: `oce index`, `search`, and `mcp` never load the renderer.
+    const { runTui } = await import("../trace/tui");
+    await runTui({ session: built.trace });
+    await close();
     return;
   }
 
@@ -409,9 +322,124 @@ withStoreOptions(program.command("agent", { isDefault: true }).description("Inte
       ],
     },
   });
-  await watcher?.stop();
-  ctx.close();
+  await close();
 });
+
+withStoreOptions(program.command("trace").description("Open Trace — the agent workspace: watch retrieval, inspect the context window, review and rewind")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("-p, --provider <provider>", "LLM provider: openai | anthropic | google | ollama | custom")
+  .option("--llm-model <model>", "LLM model (default: provider-appropriate)")
+  .option("--llm-base-url <url>", "LLM endpoint override (custom/ollama)")
+  .option("--embedding-provider <provider>", "Embedding provider (separate from the LLM provider)")
+  .option("--embedding-model <model>", "Embedding model")
+  .option("--api-key <key>", "LLM API key"))
+  .option("--port <n>", "Port to listen on (default: an open one)")
+  .option("--host <host>", "Interface to bind (default 127.0.0.1 — loopback only)")
+  .option("--no-open", "Do not open a browser")
+  .option("--headless", "Serve the API only; do not serve Studio or open a browser")
+  .option("--no-parallel", "Single session only; do not offer git-worktree-isolated parallel sessions")
+  .option("--auto-edit", "Approval mode: file edits run without asking, shell still asks")
+  .option("--full-auto", "Approval mode: nothing asks (containers/CI)")
+  .option("--continue", "Resume the most recent session in this workspace")
+  .option("--resume <id>", "Resume a specific saved session")
+  .option("--no-plan", "Disable the agent's update-plan tool")
+  .option("--no-delegate", "Disable the sub-agent delegate tool")
+  .option("--no-env", "Do not inject platform/git/index facts into the system prompt")
+  .option("--no-index", "Skip the startup index (use the existing index as-is)")
+  .option("--watch", "Keep the index live as files change during the session")
+  .option("--route", "Route each query to a cost-appropriate model tier")
+  .option("--memory", "Remember codebase insights across sessions")
+  .option("--audit", "Append runs and tool calls to the tamper-evident audit log")
+  .option("--no-embed-cache", "Disable the shared embedding cache")
+  .action(async (opts) => {
+  const diag = diagnosticsFor(opts);
+
+  // Resolve the branch BEFORE building, so the primary session reports which
+  // checkout it is on. Once siblings exist, "which one am I looking at" is the
+  // first question, and an unlabelled main session is the confusing one.
+  const { WorktreeManager } = await import("../trace/worktree");
+  const worktrees = new WorktreeManager({ repoRoot: opts.workspace || process.cwd() });
+  const parallel = opts.parallel !== false && await worktrees.isRepo();
+  const mainBranch = parallel ? (await worktrees.list()).find(w => w.main)?.branch : undefined;
+
+  const built = await buildSession({
+    opts: { ...opts, branch: mainBranch },
+    diag, interactive: true, traced: true,
+    resolveConfig: (o) => resolveConfig(o),
+    fatal: cliFatal,
+  });
+  if (!built.trace) cliFatal("Trace session could not be built.");
+
+  const { startTraceServer } = await import("../trace/server");
+  const pathMod = await import("path");
+
+  // Parallel sessions need git worktrees for isolation: two agents editing one
+  // checkout see each other's half-finished edits. Without a repository the
+  // harness runs one session, which is the pre-existing behaviour.
+  const { SessionRegistry } = await import("../trace/registry");
+  if (!parallel && opts.parallel !== false) {
+    diag.progress("Not a git repository — running a single session.\n");
+  }
+
+  const registry = new SessionRegistry({
+    ...(parallel ? { worktrees } : {}),
+    build: async ({ workspace, title, branch }) => {
+      // A sibling session is the same stack rooted at its own worktree.
+      const child = await buildSession({
+        opts: { ...opts, workspace: workspace || opts.workspace, branch, index: opts.index },
+        diag, interactive: true, traced: true,
+        resolveConfig: (o) => resolveConfig(o),
+        fatal: (message) => { throw new Error(message); },
+      });
+      if (!child.trace) throw new Error(`Could not start a session for ${title}.`);
+      return { session: child.trace, close: child.close };
+    },
+  });
+  registry.adopt(built.sessionId, { session: built.trace, close: built.close }, {
+    title: mainBranch ?? "main",
+    workspace: built.config.workspaceRoot,
+    branch: mainBranch,
+  });
+
+  // Assets sit beside the compiled server (dist/trace/studio). Absent until
+  // `npm run build:studio` has run — the API still serves, and the static
+  // handler says so rather than 404ing blankly.
+  const staticDir = pathMod.join(__dirname, "..", "trace", "studio");
+  const server = await startTraceServer({
+    session: built.trace,
+    ...(parallel ? { registry } : {}),
+    port: opts.port ? Number(opts.port) : 0,
+    host: opts.host,
+    ...(opts.headless ? {} : { staticDir }),
+    onLog: (m) => diag.progress(m + "\n"),
+  });
+
+  outputText(`\n  Trace  ${server.url}\n  ${built.provider}/${built.model} · ${built.ctx.getChunkCount().toLocaleString()} chunks · ${built.permissions.getMode()}\n  Ctrl+C to stop.\n`);
+  if (opts.open !== false && !opts.headless) await openBrowser(server.url, diag);
+
+  // The server owns the process from here; Ctrl+C unwinds both it and the index.
+  await new Promise<void>(resolve => {
+    const stop = () => { process.off("SIGINT", stop); resolve(); };
+    process.on("SIGINT", stop);
+  });
+  await server.close();
+  await registry.closeAll();
+});
+
+/** Best-effort browser launch. A failure is a hint, not an error — the URL is
+ *  already on screen and remains usable. */
+async function openBrowser(url: string, diag: Diagnostics): Promise<void> {
+  const { spawn } = await import("child_process");
+  const command = process.platform === "darwin" ? "open"
+    : process.platform === "win32" ? "cmd"
+    : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    spawn(command, args, { stdio: "ignore", detached: true }).unref();
+  } catch {
+    diag.progress("Could not open a browser — copy the URL above.\n");
+  }
+}
 
 program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)")
   .requiredOption("--cases <file>", "JSON file of eval cases: [{ id, query, expectedPaths: [..] }]")
@@ -429,6 +457,7 @@ program.command("eval").description("Score retrieval quality against a labeled q
   .option("--json", "Print the report as JSON to stdout (suppresses the table)")
   .action(async (opts: any) => {
     const fs = await import("fs");
+    const diag = diagnosticsFor(opts);
     const { runEval, parseEvalCases, compareReports } = await import("../eval/runner");
     const cases = parseEvalCases(JSON.parse(await fs.promises.readFile(opts.cases, "utf8")));
     const k = Math.max(1, Number(opts.topK));
@@ -436,12 +465,12 @@ program.command("eval").description("Score retrieval quality against a labeled q
     const ctx = await OpenContext.create(resolveConfig(opts));
     try {
       if (opts.index !== false) {
-        process.stderr.write("Refreshing index...\n");
-        await ctx.incrementalIndex((s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `));
-        process.stderr.write("\n");
+        diag.info("Refreshing index...");
+        await ctx.incrementalIndex((s, c, t) => t > 0 && diag.progress(`\r[${s}] ${c}/${t}   `));
+        diag.progress("\n");
       }
       if (!ctx.getChunkCount()) {
-        console.error("Index is empty — run 'oce index' first or drop --no-index.");
+        humanDiagnostics.error("Index is empty — run 'oce index' first or drop --no-index.");
         process.exit(1);
       }
       const expand = opts.expand !== false;
@@ -457,38 +486,38 @@ program.command("eval").description("Score retrieval quality against a labeled q
             if (opts.json) return;
             const mark = r.error ? "✗ ERR" : r.metrics.hit ? `✓ @${r.metrics.firstHitRank}` : "✗ miss";
             const ctxMark = r.metrics.contextRecall === undefined ? "" : ` ctx=${r.metrics.contextRecall > 0 ? "✓" : "✗"}`;
-            console.log(`[${String(i + 1).padStart(2)}/${total}] ${mark.padEnd(7)} ndcg=${r.metrics.ndcg.toFixed(3)}${ctxMark} ${r.id}${r.error ? ` (${r.error})` : ""}`);
+            outputText(`[${String(i + 1).padStart(2)}/${total}] ${mark.padEnd(7)} ndcg=${r.metrics.ndcg.toFixed(3)}${ctxMark} ${r.id}${r.error ? ` (${r.error})` : ""}`);
           },
         },
       );
       const mode = ctx.getStatus().searchMode;
       report.searchMode = mode; // persisted into --out/--json so saved baselines carry their mode
       if (opts.out) await fs.promises.writeFile(opts.out, JSON.stringify(report, null, 2));
-      if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
+      if (opts.json) { outputJson(report); return; }
       const a = report.aggregate;
-      console.log(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}${mode === "keyword-only" ? " | ⚠ KEYWORD-ONLY MODE — not comparable to hybrid baselines" : ""}`);
+      outputText(`\nk=${k} retrieveK=${retrieveK} expand=${expand} | cases: ${a.cases}${mode === "keyword-only" ? " | ⚠ KEYWORD-ONLY MODE — not comparable to hybrid baselines" : ""}`);
       const ctxLine = a.contextRecall !== undefined ? `  ctx-recall=${a.contextRecall.toFixed(3)}  ctx-hit-rate=${(a.contextHitRate ?? 0).toFixed(3)}` : "";
-      console.log(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}${ctxLine}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
+      outputText(`recall@k=${a.recallAtK.toFixed(3)}  MRR=${a.mrr.toFixed(3)}  nDCG@k=${a.ndcgAtK.toFixed(3)}  hit-rate=${a.hitRate.toFixed(3)}${ctxLine}  mean-latency=${report.meanLatencyMs.toFixed(0)}ms`);
       const misses = report.results.filter(r => !r.metrics.hit);
       if (misses.length) {
-        console.log(`\nMisses (${misses.length}):`);
-        for (const m of misses) console.log(`  ${m.id}: expected ${m.expectedPaths.join(", ")} — got [${m.retrievedFiles.slice(0, 3).join(", ")}${m.retrievedFiles.length > 3 ? ", …" : ""}]`);
+        outputText(`\nMisses (${misses.length}):`);
+        for (const m of misses) outputText(`  ${m.id}: expected ${m.expectedPaths.join(", ")} — got [${m.retrievedFiles.slice(0, 3).join(", ")}${m.retrievedFiles.length > 3 ? ", …" : ""}]`);
       }
       if (opts.baseline) {
         const baseline = JSON.parse(await fs.promises.readFile(opts.baseline, "utf8"));
         if (baseline.searchMode && baseline.searchMode !== mode) {
-          console.log(`\n⚠ baseline was ${baseline.searchMode}, this run is ${mode} — deltas reflect the mode change, not retrieval quality.`);
+          outputText(`\n⚠ baseline was ${baseline.searchMode}, this run is ${mode} — deltas reflect the mode change, not retrieval quality.`);
         } else if (!baseline.searchMode && mode === "keyword-only") {
-          console.log(`\n⚠ baseline has no search-mode marker (likely hybrid); this run is keyword-only — deltas are not meaningful.`);
+          outputText(`\n⚠ baseline has no search-mode marker (likely hybrid); this run is keyword-only — deltas are not meaningful.`);
         }
         const cmp = compareReports(baseline, report);
         const sign = (x: number) => (x >= 0 ? "+" : "") + x.toFixed(3);
         const ctxDelta = cmp.aggregate.contextRecall !== undefined ? ` Δctx-recall=${sign(cmp.aggregate.contextRecall)} Δctx-hit=${sign(cmp.aggregate.contextHitRate ?? 0)}` : "";
-        console.log(`\nvs baseline (${cmp.perCase.length} shared cases): ΔnDCG=${sign(cmp.aggregate.ndcgAtK)} ΔMRR=${sign(cmp.aggregate.mrr)} Δrecall=${sign(cmp.aggregate.recallAtK)} Δhit-rate=${sign(cmp.aggregate.hitRate)}${ctxDelta}`);
-        console.log(`improved: ${cmp.improved}  regressed: ${cmp.regressed}  unchanged: ${cmp.unchanged}`);
-        for (const d of cmp.perCase.filter(d => d.direction === "regressed")) console.log(`  ▼ ${d.id} ΔnDCG=${sign(d.ndcg)}`);
+        outputText(`\nvs baseline (${cmp.perCase.length} shared cases): ΔnDCG=${sign(cmp.aggregate.ndcgAtK)} ΔMRR=${sign(cmp.aggregate.mrr)} Δrecall=${sign(cmp.aggregate.recallAtK)} Δhit-rate=${sign(cmp.aggregate.hitRate)}${ctxDelta}`);
+        outputText(`improved: ${cmp.improved}  regressed: ${cmp.regressed}  unchanged: ${cmp.unchanged}`);
+        for (const d of cmp.perCase.filter(d => d.direction === "regressed")) outputText(`  ▼ ${d.id} ΔnDCG=${sign(d.ndcg)}`);
         if (cmp.onlyInBaseline.length || cmp.onlyInCurrent.length) {
-          console.log(`(cases only in baseline: ${cmp.onlyInBaseline.length}; only in current: ${cmp.onlyInCurrent.length} — excluded from deltas)`);
+          outputText(`(cases only in baseline: ${cmp.onlyInBaseline.length}; only in current: ${cmp.onlyInCurrent.length} — excluded from deltas)`);
         }
       }
     } finally {
@@ -506,20 +535,135 @@ program.command("multi-search <query>").description("Search across multiple repo
   .action(async (query: string, opts: any) => {
     const ee = await loadEnterpriseEdition(getLicense());
     if (!ee) {
-      console.error("Multi-repo search is a Team feature. Activate a license with 'oce activate <key>' (check 'oce license').");
+      humanDiagnostics.error("Multi-repo search is a Team feature. Activate a license with 'oce activate <key>' (check 'oce license').");
       process.exit(1);
     }
     const repoPaths = String(opts.repos || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-    if (!repoPaths.length) { console.error("Specify repos with --repos <path1,path2,...>."); process.exit(1); }
+    if (!repoPaths.length) { humanDiagnostics.error("Specify repos with --repos <path1,path2,...>."); process.exit(1); }
     const base = resolveConfig(opts);
     const mr = await ee.createMultiRepoContext({ repos: repoPaths.map((p: string) => ({ path: p })), base });
     if (opts.index !== false) {
-      process.stderr.write(`Indexing ${mr.repoNames().length} repo(s): ${mr.repoNames().join(", ")} ...\n`);
-      const counts = await mr.indexAll((repo: string, s: string, c: number, t: number) => t > 0 && process.stderr.write(`\r[${repo}] ${s} ${c}/${t}     `));
-      process.stderr.write("\n" + counts.map((c: any) => `${c.repo}: ${c.chunks} chunks`).join(" | ") + "\n\n");
+      humanDiagnostics.progress(`Indexing ${mr.repoNames().length} repo(s): ${mr.repoNames().join(", ")} ...\n`);
+      const counts = await mr.indexAll((repo: string, s: string, c: number, t: number) => t > 0 && humanDiagnostics.progress(`\r[${repo}] ${s} ${c}/${t}     `));
+      humanDiagnostics.progress("\n" + counts.map((c: any) => `${c.repo}: ${c.chunks} chunks`).join(" | ") + "\n\n");
     }
-    console.log(await mr.searchFormatted(query, Number(opts.topK)));
+    outputText(await mr.searchFormatted(query, Number(opts.topK)));
     mr.close();
+  });
+
+program.command("setup").description("Get a working model — shows the free options and writes the config")
+  .option("-w, --workspace <path>", "Workspace", process.cwd())
+  .option("-p, --provider <name>", "Configure this provider directly instead of listing options")
+  .option("--llm-model <model>", "Model to record (default: the provider's)")
+  .option("--embeddings <provider>", "Record the embedding provider for semantic search: ollama | voyage | openai | local | none")
+  .option("--json", "Emit the detected state as JSON")
+  .action(async (opts: any) => {
+    const { PROVIDER_PRESETS, findPreset, freePresets, keyFor, probeOllama } = await import("../agent/presets");
+    const fsMod = await import("fs");
+    const pathMod = await import("path");
+
+    if (opts.embeddings) {
+      const choice = String(opts.embeddings).toLowerCase();
+      const allowed = ["ollama", "voyage", "openai", "local", "none"];
+      if (!allowed.includes(choice)) {
+        humanDiagnostics.error(`Unknown embedding provider '${choice}'. Use one of: ${allowed.join(", ")}`);
+        process.exitCode = 1;
+        return;
+      }
+      const dir = pathMod.join(opts.workspace || process.cwd(), ".open-context");
+      const file = pathMod.join(dir, "config.json");
+      let existing: any = {};
+      try { existing = JSON.parse(fsMod.readFileSync(file, "utf8")); } catch {}
+      const next = { ...existing, embedding: { provider: choice, model: DEFAULT_MODEL_FOR_PROVIDER[choice as keyof typeof DEFAULT_MODEL_FOR_PROVIDER] } };
+      fsMod.mkdirSync(dir, { recursive: true });
+      fsMod.writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+      outputText(`Wrote ${file}`);
+      outputText(`  embeddings · ${choice}${choice === "none" ? " (keyword search)" : ` · ${next.embedding.model}`}`);
+      // Switching providers changes the embedding space, so the index rebuilds.
+      if (choice !== "none") outputText(`\nNext: oce index   (rebuilds the index with ${choice} embeddings)`);
+      if (!opts.provider) return;
+    }
+
+    const ollama = await probeOllama();
+    const detected = PROVIDER_PRESETS
+      .map(p => ({ preset: p, key: keyFor(p) }))
+      .filter(d => d.key || (d.preset.id === "ollama" && ollama.up));
+
+    if (opts.json) {
+      outputJson({
+        ollama,
+        ready: detected.map(d => d.preset.id),
+        presets: PROVIDER_PRESETS.map(p => ({ id: p.id, label: p.label, cost: p.cost, model: p.model })),
+      });
+      return;
+    }
+
+    // Writing the choice is the whole point: the next `oce trace` should just work.
+    const write = (id: string): void => {
+      const preset = findPreset(id);
+      if (!preset) { humanDiagnostics.error(`Unknown provider '${id}'. Try one of: ${PROVIDER_PRESETS.map(p => p.id).join(", ")}`); process.exitCode = 1; return; }
+      const dir = pathMod.join(opts.workspace || process.cwd(), ".open-context");
+      const file = pathMod.join(dir, "config.json");
+      let existing: any = {};
+      try { existing = JSON.parse(fsMod.readFileSync(file, "utf8")); } catch {}
+      const next = {
+        ...existing,
+        llm: {
+          provider: preset.provider,
+          model: opts.llmModel || preset.model,
+          ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
+        },
+      };
+      fsMod.mkdirSync(dir, { recursive: true });
+      fsMod.writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+      outputText(`Wrote ${file}`);
+      outputText(`  ${preset.label} · ${next.llm.model}`);
+      const key = keyFor(preset);
+      if (!key && preset.keyEnv.length) {
+        outputText(`\nStill needed: ${preset.setup}`);
+        outputText(`Then: export ${preset.keyEnv[0]}=...`);
+      } else {
+        outputText(`\nReady. Try:  oce trace`);
+      }
+    };
+
+    if (opts.provider) return write(opts.provider);
+
+    outputText("Open Context Engine — pick a model\n");
+    if (ollama.up) {
+      outputText(`✓ Ollama is running locally${ollama.models.length ? ` (${ollama.models.slice(0, 3).join(", ")})` : " — no models pulled yet"}`);
+      outputText("  Free, offline, no key. Best default if you have the RAM.\n");
+    }
+    for (const d of detected.filter(d => d.key)) {
+      outputText(`✓ ${d.preset.label} — key found in the environment`);
+    }
+    if (detected.length) outputText("");
+
+    outputText("Free options:");
+    for (const preset of freePresets()) {
+      const ready = preset.id === "ollama" ? ollama.up : !!keyFor(preset);
+      outputText(`  ${ready ? "✓" : " "} ${preset.id.padEnd(11)} ${preset.label}`);
+      outputText(`      ${preset.note}`);
+      if (!ready) outputText(`      ${preset.setup}`);
+    }
+    outputText("\nPaid:");
+    for (const preset of PROVIDER_PRESETS.filter(p => p.cost === "paid")) {
+      outputText(`  ${keyFor(preset) ? "✓" : " "} ${preset.id.padEnd(11)} ${preset.label}`);
+    }
+
+    // Retrieval has its own provider, separate from the chat model. Without
+    // one the engine runs keyword search, which works — this is how to get
+    // semantic ranking on top.
+    const hasEmbedModel = ollama.models.some(m => m.startsWith("nomic-embed-text"));
+    outputText("\nSemantic search (embeddings — separate from the chat model):");
+    outputText(`  ${ollama.up && hasEmbedModel ? "✓" : " "} ollama      free, local — ollama pull nomic-embed-text`);
+    outputText(`  ${process.env.VOYAGE_API_KEY ? "✓" : " "} voyage      best code retrieval — key at https://dash.voyageai.com`);
+    outputText(`  ${process.env.OPENAI_API_KEY ? "✓" : " "} openai      text-embedding-3-small — uses OPENAI_API_KEY`);
+    outputText(`    none        keyword search only (what runs when nothing is set)`);
+
+    outputText(`\nChoose a chat model:   oce setup -p <name>`);
+    outputText(`Choose embeddings:     oce setup --embeddings <name>`);
+    outputText(`Or just run:           oce trace -p <name>`);
   });
 
 program.command("status").description("Show index health: store, chunks, files, search mode, policy, license")
@@ -532,6 +676,10 @@ program.command("status").description("Show index health: store, chunks, files, 
     const { defaultStorePath } = await import("../core/context");
     const config = resolveConfig(opts, { requireCreds: false });
     config.embedder = staticEmbedder(config.embedding);
+    // `status` reports; it must never rebuild. Without this, running it without
+    // naming the provider the index was built with silently wipes the index —
+    // a read-only-sounding command destroying the thing it was asked about.
+    config.readOnly = true;
     const storeDir = config.storePath || defaultStorePath(config.workspaceRoot);
     const dbPath = pathMod.join(storeDir, "context.db");
     const ctx = await OpenContext.create(config);
@@ -544,18 +692,29 @@ program.command("status").description("Show index health: store, chunks, files, 
       const report = {
         workspace: config.workspaceRoot,
         store: { dir: storeDir, dbSizeBytes },
-        index: { chunks: ctx.getChunkCount(), searchMode: status.searchMode, ...(status.degradedReason ? { degradedReason: status.degradedReason } : {}) },
+        index: {
+          chunks: ctx.getChunkCount(),
+          searchMode: status.searchMode,
+          ...(status.degradedReason ? { degradedReason: status.degradedReason } : {}),
+          ...(status.staleReason ? { staleReason: status.staleReason } : {}),
+        },
         embedding: { provider: config.embedding.provider, model: config.embedding.model, dimension: config.embedding.dimension },
         policy: policy ? { sources: policy.sources, locked: policy.locked, summary: describePolicy(policy) } : null,
         license: { plan: license.plan, valid: license.valid, ...(license.payload?.org ? { org: license.payload.org } : {}) },
       };
-      if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
-      console.log(`workspace  ${report.workspace}`);
-      console.log(`store      ${storeDir} (${(dbSizeBytes / 1e6).toFixed(1)} MB)`);
-      console.log(`index      ${report.index.chunks.toLocaleString()} chunks · ${report.index.searchMode}${status.degradedReason ? ` (${status.degradedReason})` : ""}`);
-      console.log(`embedding  ${report.embedding.provider}/${report.embedding.model} (${report.embedding.dimension}d)`);
-      console.log(`policy     ${report.policy ? report.policy.summary : "(disabled)"}`);
-      console.log(`license    ${report.license.plan}${report.license.org ? ` (${report.license.org})` : ""}`);
+      if (opts.json) { outputJson(report); return; }
+      outputText(`workspace  ${report.workspace}`);
+      outputText(`store      ${storeDir} (${(dbSizeBytes / 1e6).toFixed(1)} MB)`);
+      const mode = status.degradedKind === "keyword_only"
+        ? "keyword search — no embedding provider (run 'oce setup' for semantic)"
+        : `${report.index.searchMode}${status.degradedReason ? ` (${status.degradedReason})` : ""}`;
+      outputText(`index      ${report.index.chunks.toLocaleString()} chunks · ${mode}`);
+      if (status.staleReason) {
+        outputText(`⚠ stale    ${status.staleReason} — run 'oce index' to rebuild.`);
+      }
+      outputText(`embedding  ${report.embedding.provider}/${report.embedding.model} (${report.embedding.dimension}d)`);
+      outputText(`policy     ${report.policy ? report.policy.summary : "(disabled)"}`);
+      outputText(`license    ${report.license.plan}${report.license.org ? ` (${report.license.org})` : ""}`);
     } finally {
       ctx.close();
     }
@@ -571,16 +730,16 @@ program.command("clean").description("Delete the workspace's index store (sessio
     const { defaultStorePath } = await import("../core/context");
     const storeDir = opts.storePath || defaultStorePath(opts.workspace);
     const dbPath = pathMod.join(storeDir, "context.db");
-    if (!fs.existsSync(dbPath)) { console.log(`No index database at ${dbPath}.`); return; }
+    if (!fs.existsSync(dbPath)) { outputText(`No index database at ${dbPath}.`); return; }
     if (!opts.yes) {
-      console.error(`This deletes the index database at ${dbPath} (a re-index rebuilds it). Re-run with --yes to confirm.`);
+      humanDiagnostics.error(`This deletes the index database at ${dbPath} (a re-index rebuilds it). Re-run with --yes to confirm.`);
       process.exit(1);
     }
     let removed = 0;
     for (const suffix of ["", "-wal", "-shm", ".pre-pull"]) {
       try { fs.unlinkSync(dbPath + suffix); removed++; } catch {}
     }
-    console.log(`Removed ${removed} file(s) from ${storeDir}. Run 'oce index' to rebuild.`);
+    outputText(`Removed ${removed} file(s) from ${storeDir}. Run 'oce index' to rebuild.`);
   });
 
 program.command("push-index <dest>").description("Export the index as an artifact and publish it — Team feature. <dest> is a file path or HTTP(S) URL (PUT; presigned S3/GCS URLs work).")
@@ -604,22 +763,22 @@ program.command("push-index <dest>").description("Export the index as an artifac
     const ctx = await OpenContext.create(config);
     try {
       if (refresh) {
-        process.stderr.write("Refreshing index...\n");
-        await ctx.incrementalIndex((s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `));
-        process.stderr.write("\n");
+        humanDiagnostics.info("Refreshing index...");
+        await ctx.incrementalIndex((s, c, t) => t > 0 && humanDiagnostics.progress(`\r[${s}] ${c}/${t}   `));
+        humanDiagnostics.progress("\n");
       }
-      if (!ctx.getChunkCount()) { console.error("Index is empty — run 'oce index' first."); process.exit(1); }
+      if (!ctx.getChunkCount()) { humanDiagnostics.error("Index is empty — run 'oce index' first."); process.exit(1); }
       const isLocal = !/^https?:\/\//i.test(dest);
       const artifactFile = isLocal ? dest : pathMod.join(os.tmpdir(), `oce-index-${Date.now()}.db.gz`);
       const manifest = await ctx.exportIndex(artifactFile);
       if (!isLocal) {
-        process.stderr.write(`Uploading to ${dest} ...\n`);
+        humanDiagnostics.progress(`Uploading to ${dest} ...\n`);
         await pushArtifact(artifactFile, dest, { token: opts.token || process.env.OCE_INDEX_TOKEN });
         await fs.promises.rm(artifactFile, { force: true });
       }
       const size = isLocal ? ` (${(fs.statSync(dest).size / 1e6).toFixed(1)} MB)` : "";
-      console.log(`Published index artifact${size}: ${manifest.chunkCount} chunks, ${manifest.fileCount} files, ${manifest.embeddingModel} ${manifest.dimension}d${manifest.git?.commit ? `, commit ${manifest.git.commit.slice(0, 8)}` : ""}.`);
-      console.log(`Teammates install it with: oce pull-index ${isLocal ? dest : "<url>"}`);
+      outputText(`Published index artifact${size}: ${manifest.chunkCount} chunks, ${manifest.fileCount} files, ${manifest.embeddingModel} ${manifest.dimension}d${manifest.git?.commit ? `, commit ${manifest.git.commit.slice(0, 8)}` : ""}.`);
+      outputText(`Teammates install it with: oce pull-index ${isLocal ? dest : "<url>"}`);
     } finally {
       ctx.close();
     }
@@ -648,25 +807,29 @@ program.command("pull-index <src>").description("Install a team index artifact, 
     let artifactFile = src;
     if (!isLocal) {
       artifactFile = pathMod.join(os.tmpdir(), `oce-index-pull-${Date.now()}.db.gz`);
-      process.stderr.write(`Downloading ${src} ...\n`);
+      humanDiagnostics.progress(`Downloading ${src} ...\n`);
       await pullArtifact(src, artifactFile, { token: opts.token || process.env.OCE_INDEX_TOKEN });
     }
     try {
-      const manifest = await installArtifact(artifactFile, storeDir, { model: config.embedding.model, dimension: config.embedding.dimension });
-      console.log(`Installed team index: ${manifest.chunkCount} chunks, ${manifest.fileCount} files, built ${manifest.createdAt.slice(0, 19)}${manifest.git?.commit ? ` at commit ${manifest.git.commit.slice(0, 8)}` : ""}.`);
+      const manifest = await installArtifact(artifactFile, storeDir, {
+        provider: config.embedding.provider,
+        model: config.embedding.model,
+        dimension: config.embedding.dimension,
+      });
+      outputText(`Installed team index: ${manifest.chunkCount} chunks, ${manifest.fileCount} files, built ${manifest.createdAt.slice(0, 19)}${manifest.git?.commit ? ` at commit ${manifest.git.commit.slice(0, 8)}` : ""}.`);
       if (reconcile) {
         const ctx = await OpenContext.create(config);
         try {
-          process.stderr.write("Reconciling local changes...\n");
-          const r = await ctx.incrementalIndex((s, c, t) => t > 0 && process.stderr.write(`\r[${s}] ${c}/${t}   `));
-          process.stderr.write("\n");
-          console.log(`Reconciled: ${r.newlyIndexed.length} file(s) re-embedded locally, ${r.alreadyIndexed.length} reused from the artifact, ${r.removed.length} removed.`);
-          if (r.failed?.length) { console.error(`⚠ ${r.failed.length} file(s) failed to embed — retried on the next index. ${r.failedReason ?? ""}`); process.exitCode = 1; }
+          humanDiagnostics.progress("Reconciling local changes...\n");
+          const r = await ctx.incrementalIndex((s, c, t) => t > 0 && humanDiagnostics.progress(`\r[${s}] ${c}/${t}   `));
+          humanDiagnostics.progress("\n");
+          outputText(`Reconciled: ${r.newlyIndexed.length} file(s) re-embedded locally, ${r.alreadyIndexed.length} reused from the artifact, ${r.removed.length} removed.`);
+          if (r.failed?.length) { humanDiagnostics.error(`⚠ ${r.failed.length} file(s) failed to embed — retried on the next index. ${r.failedReason ?? ""}`); process.exitCode = 1; }
         } finally {
           ctx.close();
         }
       } else {
-        console.log("Skipped reconciliation (--no-reconcile) — run 'oce index --incremental' to fold in local changes.");
+        outputText("Skipped reconciliation (--no-reconcile) — run 'oce index --incremental' to fold in local changes.");
       }
     } finally {
       if (!isLocal) await fs.promises.rm(artifactFile, { force: true });
@@ -678,6 +841,7 @@ program.command("bench").description("Benchmark indexing throughput on this work
   .option("--workers <n>", "Worker count for the parallel pass (default: auto)")
   .option("--json", "Print results as JSON")
   .action(async (opts: any) => {
+    const diag = diagnosticsFor(opts);
     const { FileFilter } = await import("../core/file-filter");
     const { AstChunker } = await import("../core/ast-chunker");
     const { CodeChunker } = await import("../core/chunker");
@@ -685,7 +849,7 @@ program.command("bench").description("Benchmark indexing throughput on this work
     const { ChunkWorkerPool, defaultPoolSize } = await import("../core/chunk-pool");
 
     const filter = new FileFilter();
-    process.stderr.write("Collecting files...\n");
+    diag.info("Collecting files...");
     const files = await filter.collectFiles(opts.workspace);
     const totalBytes = files.reduce((s, f) => s + f.contents.length, 0);
 
@@ -707,13 +871,13 @@ program.command("bench").description("Benchmark indexing throughput on this work
       return { ms, chunkCount, edgeCount };
     };
 
-    process.stderr.write(`Chunking ${files.length} files (${(totalBytes / 1e6).toFixed(1)} MB) in-process...\n`);
+    diag.info(`Chunking ${files.length} files (${(totalBytes / 1e6).toFixed(1)} MB) in-process...`);
     const inline = await runInline();
 
     let pooled: { ms: number; chunkCount: number; edgeCount: number; workers: number } | null = null;
     if (ChunkWorkerPool.isAvailable()) {
       const workers = opts.workers ? Math.max(1, Number(opts.workers)) : defaultPoolSize();
-      process.stderr.write(`Chunking again with ${workers} worker thread(s)...\n`);
+      diag.info(`Chunking again with ${workers} worker thread(s)...`);
       const pool = new ChunkWorkerPool({ maxChunkChars, size: workers });
       const start = Date.now();
       const results = await pool.run(files);
@@ -726,7 +890,7 @@ program.command("bench").description("Benchmark indexing throughput on this work
         workers,
       };
     } else {
-      process.stderr.write("(worker pool unavailable — dist/core/chunk-worker.js not built; run 'npm run build')\n");
+      diag.warn("(worker pool unavailable — dist/core/chunk-worker.js not built; run 'npm run build')");
     }
 
     const report = {
@@ -741,10 +905,10 @@ program.command("bench").description("Benchmark indexing throughput on this work
         },
       } : {}),
     };
-    if (opts.json) { console.log(JSON.stringify(report, null, 2)); return; }
-    console.log(`\nfiles: ${report.files}  size: ${report.megabytes} MB`);
-    console.log(`in-process: ${inline.ms}ms  (${report.inline.filesPerSec} files/s, ${inline.chunkCount} chunks, ${inline.edgeCount} edges)`);
-    if (pooled) console.log(`workers x${pooled.workers}: ${pooled.ms}ms  (${report.workers!.filesPerSec} files/s, speedup ${report.workers!.speedup}x)`);
+    if (opts.json) { outputJson(report); return; }
+    outputText(`\nfiles: ${report.files}  size: ${report.megabytes} MB`);
+    outputText(`in-process: ${inline.ms}ms  (${report.inline.filesPerSec} files/s, ${inline.chunkCount} chunks, ${inline.edgeCount} edges)`);
+    if (pooled) outputText(`workers x${pooled.workers}: ${pooled.ms}ms  (${report.workers!.filesPerSec} files/s, speedup ${report.workers!.speedup}x)`);
   });
 
 program.command("audit").description("Inspect the tamper-evident audit log")
@@ -758,11 +922,11 @@ program.command("audit").description("Inspect the tamper-evident audit log")
   .action((opts: any) => {
     const dir = defaultAuditDir(opts.workspace, opts.storePath);
     const all = readAuditEvents(dir);
-    if (!all.length) { console.log(`No audit events found in ${dir}.`); return; }
+    if (!all.length) { if (opts.json) outputJson([]); else outputText(`No audit events found in ${dir}.`); return; }
     if (opts.verify) {
       const v = verifyAuditChain(all);
-      if (v.ok) console.log(`✓ chain intact — ${v.checked} events verified.`);
-      else { console.error(`✗ TAMPERED at seq ${v.brokenAtSeq}: ${v.reason} (${v.checked} events verified before the break)`); process.exitCode = 1; }
+      if (v.ok) outputText(`✓ chain intact — ${v.checked} events verified.`);
+      else { humanDiagnostics.error(`✗ TAMPERED at seq ${v.brokenAtSeq}: ${v.reason} (${v.checked} events verified before the break)`); process.exitCode = 1; }
       return;
     }
     const events = readAuditEvents(dir, {
@@ -770,12 +934,12 @@ program.command("audit").description("Inspect the tamper-evident audit log")
       since: opts.since ? new Date(opts.since) : undefined,
       limit: Math.max(1, Number(opts.limit)),
     });
-    if (opts.json) { for (const e of events) console.log(JSON.stringify(e)); return; }
+    if (opts.json) { outputJson(events); return; }
     for (const e of events) {
       const detail = Object.entries(e.data).map(([k, v]) => `${k}=${typeof v === "string" ? v.slice(0, 120) : JSON.stringify(v)}`).join(" ");
-      console.log(`${e.ts}  #${e.seq}  ${e.type.padEnd(10)} ${detail}`);
+      outputText(`${e.ts}  #${e.seq}  ${e.type.padEnd(10)} ${detail}`);
     }
-    console.log(`\n${events.length} of ${all.length} events shown (${dir}). Use --verify to check integrity.`);
+    outputText(`\n${events.length} of ${all.length} events shown (${dir}). Use --verify to check integrity.`);
   });
 
 program.command("policy").description("Show the effective policy for a workspace (user + workspace + org lock)")
@@ -783,10 +947,10 @@ program.command("policy").description("Show the effective policy for a workspace
   .option("--json", "Print the effective policy as JSON")
   .action((opts: any) => {
     const p = loadPolicy(opts.workspace);
-    if (opts.json) { console.log(JSON.stringify(p, null, 2)); return; }
-    console.log(describePolicy(p));
-    if (p.sources.length) console.log(`Sources:\n${p.sources.map(s => `  - ${s}`).join("\n")}`);
-    for (const w of p.warnings) console.log(`⚠ ${w}`);
+    if (opts.json) { outputJson(p); return; }
+    outputText(describePolicy(p));
+    if (p.sources.length) outputText(`Sources:\n${p.sources.map(s => `  - ${s}`).join("\n")}`);
+    for (const w of p.warnings) outputText(`⚠ ${w}`);
   });
 
 program.command("activate <key>").description("Activate a Team/Enterprise license key").action(async (key: string) => {
@@ -798,29 +962,29 @@ program.command("activate <key>").description("Activate a Team/Enterprise licens
     const why = status.reason === "expired" ? "this license has expired"
       : status.reason === "bad-signature" ? "invalid signature (is the key correct and complete?)"
       : "malformed license key";
-    console.error(`Activation failed: ${why}.`);
+    humanDiagnostics.error(`Activation failed: ${why}.`);
     process.exit(1);
   }
   {
     const { loadCachedRevocations } = await import("../core/license");
     if (status.payload?.id && loadCachedRevocations()?.revoked.includes(status.payload.id)) {
-      console.error("Activation failed: this license has been revoked.");
+      humanDiagnostics.error("Activation failed: this license has been revoked.");
       process.exit(1);
     }
   }
   // SSO-lite: a domain-bound license only activates for a matching identity.
   const domainCheck = checkOrgDomainBinding(status.payload, resolveActivationEmail());
   if (domainCheck === "mismatch") {
-    console.error(`Activation failed: this license is bound to @${status.payload?.orgDomain} email addresses, but your identity (git config user.email / OCE_ACTIVATION_EMAIL) does not match.`);
+    humanDiagnostics.error(`Activation failed: this license is bound to @${status.payload?.orgDomain} email addresses, but your identity (git config user.email / OCE_ACTIVATION_EMAIL) does not match.`);
     process.exit(1);
   }
   if (domainCheck === "unverifiable") {
-    console.error(`⚠ License is bound to @${status.payload?.orgDomain} but no local email identity was found — proceeding. Set OCE_ACTIVATION_EMAIL or git config user.email to silence this.`);
+    humanDiagnostics.error(`⚠ License is bound to @${status.payload?.orgDomain} but no local email identity was found — proceeding. Set OCE_ACTIVATION_EMAIL or git config user.email to silence this.`);
   }
   const p = saveLicenseToken(key);
   const exp = status.payload?.exp ? new Date(status.payload.exp * 1000).toISOString().slice(0, 10) : "perpetual";
-  console.log(`Activated ${status.plan} license for ${status.payload?.org} — ${status.payload?.seats} seat(s), expires ${exp}.`);
-  console.log(`Saved to ${p}`);
+  outputText(`Activated ${status.plan} license for ${status.payload?.org} — ${status.payload?.seats} seat(s), expires ${exp}.`);
+  outputText(`Saved to ${p}`);
 });
 
 program.command("license").description("Show the current license status")
@@ -829,26 +993,33 @@ program.command("license").description("Show the current license status")
   if (opts.refresh) {
     const { refreshRevocations } = await import("../core/license");
     const list = await refreshRevocations(typeof opts.refresh === "string" ? opts.refresh : undefined);
-    if (list) console.log(`Revocation list refreshed (${list.revoked.length} entries, updated ${new Date(list.updatedAt * 1000).toISOString().slice(0, 10)}).`);
-    else console.log("Revocation list not refreshed (no URL configured, or fetch/verify failed) — continuing with the cached list.");
+    if (list) outputText(`Revocation list refreshed (${list.revoked.length} entries, updated ${new Date(list.updatedAt * 1000).toISOString().slice(0, 10)}).`);
+    else outputText("Revocation list not refreshed (no URL configured, or fetch/verify failed) — continuing with the cached list.");
   }
   const s = getLicense();
   if (!s.valid) {
-    if (s.reason === "expired") console.log(`License expired (was ${s.payload?.plan} for ${s.payload?.org}). Running as Community (free) edition.`);
-    else if (s.reason === "revoked") console.log(`License ${s.payload?.id} for ${s.payload?.org} has been REVOKED. Running as Community (free) edition — contact support if this is unexpected.`);
-    else console.log("No active license — running as Community (free) edition. Activate with 'oce activate <key>'.");
+    if (s.reason === "expired") outputText(`License expired (was ${s.payload?.plan} for ${s.payload?.org}). Running as Community (free) edition.`);
+    else if (s.reason === "revoked") outputText(`License ${s.payload?.id} for ${s.payload?.org} has been REVOKED. Running as Community (free) edition — contact support if this is unexpected.`);
+    else outputText("No active license — running as Community (free) edition. Activate with 'oce activate <key>'.");
     return;
   }
   const exp = s.payload?.exp ? new Date(s.payload.exp * 1000).toISOString().slice(0, 10) : "perpetual";
-  console.log(`Plan:    ${s.plan}`);
-  console.log(`Org:     ${s.payload?.org}`);
-  console.log(`Seats:   ${s.payload?.seats}`);
-  console.log(`Expires: ${exp}`);
-  if (s.inGrace) console.log(`\n⚠ In grace period — ${s.daysLeft} day(s) left. Please renew to avoid interruption.`);
+  outputText(`Plan:    ${s.plan}`);
+  outputText(`Org:     ${s.payload?.org}`);
+  outputText(`Seats:   ${s.payload?.seats}`);
+  outputText(`Expires: ${exp}`);
+  if (s.inGrace) outputText(`\n⚠ In grace period — ${s.daysLeft} day(s) left. Please renew to avoid interruption.`);
 });
 
 program.command("deactivate").description("Remove the saved license key").action(() => {
-  console.log(clearLicense() ? "License removed — now running as Community edition." : "No license was active.");
+  outputText(clearLicense() ? "License removed — now running as Community edition." : "No license was active.");
 });
 
-program.parse();
+// Every action is async. `parse()` left their rejections unhandled, so a
+// misconfiguration surfaced as a raw Node stack trace — the first thing a new
+// user saw. Print the message; keep the stack for OCE_DEBUG.
+program.parseAsync().catch((err: any) => {
+  humanDiagnostics.error(String(err?.message ?? err));
+  if (process.env.OCE_DEBUG && err?.stack) process.stderr.write(`${err.stack}\n`);
+  process.exit(1);
+});
