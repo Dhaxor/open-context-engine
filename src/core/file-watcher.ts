@@ -20,6 +20,7 @@ export class FileWatcher {
   private filter: FileFilter;
   private processing = false;
   private queued = false;
+  private events: FileWatcherEvents = {};
 
   constructor(
     private context: OpenContext,
@@ -45,7 +46,7 @@ export class FileWatcher {
     this.watcher.on("change", onChange);
     this.watcher.on("unlink", onUnlink);
     this.watcher.on("error", (err: unknown) => events.onError?.(err instanceof Error ? err : new Error(String(err))));
-    (this as any)._events = events;
+    this.events = events;
     // Resolve only once chokidar has finished its initial scan, so edits made
     // immediately after start() aren't raced/dropped during the scan.
     const watcher = this.watcher;
@@ -102,28 +103,36 @@ export class FileWatcher {
       const removed = [...this.removedPaths]; this.removedPaths.clear();
       const root = path.resolve(this.config.workspaceRoot);
       const files: File[] = [];
+      let deferred = false;
       for (const rel of changed) {
         try {
           const buf = await fs.promises.readFile(path.join(root, rel));
           const decision = this.filter.shouldIncludeBuffer(rel, buf);
-          if (!decision.include) { this.removedPaths.add(rel); continue; }
+          if (!decision.include) { this.removedPaths.add(rel); deferred = true; continue; }
           files.push({ path: rel, contents: buf.toString("utf8") });
         } catch {
           this.removedPaths.add(rel);
+          deferred = true;
         }
       }
-      const events: FileWatcherEvents = (this as any)._events ?? {};
+      const events = this.events;
       try {
         if (removed.length) await this.context.removeFromIndex(removed);
         if (files.length) {
           const result = await this.context.addFiles(files);
-          events.onReindex?.(result);
+          // addFiles reports only its own files; fold the removals from this
+          // window in so "[reindex] +1 new, 0 removed" doesn't lie.
+          events.onReindex?.(removed.length ? { ...result, removed: [...result.removed, ...removed] } : result);
         } else if (removed.length) {
           events.onReindex?.({ newlyIndexed: [], alreadyIndexed: [], removed, duration: 0 });
         }
       } catch (err) {
         events.onError?.(err instanceof Error ? err : new Error(String(err)));
       }
+      // Paths parked in removedPaths by the read loop above have no timer
+      // armed; without this their stale chunks linger until the next
+      // unrelated edit triggers a flush.
+      if (deferred) this.scheduleFlush();
     } finally {
       this.processing = false;
       if (this.queued) { this.queued = false; this.scheduleFlush(); }
