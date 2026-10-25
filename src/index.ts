@@ -60,7 +60,7 @@ export { splitForCompaction, renderTranscript, compactHistory, estimateTokens, t
 export type { CompactionSplit, CompactionResult } from "./agent/utils";
 export { OpenAICaller, AnthropicCaller, GoogleCaller, contextWindowFor } from "./agent/providers";
 export type { LLMCaller, LLMResponse } from "./agent/providers";
-export { resolveInside, isKeyishPath } from "./core/utils";
+export { isKeyishPath } from "./core/utils";
 export { scrubbedEnv } from "./agent/extra-tools";
 export {
   getLicense, verifyLicenseToken, isEntitled, requireFeature, loadEnterpriseEdition,

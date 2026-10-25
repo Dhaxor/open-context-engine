@@ -95,10 +95,6 @@ export function resolveWorkspacePath(workspaceRoot: string, relPath: string): st
   return abs;
 }
 
-/** @deprecated Use resolveWorkspacePath for agent/tool user paths. */
-export function resolveInside(root: string, p: string): string {
-  return resolveWorkspacePath(root, p);
-}
 export function formatResults(results: import("./types").SearchResult[]): string {
   if (!results.length) return "No results found.";
   return results.map(r => {

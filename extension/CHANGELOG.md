@@ -35,6 +35,13 @@
 - **Team index sync (Team license, CLI).** `oce push-index` publishes the index as an artifact; `oce pull-index` installs it and re-embeds only the local diff. Pairs with the embedding cache for a one-embedding-bill-per-team story.
 
 - **Linux arm64 is now a supported platform.** The release matrix gained a native `ubuntu-22.04-arm` leg (same glibc 2.34 floor as x64) — no cross-compiling, and `sqlite-vec-linux-arm64` ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.
+- **Session memory (on by default)** — the agent now remembers codebase insights across chat sessions, stored locally in `.open-context/memories.json`. Relevant memories ride along in the agent's context per query. Disable with `openContext.agent.memory.enabled`.
+- **Model routing (opt-in)** — `openContext.agent.routing.enabled` routes each query to a cost-appropriate tier: quick lookups go to a fast model (e.g. Haiku), multi-file/analytical work to the strongest (e.g. Opus), everything else to your configured model. Tier models are overridable; the chat shows which tier each turn used.
+- **Smooth streaming render** — agent responses no longer flicker. The chat bubble keeps a stable rendered prefix (the *committed* markdown) and a live plain-text *tail* that grows by single text-node append per token, with a dedicated cursor element anchored to the end. Full markdown-it + highlight.js only re-runs when a paragraph or code fence closes — not every animation frame.
+- **Auto-scroll respects the user** — if you scroll up to read, the chat stops yanking you back down. A floating "Latest" pill reattaches with one click. Sending a new message snaps to the bottom regardless.
+- **Review & undo agent edits** — every file the agent changes now shows *Open diff* (native side-by-side), *Undo*, and *Redo*, with a per-turn "N files changed · Undo all" summary. Undo/redo apply exact inverses and keep the index in sync.
+- **Undo Last Agent Edit** command (also in the chat title bar).
+- **Resilient chat** — the conversation no longer disappears when the panel is hidden or moved (`retainContextWhenHidden`), and the last active conversation is restored after a window reload.
 
 ## 0.2.0
 
@@ -56,17 +63,6 @@ Smaller things:
 
 - **Real error messages instead of silent indexing failures.** The startup-index catch site now opens a notification + Output channel entry instead of swallowing to `console.error` where no user could see it. The same classifier covers NMV mismatch, glibc skew, musl/Alpine, wrong-arch binaries, and missing sqlite-vec platform packages.
 - New "Open Context Engine" Output channel containing the raw load error and timestamps for support tickets.
-
-## Unreleased
-
-- **Session memory (on by default)** — the agent now remembers codebase insights across chat sessions, stored locally in `.open-context/memories.json`. Relevant memories ride along in the agent's context per query. Disable with `openContext.agent.memory.enabled`.
-- **Model routing (opt-in)** — `openContext.agent.routing.enabled` routes each query to a cost-appropriate tier: quick lookups go to a fast model (e.g. Haiku), multi-file/analytical work to the strongest (e.g. Opus), everything else to your configured model. Tier models are overridable; the chat shows which tier each turn used.
-
-- **Smooth streaming render** — agent responses no longer flicker. The chat bubble keeps a stable rendered prefix (the *committed* markdown) and a live plain-text *tail* that grows by single text-node append per token, with a dedicated cursor element anchored to the end. Full markdown-it + highlight.js only re-runs when a paragraph or code fence closes — not every animation frame.
-- **Auto-scroll respects the user** — if you scroll up to read, the chat stops yanking you back down. A floating "Latest" pill reattaches with one click. Sending a new message snaps to the bottom regardless.
-- **Review & undo agent edits** — every file the agent changes now shows *Open diff* (native side-by-side), *Undo*, and *Redo*, with a per-turn "N files changed · Undo all" summary. Undo/redo apply exact inverses and keep the index in sync.
-- **Undo Last Agent Edit** command (also in the chat title bar).
-- **Resilient chat** — the conversation no longer disappears when the panel is hidden or moved (`retainContextWhenHidden`), and the last active conversation is restored after a window reload.
 
 ## 0.1.0
 
