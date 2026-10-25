@@ -1,0 +1,753 @@
+{
+  "generatedAt": "2026-10-25T03:19:10.548Z",
+  "k": 10,
+  "caseCount": 27,
+  "aggregate": {
+    "cases": 27,
+    "recallAtK": 0.9259259259259259,
+    "mrr": 0.6052910052910052,
+    "ndcgAtK": 0.6851128715449951,
+    "hitRate": 0.9259259259259259,
+    "contextRecall": 0.9259259259259259,
+    "contextHitRate": 0.9259259259259259
+  },
+  "results": [
+    {
+      "id": "flask-class",
+      "query": "the main Flask application class",
+      "expectedPaths": [
+        "src/flask/app.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/cli.py",
+        "src/flask/sansio/app.py",
+        "src/flask/__main__.py",
+        "src/flask/app.py",
+        "tests/test_basic.py",
+        "examples/tutorial/flaskr/__init__.py",
+        "docs/patterns/appdispatch.rst",
+        "src/flask/json/provider.py",
+        "docs/conf.py",
+        "docs/shell.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 10
+    },
+    {
+      "id": "blueprint-class",
+      "query": "Blueprint class for organizing routes into registrable groups",
+      "expectedPaths": [
+        "src/flask/blueprints.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/sansio/blueprints.py",
+        "tests/test_cli.py",
+        "src/flask/blueprints.py",
+        "tests/test_blueprints.py",
+        "src/flask/cli.py",
+        "docs/tutorial/views.rst",
+        "docs/blueprints.rst",
+        "docs/cli.rst",
+        "docs/patterns/packages.rst",
+        "src/flask/sansio/app.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "blueprint-sansio-base",
+      "query": "the WSGI-independent Blueprint base class",
+      "expectedPaths": [
+        "src/flask/sansio/blueprints.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_views.py",
+        "src/flask/sansio/blueprints.py",
+        "tests/test_blueprints.py",
+        "docs/extensiondev.rst",
+        "docs/design.rst",
+        "docs/blueprints.rst",
+        "docs/patterns/appdispatch.rst",
+        "src/flask/app.py",
+        "tests/test_logging.py",
+        "docs/tutorial/views.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "config-class",
+      "query": "Config dict subclass that loads configuration from files and objects",
+      "expectedPaths": [
+        "src/flask/config.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/config.py",
+        "tests/test_config.py",
+        "docs/config.rst",
+        "src/flask/wrappers.py",
+        "docs/patterns/celery.rst",
+        "docs/patterns/fileuploads.rst",
+        "src/flask/views.py",
+        "docs/tutorial/factory.rst",
+        "CHANGES.rst",
+        "src/flask/sansio/app.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "app-context",
+      "query": "application context and request context stack management",
+      "expectedPaths": [
+        "src/flask/ctx.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/app.py",
+        "docs/appcontext.rst",
+        "src/flask/ctx.py",
+        "docs/reqcontext.rst",
+        "src/flask/sansio/app.py",
+        "docs/quickstart.rst",
+        "src/flask/cli.py",
+        "src/flask/testing.py",
+        "tests/test_helpers.py",
+        "docs/signals.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "after-this-request",
+      "query": "after_this_request hook to run a function at the end of the request",
+      "expectedPaths": [
+        "src/flask/ctx.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/ctx.py",
+        "tests/test_basic.py",
+        "docs/patterns/requestchecksum.rst",
+        "CHANGES.rst",
+        "src/flask/sansio/app.py",
+        "docs/reqcontext.rst",
+        "src/flask/app.py",
+        "docs/patterns/deferredcallbacks.rst",
+        "docs/quickstart.rst",
+        ".pre-commit-config.yaml"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "secure-cookie-session",
+      "query": "SecureCookieSession session implementation backed by a signed cookie",
+      "expectedPaths": [
+        "src/flask/sessions.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/sessions.py",
+        "tests/test_reqctx.py",
+        "tests/test_testing.py",
+        "tests/test_basic.py",
+        "docs/config.rst",
+        "docs/web-security.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 3
+    },
+    {
+      "id": "null-session",
+      "query": "NullSession error raised when sessions are used without a secret key",
+      "expectedPaths": [
+        "src/flask/sessions.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_basic.py",
+        "src/flask/sessions.py",
+        "src/flask/cli.py",
+        "docs/config.rst",
+        "src/flask/debughelpers.py",
+        "docs/errorhandling.rst",
+        "docs/quickstart.rst",
+        "tests/test_reqctx.py",
+        "CHANGES.rst",
+        "tests/test_config.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "jinja-env",
+      "query": "Jinja template Environment subclass and template rendering",
+      "expectedPaths": [
+        "src/flask/templating.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/app.py",
+        "src/flask/sansio/app.py",
+        "tests/test_templating.py",
+        "src/flask/templating.py",
+        "tests/test_blueprints.py",
+        "docs/tutorial/templates.rst",
+        "docs/installation.rst",
+        "docs/templating.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "template-loader",
+      "query": "DispatchingJinjaLoader that finds templates across blueprints",
+      "expectedPaths": [
+        "src/flask/templating.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/templating.py",
+        "tests/test_blueprints.py",
+        "docs/blueprints.rst",
+        "src/flask/sansio/app.py",
+        "src/flask/sansio/scaffold.py",
+        "src/flask/sansio/blueprints.py",
+        "src/flask/debughelpers.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 4
+    },
+    {
+      "id": "test-client",
+      "query": "FlaskClient test client for making requests against the app",
+      "expectedPaths": [
+        "src/flask/testing.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/app.py",
+        "src/flask/testing.py",
+        "tests/test_request.py",
+        "tests/test_helpers.py",
+        "tests/test_views.py",
+        "docs/testing.rst",
+        "tests/test_basic.py",
+        "docs/api.rst",
+        "docs/tutorial/tests.rst",
+        "docs/config.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "environ-builder",
+      "query": "EnvironBuilder for constructing WSGI test environments",
+      "expectedPaths": [
+        "src/flask/testing.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_testing.py",
+        "tests/test_reqctx.py",
+        "tests/test_logging.py",
+        "src/flask/app.py",
+        "src/flask/testing.py",
+        "tests/test_basic.py",
+        "tests/conftest.py",
+        "tests/test_apps/helloworld/wsgi.py",
+        "docs/deploying/mod_wsgi.rst",
+        "docs/patterns/requestchecksum.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.2,
+        "ndcg": 0.38685280723454163,
+        "hit": true,
+        "firstHitRank": 5,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "method-view",
+      "query": "MethodView class-based views dispatching on HTTP method",
+      "expectedPaths": [
+        "src/flask/views.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_views.py",
+        "src/flask/views.py",
+        "docs/views.rst",
+        "tests/test_helpers.py",
+        "docs/async-await.rst",
+        "tests/test_basic.py",
+        "docs/api.rst",
+        "src/flask/sansio/app.py",
+        "docs/tutorial/views.rst",
+        "docs/extensiondev.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 4
+    },
+    {
+      "id": "view-decorator",
+      "query": "View base class and the route view function registration decorator",
+      "expectedPaths": [
+        "src/flask/views.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_views.py",
+        "tests/test_blueprints.py",
+        "src/flask/views.py",
+        "docs/patterns/viewdecorators.rst",
+        "docs/api.rst",
+        "docs/views.rst",
+        "docs/tutorial/views.rst",
+        "tests/test_basic.py",
+        "src/flask/sansio/scaffold.py",
+        "docs/patterns/lazyloading.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "request-wrapper",
+      "query": "Request subclass with Flask-specific parsing",
+      "expectedPaths": [
+        "src/flask/wrappers.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/ctx.py",
+        "src/flask/views.py",
+        "tests/test_basic.py",
+        "src/flask/cli.py",
+        "tests/test_user_error_handler.py",
+        "docs/patterns/subclassing.rst",
+        "src/flask/wrappers.py",
+        "tests/test_blueprints.py",
+        ".github/ISSUE_TEMPLATE/feature-request.md",
+        "src/flask/config.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.14285714285714285,
+        "ndcg": 0.3333333333333333,
+        "hit": true,
+        "firstHitRank": 7,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "response-wrapper",
+      "query": "Response subclass returned by views",
+      "expectedPaths": [
+        "src/flask/wrappers.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/views.py",
+        "src/flask/app.py",
+        "src/flask/helpers.py",
+        "tests/test_basic.py",
+        "tests/test_user_error_handler.py",
+        "docs/views.rst",
+        "docs/patterns/subclassing.rst",
+        "docs/errorhandling.rst",
+        "src/flask/ctx.py",
+        "tests/test_views.py"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 4
+    },
+    {
+      "id": "stream-with-context",
+      "query": "stream_with_context helper for streaming responses that keep the request context",
+      "expectedPaths": [
+        "src/flask/helpers.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_helpers.py",
+        "src/flask/helpers.py",
+        "src/flask/templating.py",
+        "tests/test_testing.py",
+        "docs/patterns/streaming.rst",
+        "src/flask/ctx.py",
+        "tests/test_logging.py",
+        "src/flask/app.py",
+        "docs/reqcontext.rst",
+        "docs/shell.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "debug-flag",
+      "query": "get_debug_flag reading the FLASK_DEBUG environment variable",
+      "expectedPaths": [
+        "src/flask/helpers.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/helpers.py",
+        "src/flask/cli.py",
+        "src/flask/app.py",
+        "tests/test_helpers.py",
+        "docs/config.rst",
+        "src/flask/config.py",
+        "src/flask/logging.py",
+        "src/flask/sansio/app.py",
+        "tests/conftest.py",
+        "src/flask/testing.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "cli-entry",
+      "query": "command line interface commands and app discovery from the FLASK_APP variable",
+      "expectedPaths": [
+        "src/flask/cli.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/app.py",
+        "src/flask/cli.py",
+        "examples/tutorial/flaskr/db.py",
+        "tests/test_cli.py",
+        "docs/cli.rst",
+        "src/flask/testing.py",
+        "docs/api.rst",
+        "docs/tutorial/database.rst",
+        "src/flask/config.py",
+        "docs/Makefile"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "find-best-app",
+      "query": "find_best_app locating an app instance in a module for the CLI",
+      "expectedPaths": [
+        "src/flask/cli.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/cli.py",
+        "tests/test_cli.py",
+        "src/flask/sansio/app.py",
+        "tests/test_instance_config.py",
+        "src/flask/app.py",
+        "src/flask/sansio/scaffold.py",
+        "docs/cli.rst",
+        "src/flask/testing.py",
+        "docs/appcontext.rst",
+        "docs/tutorial/factory.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "logger-creation",
+      "query": "create_logger setting up the application logger",
+      "expectedPaths": [
+        "src/flask/logging.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/logging.py",
+        "tests/test_logging.py",
+        "docs/patterns/appfactories.rst",
+        "docs/logging.rst",
+        "docs/config.rst",
+        "src/flask/app.py",
+        "src/flask/sansio/app.py",
+        "docs/testing.rst",
+        "docs/quickstart.rst",
+        "docs/api.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "json-provider",
+      "query": "JSONProvider and DefaultJSONProvider controlling JSON serialization",
+      "expectedPaths": [
+        "src/flask/json/provider.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/json/provider.py",
+        "src/flask/json/__init__.py",
+        "tests/test_json.py",
+        "src/flask/json/tag.py",
+        "src/flask/testing.py",
+        "docs/api.rst",
+        "tests/test_testing.py",
+        "src/flask/wrappers.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 4
+    },
+    {
+      "id": "session-tag",
+      "query": "JSONTag serializer tags for session cookies",
+      "expectedPaths": [
+        "src/flask/json/tag.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/json/tag.py",
+        "src/flask/sessions.py",
+        "tests/test_testing.py",
+        "tests/test_basic.py",
+        "tests/test_json_tag.py",
+        "tests/test_reqctx.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "routing-redirect-debug",
+      "query": "FormDataRoutingRedirect debug warning for trailing-slash form posts",
+      "expectedPaths": [
+        "src/flask/debughelpers.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/debughelpers.py",
+        "tests/test_basic.py",
+        "src/flask/wrappers.py",
+        "docs/api.rst",
+        "docs/quickstart.rst",
+        ".pre-commit-config.yaml",
+        "tests/test_views.py",
+        "src/flask/app.py",
+        "docs/tutorial/blog.rst",
+        "docs/patterns/wtforms.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 4
+    },
+    {
+      "id": "scaffold",
+      "query": "Scaffold base shared setup for apps and blueprints",
+      "expectedPaths": [
+        "src/flask/sansio/scaffold.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/sansio/scaffold.py",
+        "src/flask/sansio/blueprints.py",
+        "examples/celery/src/task_app/tasks.py",
+        "tests/test_blueprints.py"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "globals-proxy",
+      "query": "module-level proxies like request and session",
+      "expectedPaths": [
+        "src/flask/globals.py"
+      ],
+      "retrievedFiles": [
+        "src/flask/sessions.py",
+        "docs/reqcontext.rst",
+        "docs/appcontext.rst",
+        "CHANGES.rst",
+        "docs/api.rst",
+        "src/flask/ctx.py",
+        "docs/deploying/apache-httpd.rst",
+        "docs/deploying/nginx.rst",
+        "tests/test_logging.py",
+        "src/flask/logging.py"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "signals",
+      "query": "request started and finished signal definitions",
+      "expectedPaths": [
+        "src/flask/signals.py"
+      ],
+      "retrievedFiles": [
+        "tests/test_signals.py",
+        "src/flask/signals.py",
+        "src/flask/sansio/app.py",
+        "src/flask/sansio/scaffold.py",
+        "docs/signals.rst",
+        "src/flask/sansio/blueprints.py",
+        "src/flask/app.py",
+        "docs/reqcontext.rst",
+        "docs/api.rst",
+        "docs/patterns/celery.rst"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    }
+  ],
+  "meanLatencyMs": 6.222222222222222,
+  "searchMode": "keyword-only"
+}

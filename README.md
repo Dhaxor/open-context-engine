@@ -548,6 +548,8 @@ Current numbers on this repo's committed 44-case gold set ([`eval/oce.eval.json`
 
 Reports record which search mode produced them (`hybrid` vs `keyword-only`), and baseline comparisons warn loudly on a mode mismatch.
 
+**Cross-repo validation:** the bundled set only proves retrieval on this repository. [`eval/external/`](eval/external/) holds gold sets for codebases OCE has never seen — starting with Flask 3.1.2 (Python, 27 cases, recall@10 0.926 keyword-only) — with committed baselines and a workflow for adding more. A ranking change that wins on `eval/oce.eval.json` should be re-run there before it counts as progress.
+
 A case file is a JSON array (or `{ cases: [...] }`):
 
 ```json
