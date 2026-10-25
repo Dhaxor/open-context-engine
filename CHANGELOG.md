@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.1
+
+### Fixes
+
+- **The file watcher no longer strands stale chunks.** A file rejected during
+  a debounced flush — replaced with binary bytes, or unreadable at that
+  instant — was parked for removal with no timer armed, so its old chunks
+  stayed in the index until the next unrelated edit. The watcher now re-arms
+  itself and completes the eviction.
+- **`oce watch` reports removals honestly.** When additions and deletions
+  landed in one debounce window, the `[reindex]` line always said `0 removed`
+  because it relayed the add-result verbatim. Removals from the same window
+  are folded into the report.
+- **`oce index` closes its store before exit.** Process teardown masked it,
+  but the open handle kept the database locked against `oce clean` on Windows
+  and left WAL files behind.
+- **`release-check.sh` runs on Windows dev machines.** It assumed npm's POSIX
+  `$PREFIX/bin/oce` layout; Windows npm puts the shim at the prefix root.
+
+### Internal
+
+- All pending dependency majors landed: TypeScript 7, vitest 5 (with an
+  explicit vite 8 devDependency — vitest 5 takes vite as a required peer),
+  openai 7, chokidar 6, ignore 7, markdown-it 15, @types/node 26, vsce 4.
+- The 1,025-line `src/cli/index.ts` is now `io`/`config`/six command modules
+  plus a thin entry point, with 33 tests running the real commands in-process
+  (keyword-only path, no keys needed).
+- New regression suites: the file watcher (real-store create/edit/delete,
+  binary eviction, error survival, mid-flush queuing), `MultiContext` and
+  `packWithDependencies` (previously exported-but-untested), and a Studio
+  guard that fails the build if a raw-HTML sink ever appears next to
+  model-derived strings.
+- The shared design tokens between the marketing site and Trace are enforced
+  by test instead of by hand.
+- `eval/external/` — a Flask 3.1.2 gold set (27 cases, recall@10 0.926
+  keyword-only) with a committed baseline, so ranking changes are validated
+  against a codebase this repo has never seen.
+
 ## 0.4.0 — first public release
 
 The first version published to npm. Earlier version numbers were internal.

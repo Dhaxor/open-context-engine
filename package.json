@@ -1,6 +1,6 @@
 {
   "name": "open-context-engine",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
