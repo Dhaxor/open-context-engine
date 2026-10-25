@@ -2,15 +2,34 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["vscode", "node"]
+    "types": [
+      "vscode",
+      "node"
+    ],
+    "rootDir": ".."
   },
-  "include": ["src/**/*", "../../src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "../../node_modules", "../../dist", "src/chat/webview/main.ts", "src/chat/webview/render.ts", "src/chat/webview/styles.css"]
+  "include": [
+    "src/**/*",
+    "../../src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "../../node_modules",
+    "../../dist",
+    "src/**/*.test.ts",
+    "test/**/*",
+    "src/chat/webview/main.ts",
+    "src/chat/webview/render.ts",
+    "src/chat/webview/styles.css"
+  ]
 }

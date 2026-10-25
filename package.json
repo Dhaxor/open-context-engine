@@ -50,12 +50,19 @@
     "check:desktop": "node scripts/check-desktop.js",
     "preview:tui": "node scripts/tui-preview.js",
     "release:check": "bash scripts/release-check.sh",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.studio.json",
-    "test": "vitest run",
+    "typecheck": "npm run typecheck:core && npm run typecheck:extension",
+    "test": "npm run test:core && npm run test:extension",
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
-    "prepublishOnly": "npm run typecheck && npm run test"
+    "prepublishOnly": "npm run typecheck && npm run test",
+    "typecheck:core": "tsc --noEmit && tsc -p tsconfig.studio.json",
+    "typecheck:extension": "npm --prefix extension run typecheck",
+    "test:core": "vitest run",
+    "test:extension": "npm --prefix extension run test",
+    "verify:core": "npm run typecheck:core && npm run test:core",
+    "verify:extension": "npm --prefix extension run verify",
+    "verify": "npm run verify:core && npm run verify:extension"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
