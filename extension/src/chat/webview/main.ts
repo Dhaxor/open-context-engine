@@ -331,7 +331,7 @@ function agentStep(step: number, status: string) {
   if (!el) {
     stepCount++; updateActivitySummary();
     el = document.createElement("div"); el.id = "agent-step-" + step; el.className = "card step";
-    el.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Reasoning step ${step + 1}</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
+    el.innerHTML = `<div class="chead"><span class="status-ic"><span class="spin"></span></span><span class="ttl">Reasoning step ${esc(String(step + 1))}</span><span class="chev">${icon("chevron")}</span></div><div class="cbody"></div>`;
     wireCardToggle(el);
     activityBody().appendChild(el);
     stepCards[step] = el;
@@ -353,9 +353,10 @@ function addEdit(e: any) {
   sealBubble();
   const el = document.createElement("div"); el.className = "card edit open"; el.dataset.editId = e.id; el._diff = e.diff;
   const title = e.kind === "create" ? "Created" : e.kind === "remove" ? "Deleted" : "Edited";
-  const count = e.replacedOccurrences ? ` (${e.replacedOccurrences})` : "";
+  const kind = e.kind === "create" || e.kind === "remove" ? e.kind : "edit";
+  const count = e.replacedOccurrences ? ` (${esc(String(e.replacedOccurrences))})` : "";
   const openBtn = e.kind === "remove" ? "" : `<button class="mini" data-open="${esc(e.path)}">${icon("open")} Open</button>`;
-  el.innerHTML = `<div class="chead"><span class="kind ${e.kind}">${e.kind === "str-replace" ? "edit" : e.kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
+  el.innerHTML = `<div class="chead"><span class="kind ${kind}">${kind}</span><span class="path">${esc(e.path)}</span><span class="state">${title}${count}</span><span class="chev">${icon("chevron")}</span></div>` +
     `<div class="cbody"><div class="diff">${fmtDiff(e.diff)}</div></div>` +
     `<div class="acts"><button class="mini" data-diff="${e.id}">${icon("diff")} Diff</button>${openBtn}<span class="spacer"></span><button class="mini undo" data-undo="${e.id}">${icon("undo")} Undo</button></div>`;
   el?.querySelector?.(".chead")?.addEventListener("click", () => el.classList.toggle("open"));
@@ -384,10 +385,10 @@ function renderSearchResults(results: any[]) {
   if (!results || !results.length) { const e = document.createElement("div"); e.className = "notice"; e.textContent = "No matches found."; msgs.appendChild(e); scroll(); return; }
   results.forEach((r) => {
     const el = document.createElement("div"); el.className = "card sr";
-    const loc = esc(r.path) + ":" + r.startLine + "-" + r.endLine;
+    const loc = esc(`${r.path}:${r.startLine}-${r.endLine}`);
     const repo = r.repo ? `<span class="repo">${esc(r.repo)}</span>` : "";
     const lines = (r.contents || "").split("\n").map((l: string, i: number) => String(r.startLine + i).padStart(5) + " │ " + l).join("\n");
-    el.innerHTML = `<div class="chead">${repo}<span class="path">${loc}</span><span class="score">${(r.score * 100).toFixed(0)}%</span><span class="chev">${icon("chevron")}</span></div><pre>${esc(lines)}</pre>`;
+    el.innerHTML = `<div class="chead">${repo}<span class="path">${loc}</span><span class="score">${esc(String((r.score * 100).toFixed(0)))}%</span><span class="chev">${icon("chevron")}</span></div><pre>${esc(lines)}</pre>`;
     el?.querySelector?.(".chead")?.addEventListener("click", (ev: any) => { if (ev.target.classList.contains("path")) { post({ type: "openFile", path: r.path, line: r.startLine }); return; } el.classList.toggle("open"); });
     msgs.appendChild(el);
   });
