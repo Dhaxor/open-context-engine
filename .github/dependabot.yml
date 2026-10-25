@@ -8,6 +8,12 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # Grammar wasms in tree-sitter-wasms 0.1.x are built for the
+      # web-tree-sitter 0.25 language ABI; 0.26+ cannot load them and every
+      # AST test fails. Unignore once tree-sitter-wasms ships ABI-16 wasms.
+      - dependency-name: "web-tree-sitter"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /extension
     schedule:
