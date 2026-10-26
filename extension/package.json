@@ -2,7 +2,7 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "open-context",
   "license": "MIT",
   "icon": "icon.png",

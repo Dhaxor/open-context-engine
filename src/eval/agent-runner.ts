@@ -77,7 +77,12 @@ export function parseAgentTasks(input: unknown): AgentTask[] {
     if (!task.files || typeof task.files !== "object" || Object.keys(task.files).length === 0) throw new Error(`task[${i}].files must seed the workspace`);
     if (!task.verify || typeof task.verify.command !== "string" || !task.verify.command.trim()) throw new Error(`task[${i}].verify.command is required`);
     for (const rel of Object.keys(task.files)) {
-      if (path.isAbsolute(rel) || rel.split(/[\\/]+/).includes("..")) throw new Error(`task[${i}].files: "${rel}" must be a relative path inside the workspace`);
+      // Strict on every platform: a task file must be a plain relative path.
+      // path.isAbsolute alone is platform-dependent ("C:\x" is relative on
+      // POSIX), so Windows drives and leading separators are refused outright.
+      if (path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel) || /^[\\/]/.test(rel) || rel.split(/[\\/]+/).includes("..")) {
+        throw new Error(`task[${i}].files: "${rel}" must be a relative path inside the workspace`);
+      }
     }
     return {
       id: task.id,

@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.4.6
+
+- Version sync; no extension changes.
+
 ## 0.4.5
 
 - Version sync with the 0.4.5 release train. No extension changes; releases are versioned in lockstep so tag-driven publishing stays consistent.

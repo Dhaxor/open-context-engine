@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6
+
+- The 0.4.5 tag's test gate failed on Linux: agent-task path validation used
+  `path.isAbsolute`, which calls `C:bs.js` relative on POSIX — so the escape
+  check passed a Windows dev machine and failed every CI leg. Validation now
+  refuses Windows drive paths, leading separators, and `..` on all platforms,
+  with a dedicated cross-platform test.
+
 ## 0.4.5 — operate it: tokenless npm publishing, agent evals, honest numbers, checkout
 
 - **npm publishes without a token now.** Trusted Publishing (OIDC): the
