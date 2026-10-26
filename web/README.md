@@ -17,10 +17,11 @@ npx wrangler pages deploy web --project-name opencontextengine
 Then Pages → Custom domains → add `opencontextengine.com` (DNS is already on
 Cloudflare, so it's one click) and `www` if wanted.
 
-## Wiring checkout (when Polar products exist)
+## Checkout
 
-`pricing.html` has one `TODO(polar)` marker — replace the Team plan's mailto
-href with the Polar checkout link. Enterprise stays mailto by design.
+The Team plan's button is wired to Polar (`buy.polar.sh/polar_cl_…`, created
+under the `opencontextengine` org; the product is "Open Context Team", $25/mo).
+Enterprise stays mailto by design.
 
 ## Local preview
 
