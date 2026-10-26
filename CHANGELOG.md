@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.2 — npm package renamed to `open-context`
+
+The name `open-context-engine` on npm is owned by a different account, so no
+release from this repository could ever publish under it (0.4.0's changelog
+claimed an npm release that never happened — the publish was failing on the
+name all along). The package now ships as **`open-context`**: same CLI (`oce`),
+same code, versioned forward. The VS Code extension's Marketplace identity
+(`open-context.open-context-engine`) is unchanged.
+
+```bash
+npm install -g open-context
+```
+
 ## 0.4.1
 
 ### Fixes
