@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3 — republish of 0.4.2
+
+The 0.4.2 tag's `npm publish` failed before reaching the registry: the
+package's `prepublishOnly` gate ran the extension's typecheck, which needs
+`extension/node_modules` that the publish workflow never installs. The gate
+now verifies what the npm package actually ships (core typecheck + tests);
+the extension is gated by its own release workflow, which installs its deps.
+
 ## 0.4.2 — npm package renamed to `open-context`
 
 The name `open-context-engine` on npm is owned by a different account, so no

@@ -1,6 +1,6 @@
 {
   "name": "open-context",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -55,7 +55,7 @@
     "test:watch": "vitest",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
-    "prepublishOnly": "npm run typecheck && npm run test",
+    "prepublishOnly": "npm run verify:core",
     "typecheck:core": "tsc --noEmit && tsc -p tsconfig.studio.json",
     "typecheck:extension": "npm --prefix extension run typecheck",
     "test:core": "vitest run",
