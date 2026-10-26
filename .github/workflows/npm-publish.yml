@@ -2,14 +2,13 @@
 #
 #   git tag v0.5.0 && git push origin v0.5.0
 #
-# Publishing uses npm Trusted Publishing (OIDC): the registry trusts this
-# exact repository + workflow, so there is no NPM_TOKEN to rotate or leak —
-# `id-token: write` below is the credential. The trust is configured on the
-# package's npm settings page (Dhaxor/open-context-engine + npm-publish.yml);
-# publish attempts from anywhere else are refused.
-#
-# Node 24 because its bundled npm (11.x) speaks trusted publishing; Node 22's
-# npm 10 still requires a token.
+# Publishing authenticates with the NPM_TOKEN secret (granular publish token,
+# bypasses 2FA, expires 2026-11-02). The intended replacement is npm Trusted
+# Publishing (OIDC): the repository side is ready (Node 24's npm 11.x +
+# id-token: write), but the registry-side trust record still needs a
+# 2FA-verified re-save on the package's npm settings page — the 2026-10-26
+# attempt failed with E404 (identity not matched). Once that is confirmed,
+# delete the NODE_AUTH_TOKEN env below, then the token and the secret.
 #
 # The tag must match package.json's version — the guard step enforces it so a
 # stray tag can't publish mismatched contents.
@@ -48,3 +47,5 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx vitest run
       - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

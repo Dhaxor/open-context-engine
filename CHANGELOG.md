@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.7
+
+- Re-release: 0.4.5 and 0.4.6 never reached the registry. 0.4.5's publish
+  failed in CI (fixed in 0.4.6), and 0.4.6's tokenless OIDC publish was
+  refused by the registry (E404) — npm's Trusted Publishing record needs a
+  2FA-verified re-save that only the package owner can do. This version ships
+  the same content as 0.4.6 through the standing granular token; everything
+  below is new on npm since 0.4.4.
+
 ## 0.4.6
 
 - The 0.4.5 tag's test gate failed on Linux: agent-task path validation used

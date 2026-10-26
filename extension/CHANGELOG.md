@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.4.7
+
+- Version sync; no extension changes.
+
 ## 0.4.6
 
 - Version sync; no extension changes.
