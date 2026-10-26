@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.4.5
+
+- Version sync with the 0.4.5 release train. No extension changes; releases are versioned in lockstep so tag-driven publishing stays consistent.
+
 ## 0.4.1
 
 - **The Indexing section of Settings is real.** What was a "coming soon" placeholder now shows live index status — workspace root, indexed files and chunks, search mode (with the reason when it degrades to keyword-only), and the active embedding provider/model — and edits the settings that govern indexing: index-on-startup, re-index on file changes, the shared embedding cache, and chunk size/overlap. A Rebuild index button runs the same command as the command palette. Every value the webview can write is validated host-side (unknown keys and corrupting values are refused), and all dynamic content renders through text nodes, consistent with the Studio invariant.

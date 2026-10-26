@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.5 — operate it: tokenless npm publishing, agent evals, honest numbers, checkout
+
+- **npm publishes without a token now.** Trusted Publishing (OIDC): the
+  registry trusts this exact repository + workflow — `id-token: write` is the
+  credential. No NPM_TOKEN to rotate, leak, or lose to npm's Jan-2027 removal
+  of granular-token direct publishing.
+- **`oce eval-agent`** — end-to-end agent tasks (fix a failing test, create a
+  module, rename a symbol, delete dead code, add an endpoint) in throwaway
+  workspaces, graded by verification scripts. The first harness that can catch
+  a prompt, tool, or provider regression in the agent itself.
+- **Dual-mode retrieval baselines, measured fresh.** This repo: keyword 0.886
+  / hybrid 0.943. Flask (external): keyword 0.926 / hybrid 0.889. The honest
+  finding, committed with the numbers: fusion demotes confident BM25 hits on
+  definition-shaped queries — tuning it is tracked open work, and the
+  baselines are the harness. (June's 0.977 no longer reproduces.)
+- **Fixed: OpenAI embeddings rejected chunks over 8192 tokens**, silently
+  dropping their whole file from the index. Oversized chunks now embed their
+  head; full contents stay stored.
+- **The Team plan is purchasable** — pricing's button goes through Polar.
+
 ## 0.4.4 — npm package is `@dhaxor/open-context`
 
 npm's typosquat guard rejects the unscoped name `open-context` as too similar
