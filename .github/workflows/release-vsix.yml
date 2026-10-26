@@ -78,12 +78,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Use Node.js 22.16.0
+      - name: Use Node.js 22.22.0
         uses: actions/setup-node@v7
         with:
           # Pinned exact: setup-node's "22.x" floats with new releases, which
           # broke deterministic builds before.
-          node-version: "22.16.0"
+          node-version: "22.22.0"
 
       - name: Install core deps (repo root)
         run: npm ci
@@ -147,7 +147,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "22.16.0"
+          node-version: "22.22.0"
 
       - name: Install vsce
         run: npm install -g @vscode/vsce@^3.6.0

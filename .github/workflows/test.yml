@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-latest, windows-latest]
-        node: ["22.16.0"]
+        node: ["22.22.0"]
         # The supported floor (22) runs everywhere; the current LTS (24) is
         # what most new installs get. Node 20 was dropped: it is end-of-life
         # and better-sqlite3 no longer ships prebuilt binaries for it, so it
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          # ubuntu/22.16.0 leg matches the release-vsix.yml pin — bump together.
+          # ubuntu/22.22.0 leg matches the release-vsix.yml pin — bump together.
           node-version: ${{ matrix.node }}
       - run: npm ci
       # core + Studio typecheck: TS 7 needs the css.d.ts declaration, and only
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "22.16.0"
+          node-version: "22.22.0"
       - run: npm ci
       - name: Swap in the extension's better-sqlite3
         run: |
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "22.16.0"
+          node-version: "22.22.0"
       # Extension tsc resolves imports from BOTH dependency trees: it
       # imports ../src (root deps) and its own node_modules.
       - run: npm ci
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "22.16.0"
+          node-version: "22.22.0"
       # Extension tests import ../src, so both dependency trees must be present
       # (same install pattern as extension-types). --ignore-scripts skips a
       # no-op node-gyp step; better-sqlite3 13 prebuilds load without it.
