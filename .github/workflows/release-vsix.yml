@@ -15,8 +15,11 @@
 # Electron VS Code ships.
 #
 # Triggers:
-#  - push to a tag like v0.4.0 → build all platforms + publish to Marketplace.
-#  - workflow_dispatch → build only (no publish). Useful for local sanity.
+#  - push to a tag like v0.4.0 → build all platforms + publish to Marketplace
+#    and Open VSX.
+#  - workflow_dispatch → build only (no publish) unless an input is checked.
+#    "Publish to Open VSX" alone backfills the registry without re-publishing
+#    an existing version to the Marketplace (vsce refuses that).
 #  - pull_request touching extension/ → build all platforms as a smoke test.
 
 name: Release VSIX
@@ -28,6 +31,10 @@ on:
     inputs:
       publish:
         description: "Publish to the VS Code Marketplace after build"
+        type: boolean
+        default: false
+      openvsx:
+        description: "Publish to Open VSX after build"
         type: boolean
         default: false
   pull_request:
@@ -173,3 +180,45 @@ jobs:
             vsce publish --packagePath "$vsix" --pat "$VSCE_PAT"
             echo "::endgroup::"
           done
+
+  publish-openvsx:
+    name: Publish to Open VSX
+    needs: build
+    # Same tags as the Marketplace publish, plus a standalone dispatch input so
+    # Open VSX can be backfilled without vsce refusing the existing version.
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.openvsx == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: vsix-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish each VSIX explicitly
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
+        run: |
+          set -euo pipefail
+          ls -la artifacts/
+          shopt -s nullglob
+          count=0
+          for vsix in artifacts/*.vsix; do
+            echo "::group::Publishing $vsix"
+            npx --yes ovsx publish --packagePath "$vsix" --pat "$OVSX_PAT"
+            echo "::endgroup::"
+            count=$((count+1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found"
+            exit 1
+          fi
