@@ -107,8 +107,17 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   async embed(texts: string[]): Promise<number[][]> {
     const client = this.getClient();
     const out: number[][] = [];
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const batch = texts.slice(i, i + this.batchSize);
+    // text-embedding-3 rejects inputs over 8192 tokens (~32k chars); the
+    // chunker's 80k-char window exceeds that on dense files, and one oversized
+    // chunk failed its whole file out of the index. Embed the head of the
+    // chunk — full contents stay stored and searchable; only the vector is
+    // bounded. Code files front-load their signal (imports, signatures).
+    // Code runs ~2.5-3 chars/token (not prose's 4), so 16k chars stays under
+    // the 8192-token ceiling even for symbol-dense files.
+    const MAX_EMBED_CHARS = 16_000;
+    const bounded = texts.map(t => (t.length > MAX_EMBED_CHARS ? t.slice(0, MAX_EMBED_CHARS) : t));
+    for (let i = 0; i < bounded.length; i += this.batchSize) {
+      const batch = bounded.slice(i, i + this.batchSize);
       const resp = await retry("openai.embeddings", () => client.embeddings.create({ model: this.model, input: batch, dimensions: this.dimension }));
       const sorted = [...resp.data].sort((a, b) => a.index - b.index).map(d => d.embedding);
       out.push(...sorted);

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "fix-failing-test",
+    "instruction": "The function addPercentages in calc.js is supposed to sum a list of percentage numbers and return the total. It currently has an off-by-one bug: it skips the last element of the list. Fix calc.js so that all cases pass. Do not modify calc.test.js or _verify.js.",
+    "files": {
+      "calc.js": "function addPercentages(list) {\n  let total = 0;\n  for (let i = 0; i < list.length - 1; i++) {\n    total += list[i];\n  }\n  return total;\n}\n\nmodule.exports = { addPercentages };\n",
+      "calc.test.js": "const { addPercentages } = require('./calc.js');\n\nif (addPercentages([10, 20, 30]) !== 60) { throw new Error('three items'); }\nif (addPercentages([5]) !== 5) { throw new Error('single item'); }\nif (addPercentages([]) !== 0) { throw new Error('empty'); }\nconsole.log('calc tests ok');\n",
+      "_verify.js": "const { addPercentages } = require('./calc.js');\nconst assert = require('assert');\nassert.strictEqual(addPercentages([10, 20, 30]), 60);\nassert.strictEqual(addPercentages([5]), 5);\nassert.strictEqual(addPercentages([1, 2, 3, 4]), 10);\nassert.strictEqual(addPercentages([]), 0);\nconsole.log('verify ok');\n"
+    },
+    "verify": { "command": "node _verify.js" }
+  },
+  {
+    "id": "create-module",
+    "instruction": "Create a new file stats.js in the workspace root that exports two functions via CommonJS: mean(numbers) returning the arithmetic mean (0 for an empty list), and median(numbers) returning the median (for even-length lists, the average of the two middle values; 0 for an empty list). Do not modify _verify.js.",
+    "files": {
+      "README.md": "# Stats\n\nThis workspace needs a stats.js module. See the instruction.\n",
+      "_verify.js": "const { mean, median } = require('./stats.js');\nconst assert = require('assert');\nassert.strictEqual(mean([1, 2, 3, 4]), 2.5);\nassert.strictEqual(mean([]), 0);\nassert.strictEqual(median([1, 3, 2]), 2);\nassert.strictEqual(median([1, 2, 3, 4]), 2.5);\nassert.strictEqual(median([]), 0);\nassert.strictEqual(median([7]), 7);\nconsole.log('verify ok');\n"
+    },
+    "verify": { "command": "node _verify.js" }
+  },
+  {
+    "id": "rename-symbol",
+    "instruction": "The function getUserData is defined in user-store.js and called from profile.js and session.js. Rename it to fetchUserProfile everywhere — definition and every call site — keeping behavior identical. No file may still reference getUserData when you are done. Do not modify _verify.js.",
+    "files": {
+      "user-store.js": "function getUserData(id) {\n  return { id, name: 'user-' + id };\n}\n\nmodule.exports = { getUserData };\n",
+      "profile.js": "const { getUserData } = require('./user-store.js');\n\nfunction renderProfile(id) {\n  const user = getUserData(id);\n  return '<h1>' + user.name + '</h1>';\n}\n\nmodule.exports = { renderProfile };\n",
+      "session.js": "const { getUserData } = require('./user-store.js');\n\nfunction startSession(id) {\n  const user = getUserData(id);\n  return 'session-for-' + user.name;\n}\n\nmodule.exports = { startSession };\n",
+      "_verify.js": "const fs = require('fs');\nconst assert = require('assert');\nfor (const f of ['user-store.js', 'profile.js', 'session.js']) {\n  const src = fs.readFileSync(f, 'utf8');\n  assert.ok(!src.includes('getUserData'), f + ' still references getUserData');\n}\nconst { renderProfile } = require('./profile.js');\nconst { startSession } = require('./session.js');\nassert.strictEqual(renderProfile(7), '<h1>user-7</h1>');\nassert.strictEqual(startSession(2), 'session-for-user-2');\nconsole.log('verify ok');\n"
+    },
+    "verify": { "command": "node _verify.js" }
+  },
+  {
+    "id": "delete-dead-code",
+    "instruction": "legacy-billing.js is dead code: nothing uses its exports, and the team has decided to remove it. Delete legacy-billing.js and remove any reference to it from index.js, keeping everything else working. Do not modify _verify.js.",
+    "files": {
+      "legacy-billing.js": "// Old billing path, replaced by the payments service in 2024.\n// Nothing imports this module any more.\nfunction legacyChargeCents(cents) {\n  return { charged: cents, processor: 'legacy' };\n}\n\nmodule.exports = { legacyChargeCents };\n",
+      "index.js": "const { legacyChargeCents } = require('./legacy-billing.js');\nconst { renderProfile } = require('./profile.js');\n\nfunction main(id) {\n  void legacyChargeCents; // historical\n  return renderProfile(id);\n}\n\nmodule.exports = { main };\n",
+      "profile.js": "function renderProfile(id) {\n  return 'profile-' + id;\n}\n\nmodule.exports = { renderProfile };\n",
+      "_verify.js": "const fs = require('fs');\nconst assert = require('assert');\nassert.ok(!fs.existsSync('legacy-billing.js'), 'legacy-billing.js still exists');\nconst indexSrc = fs.readFileSync('index.js', 'utf8');\nassert.ok(!indexSrc.includes('legacy'), 'index.js still references legacy');\nconst { main } = require('./index.js');\nassert.strictEqual(main(3), 'profile-3');\nconsole.log('verify ok');\n"
+    },
+    "verify": { "command": "node _verify.js" }
+  },
+  {
+    "id": "add-endpoint",
+    "instruction": "router.js implements a tiny route table: routes is an object mapping 'METHOD /path' to handlers, and dispatch(method, path) looks up and calls the handler. Add a route 'GET /health' handled by a function health() that returns { status: 'ok' }. Wire it so dispatch('GET', '/health') works. Do not modify _verify.js.",
+    "files": {
+      "router.js": "const routes = {\n  'GET /': () => ({ body: 'home' }),\n  'POST /echo': (payload) => ({ body: payload }),\n};\n\nfunction dispatch(method, path, payload) {\n  const handler = routes[method + ' ' + path];\n  if (!handler) { throw new Error('no route: ' + method + ' ' + path); }\n  return handler(payload);\n}\n\nmodule.exports = { dispatch };\n",
+      "_verify.js": "const { dispatch } = require('./router.js');\nconst assert = require('assert');\nassert.deepStrictEqual(dispatch('GET', '/health'), { status: 'ok' });\nassert.strictEqual(dispatch('GET', '/').body, 'home');\nassert.strictEqual(dispatch('POST', '/echo', 'x').body, 'x');\nconsole.log('verify ok');\n"
+    },
+    "verify": { "command": "node _verify.js" }
+  }
+]

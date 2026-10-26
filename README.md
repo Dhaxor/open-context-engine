@@ -38,7 +38,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
 | 🚀 **Parallel Indexing** | Worker-thread parse/chunk pool kicks in automatically on large repos; `oce bench` measures throughput on yours. |
 | 🛟 **Degrades, Never Dies** | No embedding key, or no sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
-| 📏 **Measured, Not Guessed** | Retrieval quality is scored against a committed 44-case gold set: **recall@10 0.977 · nDCG@10 0.812 · ctx-recall 0.943** on this repo. Ranking changes ship with before/after deltas. |
+| 📏 **Measured, Not Guessed** | Retrieval quality is scored against committed gold sets — this repo's own and an external codebase — in **both** search modes: **hybrid recall@10 0.943 · keyword-only 0.886** here, **0.889 / 0.926** on Flask. Ranking changes ship with before/after deltas. The coding agent itself is scored too: `oce eval-agent` runs end-to-end tasks graded by verification scripts. |
 
 ## 🚀 Quick Start
 
@@ -540,11 +540,19 @@ oce eval --cases eval/oce.eval.json --no-expand --baseline baseline.json
 
 Reports **recall@k**, **MRR**, **nDCG@k**, **hit-rate**, and per-query latency, plus per-case deltas (improved / regressed) against a saved baseline. Metrics are file-granular: a case passes when the gold file ranks in the top-k unique files returned.
 
-Current numbers on this repo's committed 44-case gold set ([`eval/oce.eval.json`](eval/oce.eval.json), baseline at [`eval/baseline.json`](eval/baseline.json)):
+Current numbers, measured fresh on this repo's committed 44-case gold set ([`eval/oce.eval.json`](eval/oce.eval.json)) and the external 27-case Flask set ([`eval/external/flask.eval.json`](eval/external/flask.eval.json)) — baselines committed beside them:
 
-| recall@10 | MRR | nDCG@10 | hit-rate | ctx-recall | mean latency |
-|---|---|---|---|---|---|
-| **0.977** | 0.768 | 0.812 | 0.977 | 0.943 | 251 ms |
+| gold set | keyword-only (BM25) | hybrid (voyage-code-3) |
+|---|---|---|
+| this repo — recall@10 / MRR / nDCG@10 | 0.886 / 0.676 / 0.716 | **0.943 / 0.759 / 0.792** |
+| Flask 3.1.2 (external) — recall@10 / MRR / nDCG@10 | **0.926 / 0.605 / 0.685** | 0.889 / 0.604 / 0.676 |
+
+Two honest readings, and both matter:
+
+- **Hybrid earns its keep where queries paraphrase intent** — +6 points of recall on this repo's set, and it's the mode the agent actually runs in.
+- **Keyword wins on foreign codebases with definition-shaped queries** (a maintainer typing an exact symbol name). Fusion currently demotes confident BM25 hits when the semantic ranker prefers tests and docs; general-purpose embedders make it worse (openai/minilm hybrids scored 0.852 on the Flask set). Tuning that — fusion weighting, or gating when BM25 is confident — is open work, and both baselines are the harness for it.
+
+The June baseline this section used to quote (hybrid 0.977) no longer reproduces on today's engine (0.943) — drift the harness now catches on every run instead of silently shipping.
 
 Reports record which search mode produced them (`hybrid` vs `keyword-only`), and baseline comparisons warn loudly on a mode mismatch.
 

@@ -1,7 +1,7 @@
 {
   "name": "@dhaxor/open-context",
   "version": "0.4.4",
-  "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
+  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -91,6 +91,7 @@
     }
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.3.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",

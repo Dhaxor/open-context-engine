@@ -1,0 +1,1246 @@
+{
+  "generatedAt": "2026-10-26T12:11:09.281Z",
+  "k": 10,
+  "caseCount": 44,
+  "aggregate": {
+    "cases": 44,
+    "recallAtK": 0.8863636363636364,
+    "mrr": 0.6757575757575758,
+    "ndcgAtK": 0.7162593834235789,
+    "hitRate": 0.9090909090909091,
+    "contextRecall": 0.8636363636363636,
+    "contextHitRate": 0.8863636363636364
+  },
+  "results": [
+    {
+      "id": "rrf-fusion",
+      "query": "where is reciprocal rank fusion implemented and how are vector and bm25 results combined",
+      "expectedPaths": [
+        "src/core/retriever.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/retriever.ts",
+        "README.md",
+        "extension/dev/gen-harness.mjs",
+        "extension/src/health/RetrievalDebugPanel.ts",
+        "src/core/retriever.test.ts",
+        "CHANGELOG.md",
+        "src/core/sqlite-store.ts",
+        "web/index.html",
+        "src/core/streaming-retriever.ts",
+        "src/trace/retrieval.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 11
+    },
+    {
+      "id": "gitignore-filtering",
+      "query": "how are files excluded from indexing based on gitignore rules",
+      "expectedPaths": [
+        "src/core/file-filter.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/shared/indexing-form-html.ts",
+        "src/core/policy.ts",
+        "src/core/sqlite-store.ts",
+        ".contextignore",
+        "src/core/file-filter.ts",
+        ".gitignore",
+        "extension/CHANGELOG.md",
+        "src/core/types.ts",
+        "src/trace/worktree.ts",
+        "src/trace/protocol.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.2,
+        "ndcg": 0.38685280723454163,
+        "hit": true,
+        "firstHitRank": 5,
+        "contextRecall": 1
+      },
+      "elapsedMs": 11
+    },
+    {
+      "id": "voyage-embeddings",
+      "query": "voyage api embedding requests with batching and retry",
+      "expectedPaths": [
+        "src/core/embedder.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/embedder.ts",
+        "extension/src/services/ContextService.ts",
+        "src/cli/config.ts",
+        "extension/package.json",
+        "README.md",
+        "src/cli/config.test.ts",
+        "src/core/reranker.ts",
+        "src/core/types.ts",
+        "src/core/sqlite-store.ts",
+        "scripts/release-check.sh"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "sqlite-schema",
+      "query": "sqlite table schema for chunks and the vector index",
+      "expectedPaths": [
+        "src/core/sqlite-store.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/sqlite-store.ts",
+        "src/core/context.ts",
+        "src/core/sqlite-store.test.ts",
+        "README.md",
+        "web/index.html",
+        "extension/README.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "tree-sitter-chunking",
+      "query": "splitting code into chunks along function and class boundaries with tree-sitter",
+      "expectedPaths": [
+        "src/core/ast-chunker.ts"
+      ],
+      "retrievedFiles": [
+        "README.md",
+        ".github/dependabot.yml",
+        "src/core/dependency-packer.test.ts",
+        "extension/.vscodeignore",
+        "web/index.html",
+        "src/core/chunk-worker.ts",
+        "src/core/sqlite-store.test.ts",
+        "extension/package.json",
+        "package.json",
+        "extension/CHANGELOG.md"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 11
+    },
+    {
+      "id": "graph-expansion",
+      "query": "how are related chunks pulled in by following import and call edges at retrieval time",
+      "expectedPaths": [
+        "src/core/graph-expander.ts"
+      ],
+      "retrievedFiles": [
+        "src/trace/protocol.ts",
+        "src/trace/retrieval.ts",
+        "src/trace/retrieval.test.ts",
+        "src/core/code-graph.ts",
+        "extension/dev/gen-harness.mjs",
+        "CHANGELOG.md",
+        "README.md",
+        "web/index.html",
+        "src/core/ast-graph/typescript.test.ts",
+        "src/core/audit.ts"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 12
+    },
+    {
+      "id": "ast-edge-extraction",
+      "query": "extracting import and inheritance edges from the syntax tree per language",
+      "expectedPaths": [
+        "src/core/ast-graph-extractor.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/graph-extractor.ts",
+        "src/core/ast-graph/test-utils.ts",
+        "src/core/ast-languages.test.ts",
+        "src/core/ast-graph-extractor.ts",
+        "src/core/ast-graph/other-languages.ts",
+        "src/core/context.ts",
+        "src/core/chunk-worker.ts",
+        "README.md",
+        "src/core/graph-extractor.test.ts",
+        ".github/dependabot.yml"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "edit-tools",
+      "query": "agent tool that replaces an exact substring in a file with uniqueness check",
+      "expectedPaths": [
+        "src/agent/edit-tools.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/edit-tools.ts",
+        "src/agent/agent.ts",
+        "src/agent/plan.ts",
+        "src/agent/edit-tools.test.ts",
+        "src/agent/types.ts",
+        "src/agent/permissions.ts",
+        "extension/src/services/AgentService.ts",
+        "src/agent/delegate.ts",
+        "README.md",
+        "scripts/check-desktop.js"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 14
+    },
+    {
+      "id": "license-verify",
+      "query": "offline license key signature verification with ed25519",
+      "expectedPaths": [
+        "src/core/license.ts"
+      ],
+      "retrievedFiles": [
+        "scripts/license-tool.mjs",
+        "src/core/license.ts",
+        "extension/src/services/ContextService.ts",
+        "src/core/audit.ts",
+        "web/pricing.html",
+        "src/core/license.test.ts",
+        "package-lock.json",
+        "src/cli/commands/license.ts",
+        "src/cli/config.ts",
+        "web/index.html"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "mcp-tools",
+      "query": "registering the codebase retrieval tool on the MCP server",
+      "expectedPaths": [
+        "src/mcp/server.ts"
+      ],
+      "retrievedFiles": [
+        "src/mcp/server.ts",
+        "src/cli/commands/mcp.ts",
+        "src/agent/agent.ts",
+        "src/mcp/server.test.ts",
+        "src/agent/permissions.ts",
+        "src/trace/server.ts",
+        "src/agent/extra-tools.ts",
+        "extension/src/chat/webview/main.ts",
+        "web/index.html",
+        "README.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "watch-debounce",
+      "query": "debouncing rapid file change events before reindexing",
+      "expectedPaths": [
+        "src/core/file-watcher.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/file-watcher.ts",
+        "src/trace/worktree.ts",
+        "src/core/file-watcher.test.ts",
+        "CHANGELOG.md",
+        "src/core/audit.ts",
+        "extension/src/shared/indexing-form.ts",
+        "src/core/live-index.ts",
+        "extension/src/services/AgentService.ts",
+        "extension/src/shared/indexing-form.test.ts",
+        "extension/src/settings/SettingsPanel.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "query-synonyms",
+      "query": "expanding a search query with synonyms like delete remove destroy",
+      "expectedPaths": [
+        "src/core/query-expander.ts"
+      ],
+      "retrievedFiles": [
+        "src/cli/commands/search.ts",
+        "src/core/query-expander.ts",
+        "extension/src/providers/SearchProvider.ts",
+        "src/core/chunk-pool.ts",
+        "src/core/query-expander.test.ts",
+        "src/core/sqlite-store.ts",
+        "extension/src/services/ContextService.ts",
+        "src/agent/extra-tools.ts",
+        "src/core/context.ts",
+        "scripts/studio-demo.js"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "context-packing",
+      "query": "merging nearby line ranges and dropping chunks over the character budget when formatting results",
+      "expectedPaths": [
+        "src/core/context-packer.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/utils.ts",
+        "src/core/context-packer.ts",
+        "src/trace/format.ts",
+        "src/core/sqlite-store.ts",
+        "src/core/context-packer.test.ts",
+        "src/agent/agent.ts",
+        "src/core/retriever.ts",
+        "extension/dev/gen-harness.mjs",
+        "src/trace/retrieval.test.ts",
+        "src/trace/studio/components.tsx"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "recency-boost",
+      "query": "boosting recently committed files in search ranking using git log",
+      "expectedPaths": [
+        "src/core/git-recency.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/git-recency.test.ts",
+        "src/core/retriever.ts",
+        "README.md",
+        "src/core/sqlite-store.ts",
+        "CHANGELOG.md",
+        "src/core/freshness.ts",
+        "extension/CHANGELOG.md",
+        "src/agent/extra-tools.ts",
+        "src/core/types.ts",
+        "src/core/context.ts"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "step-budget",
+      "query": "limiting agent tool steps and detecting repeated identical tool calls",
+      "expectedPaths": [
+        "src/agent/step-budget.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/agent.ts",
+        "src/agent/plan.ts",
+        "src/agent/types.ts",
+        "extension/src/services/AgentService.ts",
+        "src/cli/commands/agent.ts",
+        "src/agent/permissions.ts",
+        "scripts/studio-demo.js",
+        "src/agent/providers.ts",
+        "src/agent/utils.test.ts",
+        "src/agent/harness2.test.ts"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "native-binding-errors",
+      "query": "classifying NODE_MODULE_VERSION mismatch and glibc errors when the sqlite binding fails to load",
+      "expectedPaths": [
+        "src/core/native-binding-error.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/native-binding-error.ts",
+        "extension/src/services/NativeBindingSelector.ts",
+        "src/core/native-binding-error.test.ts",
+        "extension/PUBLISHING.md",
+        "extension/CHANGELOG.md",
+        "src/core/sqlite-store.ts",
+        ".github/workflows/release-vsix.yml",
+        "src/core/embedder.ts",
+        "src/core/sqlite-store.test.ts",
+        "extension/scripts/verify-vsix.mjs"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 13
+    },
+    {
+      "id": "freshness-check",
+      "query": "detecting whether the index is stale compared to the working tree and git state",
+      "expectedPaths": [
+        "src/core/freshness.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/sqlite-store.ts",
+        "src/core/context.ts",
+        "src/core/types.ts",
+        "src/core/freshness.ts",
+        "README.md",
+        "src/core/freshness.test.ts",
+        "src/trace/worktree.ts",
+        "extension/CHANGELOG.md",
+        "CHANGELOG.md",
+        "src/cli/config.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "history-compaction",
+      "query": "compacting old conversation messages when the token budget is exceeded",
+      "expectedPaths": [
+        "src/agent/utils.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/agent.ts",
+        "src/trace/format.ts",
+        "src/agent/step-budget.test.ts",
+        "src/agent/utils.ts",
+        "CHANGELOG.md",
+        "src/agent/step-budget.ts",
+        "extension/package.json",
+        "README.md",
+        "src/trace/server.ts",
+        "src/trace/protocol.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "edit-review-undo",
+      "query": "undo and redo agent file edits with a native diff view",
+      "expectedPaths": [
+        "extension/src/services/EditReviewService.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/chat/webview/main.ts",
+        "extension/src/chat/ChatView.ts",
+        "extension/src/services/EditReviewService.ts",
+        "extension/src/services/EditReviewService.test.ts",
+        "src/trace/checkpoints.ts",
+        "README.md",
+        "src/eval/agent-runner.ts",
+        "extension/CHANGELOG.md",
+        "extension/package.json",
+        "src/trace/worktree.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "native-binding-selector",
+      "query": "selecting the right native sqlite binding for the running electron abi at activation",
+      "expectedPaths": [
+        "extension/src/services/NativeBindingSelector.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/native-binding-error.ts",
+        "extension/src/services/NativeBindingSelector.ts",
+        "src/core/sqlite-store.ts",
+        "extension/src/services/NativeBindingSelector.test.ts",
+        ".github/workflows/release-vsix.yml",
+        "src/core/native-binding-error.test.ts",
+        "extension/scripts/smoke-native.cjs",
+        "extension/src/extension.ts",
+        "extension/PUBLISHING.md",
+        "desktop/README.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "vscode-agent-build",
+      "query": "constructing the vscode chat agent with routing memory and edit tools from settings",
+      "expectedPaths": [
+        "extension/src/services/AgentService.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/services/AgentService.ts",
+        "src/cli/commands/agent.ts",
+        "src/agent/types.ts",
+        "extension/src/services/AgentService.test.ts",
+        "src/agent/edit-tools.ts",
+        "extension/src/services/VSCodeEditApplier.test.ts",
+        "src/agent/agent.ts",
+        "src/agent/agent-intelligence.test.ts",
+        "src/agent/session-memory.ts",
+        "src/agent/edit-tools.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 11
+    },
+    {
+      "id": "vscode-edit-applier",
+      "query": "applying agent file edits through vscode workspace edit api",
+      "expectedPaths": [
+        "extension/src/services/VSCodeEditApplier.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/services/VSCodeEditApplier.ts",
+        "extension/src/services/EditReviewService.ts",
+        "extension/src/chat/webview/messages.ts",
+        "extension/src/services/VSCodeEditApplier.test.ts",
+        "src/agent/edit-tools.ts",
+        "extension/src/services/EditReviewService.test.ts",
+        "extension/src/services/AgentService.ts",
+        "src/cli/commands/agent.ts",
+        "extension/test/mocks/vscode.ts",
+        "src/eval/agent-runner.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "chat-history-store",
+      "query": "persisting chat sessions with titles and message limits in workspace state",
+      "expectedPaths": [
+        "extension/src/services/ChatHistoryStore.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/services/ChatHistoryStore.ts",
+        "extension/src/chat/webview/main.ts",
+        "extension/src/chat/ChatView.ts",
+        "src/trace/session.ts",
+        "extension/package.json",
+        "src/trace/studio/app.tsx",
+        "extension/src/chat/chat-html.ts",
+        "src/trace/registry.ts",
+        "extension/CHANGELOG.md",
+        "src/trace/view-model.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "chat-webview-render",
+      "query": "rendering streaming markdown chat with a committed prefix and live text tail",
+      "expectedPaths": [
+        "extension/src/chat/webview/main.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/chat/webview/main.ts",
+        "src/trace/markdown.ts",
+        "src/agent/agent.ts",
+        "extension/README.md",
+        "src/trace/studio/safety.test.ts",
+        "README.md",
+        "src/core/multi-context.test.ts",
+        "src/trace/markdown.test.ts",
+        "extension/CHANGELOG.md",
+        "src/core/streaming-retriever.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "chatview-host",
+      "query": "webview message handling for chat queries history loading and edit review actions",
+      "expectedPaths": [
+        "extension/src/chat/ChatView.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/chat/webview/messages.ts",
+        "extension/src/chat/webview/main.ts",
+        "extension/src/services/ChatHistoryStore.ts",
+        "extension/src/chat/webview/messages.test.ts",
+        "extension/src/chat/ChatView.ts",
+        "extension/src/services/EditReviewService.ts",
+        "extension/src/chat/webview/main.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.2,
+        "ndcg": 0.38685280723454163,
+        "hit": true,
+        "firstHitRank": 5,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "model-routing",
+      "query": "choosing a cheap fast model or a powerful reasoning model based on query complexity",
+      "expectedPaths": [
+        "src/agent/model-router.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/model-router.ts",
+        "src/agent/step-budget.ts",
+        "extension/src/chat/ChatView.ts",
+        "extension/src/shared/model-keys-form-html.ts",
+        "extension/package.json",
+        "src/core/sqlite-store.ts",
+        "extension/CHANGELOG.md",
+        "src/agent/agent.ts",
+        "src/cli/commands/agent.ts",
+        "README.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "session-memory",
+      "query": "remembering codebase insights across sessions and extracting facts from answers",
+      "expectedPaths": [
+        "src/agent/session-memory.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/session-memory.ts",
+        "src/agent/agent.ts",
+        "extension/package.json",
+        "README.md",
+        "src/cli/commands/agent.ts",
+        "src/agent/agent-intelligence.test.ts",
+        "src/agent/extra-tools.ts",
+        "src/trace/session.ts",
+        "src/trace/studio/components.tsx",
+        "CHANGELOG.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "llm-providers",
+      "query": "calling the openai and anthropic chat apis with streaming and tool use",
+      "expectedPaths": [
+        "src/agent/providers.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/providers.ts",
+        "src/agent/extra-tools.ts",
+        "extension/package.json",
+        "README.md",
+        "src/agent/types.ts",
+        "extension/README.md",
+        "src/cli/commands/agent.ts",
+        "extension/CHANGELOG.md",
+        "extension/src/services/AgentService.ts",
+        "src/core/streaming-retriever.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 0
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "tool-result-truncation",
+      "query": "truncating long tool results and retrying llm calls with exponential backoff",
+      "expectedPaths": [
+        "src/agent/utils.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/agent.ts",
+        "src/agent/types.ts",
+        "src/agent/extra-tools.ts",
+        "src/agent/utils.ts",
+        "src/core/embedder.ts",
+        "extension/src/services/AgentService.test.ts",
+        "extension/package.json",
+        "scripts/studio-demo.js",
+        "README.md",
+        "src/agent/utils.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.25,
+        "ndcg": 0.43067655807339306,
+        "hit": true,
+        "firstHitRank": 4,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "shell-tool",
+      "query": "shell command tool with an allowlist and execution timeout",
+      "expectedPaths": [
+        "src/agent/extra-tools.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/extra-tools.ts",
+        "src/core/policy.ts",
+        "extension/package.json",
+        "src/agent/agent.ts",
+        "src/cli/commands/agent.ts",
+        "src/trace/session.ts",
+        "src/cli/commands/mcp.ts",
+        "src/trace/studio/client.ts",
+        "README.md",
+        "src/agent/types.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "live-index-helper",
+      "query": "bring the index up to date then keep watching for file changes",
+      "expectedPaths": [
+        "src/core/live-index.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/live-index.ts",
+        "src/cli/commands/indexing.ts",
+        "src/cli/commands/mcp.ts",
+        "src/core/file-watcher.test.ts",
+        "extension/src/extension.ts",
+        "extension/src/shared/indexing-form-html.ts",
+        "README.md",
+        "src/core/context.ts",
+        "extension/CHANGELOG.md",
+        "src/cli/commands/team.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 9
+    },
+    {
+      "id": "query-embedding-cache",
+      "query": "caching query embeddings between searches",
+      "expectedPaths": [
+        "src/core/query-cache.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/query-cache.ts",
+        "src/core/query-cache.test.ts",
+        "extension/src/services/ContextService.ts",
+        "src/core/context.ts",
+        "src/cli/config.ts",
+        "extension/src/providers/SearchProvider.ts",
+        "src/core/multi-context.ts",
+        "src/core/retriever.ts",
+        "README.md",
+        "extension/package.json"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "graph-edge-queries",
+      "query": "querying outgoing and incoming code graph edges for a file and symbol",
+      "expectedPaths": [
+        "src/core/code-graph.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/code-graph.ts",
+        "src/core/sqlite-store.ts",
+        "src/core/graph-expander.ts",
+        "src/core/graph-extractor.ts",
+        "src/core/context.ts",
+        "src/core/ast-graph-extractor.ts",
+        "src/trace/protocol.ts",
+        "src/core/graph-extractor.test.ts",
+        "src/trace/retrieval.ts",
+        "README.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "dependency-packing",
+      "query": "packing imported dependency chunks into the context within a budget ratio",
+      "expectedPaths": [
+        "src/core/dependency-packer.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/dependency-packer.ts",
+        "src/core/dependency-packer.test.ts",
+        "extension/src/health/RetrievalDebugPanel.ts",
+        "src/core/context-packer.ts",
+        "src/eval/metrics.ts",
+        "src/trace/ledger.ts",
+        "src/core/context-packer.test.ts",
+        "src/core/context.ts",
+        "src/agent/types.ts",
+        "src/core/embedder.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 10
+    },
+    {
+      "id": "streaming-stages",
+      "query": "streaming retrieval results stage by stage vector bm25 fused final",
+      "expectedPaths": [
+        "src/core/streaming-retriever.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/streaming-retriever.ts",
+        "src/core/retriever.ts",
+        "src/trace/protocol.ts",
+        "src/core/streaming-retriever.test.ts",
+        "src/trace/retrieval.ts",
+        "src/trace/retrieval.test.ts",
+        "extension/src/health/RetrievalDebugPanel.ts",
+        "extension/src/chat/webview/main.ts",
+        "src/core/retriever.integration.test.ts",
+        "scripts/studio-demo.js"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "line-chunking-fallback",
+      "query": "line based chunking with boundary patterns overlap and oversize splitting",
+      "expectedPaths": [
+        "src/core/chunker.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/chunker.ts",
+        "src/core/ast-chunker.ts",
+        "src/cli/config.ts",
+        "src/core/guidelines.ts",
+        "src/core/context-packer.ts",
+        "extension/CHANGELOG.md",
+        "README.md",
+        "src/agent/agent.ts",
+        "src/trace/desktop/shell.ts",
+        "src/core/chunker.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 6
+    },
+    {
+      "id": "guidelines-loading",
+      "query": "loading project guideline markdown files into the agent prompt",
+      "expectedPaths": [
+        "src/core/guidelines.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/agent.ts",
+        "src/core/guidelines.ts",
+        "src/agent/types.ts",
+        "src/trace/session.ts",
+        "src/trace/markdown.ts",
+        "src/agent/session-memory.ts",
+        "src/agent/agent-intelligence.test.ts",
+        "README.md",
+        "src/core/context.ts",
+        "src/agent/session-store.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "regex-extraction-fallback",
+      "query": "regex based import and export extraction when the syntax tree is unavailable",
+      "expectedPaths": [
+        "src/core/graph-extractor.ts"
+      ],
+      "retrievedFiles": [
+        "src/core/ast-graph/test-utils.ts",
+        "src/core/ast-graph-extractor.ts",
+        "src/core/graph-extractor.ts",
+        "src/core/chunk-worker.ts",
+        ".github/dependabot.yml",
+        "src/trace/protocol.ts",
+        "src/core/ast-graph-extractor.test.ts",
+        "src/core/ast-languages.test.ts",
+        "src/core/ast-graph/typescript.test.ts",
+        "extension/.vscodeignore"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 16
+    },
+    {
+      "id": "multi-repo-context",
+      "query": "searching across multiple repository contexts at once",
+      "expectedPaths": [
+        "src/core/multi-context.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/services/ContextService.ts",
+        "extension/package.json",
+        "src/core/context.ts",
+        "extension/src/chat/webview/main.ts",
+        "src/core/multi-context.test.ts",
+        "src/core/multi-context.ts",
+        "extension/src/services/AgentService.ts",
+        "README.md",
+        "src/agent/agent.ts",
+        "src/core/diff.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.16666666666666666,
+        "ndcg": 0.3562071871080222,
+        "hit": true,
+        "firstHitRank": 6,
+        "contextRecall": 1
+      },
+      "elapsedMs": 5
+    },
+    {
+      "id": "eval-metrics",
+      "query": "computing recall mrr and ndcg for retrieval evaluation",
+      "expectedPaths": [
+        "src/eval/metrics.ts"
+      ],
+      "retrievedFiles": [
+        "src/trace/retrieval.ts",
+        "src/eval/metrics.ts",
+        "README.md",
+        "web/index.html",
+        "src/eval/runner.ts",
+        "src/eval/metrics.test.ts",
+        "CHANGELOG.md",
+        "src/trace/protocol.ts",
+        "src/trace/ledger.ts",
+        "src/cli/commands/search.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "eval-runner-compare",
+      "query": "running labeled eval cases and comparing a report against a saved baseline",
+      "expectedPaths": [
+        "src/eval/runner.ts"
+      ],
+      "retrievedFiles": [
+        "src/eval/runner.ts",
+        "README.md",
+        "src/cli/commands/eval-agent.ts",
+        "src/eval/agent-runner.ts",
+        "CHANGELOG.md",
+        "src/eval/runner.test.ts",
+        "src/core/retriever.ts",
+        "src/eval/metrics.ts",
+        "src/cli/commands/search.ts",
+        "src/cli/commands.test.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "agent-loop-flow",
+      "query": "how does the agent loop execute tool calls retry on transient errors and compact old history",
+      "expectedPaths": [
+        "src/agent/agent.ts",
+        "src/agent/utils.ts"
+      ],
+      "retrievedFiles": [
+        "src/agent/agent.ts",
+        "src/agent/types.ts",
+        "src/trace/session.ts",
+        "src/agent/utils.ts",
+        "src/cli/commands/agent.ts",
+        "extension/src/services/AgentService.ts",
+        "src/agent/utils.test.ts",
+        "src/agent/harness2.test.ts",
+        "src/agent/edit-tools.ts",
+        "src/agent/extra-tools.ts"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 0.8772153153380493,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 7
+    },
+    {
+      "id": "edit-apply-review-flow",
+      "query": "how do agent edits get applied to files and then reviewed or undone in vs code",
+      "expectedPaths": [
+        "extension/src/services/VSCodeEditApplier.ts",
+        "extension/src/services/EditReviewService.ts"
+      ],
+      "retrievedFiles": [
+        "extension/src/services/EditReviewService.ts",
+        "extension/src/chat/webview/messages.ts",
+        "extension/src/chat/ChatView.ts",
+        "src/cli/commands/agent.ts",
+        "extension/src/services/AgentService.ts",
+        "README.md",
+        "extension/src/chat/webview/main.ts",
+        "extension/CHANGELOG.md",
+        "extension/package.json",
+        "src/agent/presets.ts"
+      ],
+      "metrics": {
+        "recall": 0.5,
+        "reciprocalRank": 1,
+        "ndcg": 0.6131471927654584,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 0.5
+      },
+      "elapsedMs": 8
+    },
+    {
+      "id": "indexing-flow",
+      "query": "from collecting files through chunking embedding and storing during a workspace index",
+      "expectedPaths": [
+        "src/core/context.ts",
+        "src/core/file-filter.ts"
+      ],
+      "retrievedFiles": [
+        "src/cli/commands/indexing.ts",
+        "src/core/context.ts",
+        "extension/src/shared/indexing-form-html.ts",
+        "src/core/embedder.ts",
+        "src/cli/commands/team.ts",
+        "extension/src/services/ContextService.ts",
+        "src/cli/config.test.ts",
+        "extension/README.md",
+        "README.md",
+        "src/cli/config.ts"
+      ],
+      "metrics": {
+        "recall": 0.5,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.38685280723454163,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 0.5
+      },
+      "elapsedMs": 7
+    }
+  ],
+  "meanLatencyMs": 7.931818181818182,
+  "searchMode": "keyword-only"
+}

@@ -9,10 +9,12 @@ These sets score OCE against codebases it has never seen, in other languages.
 
 | Set | Codebase | License | Cases | Mode | recall@10 | MRR |
 |---|---|---|---|---|---|---|
-| `flask.eval.json` | [Flask](https://github.com/pallets/flask) `3.1.2` (Python) | BSD-3-Clause | 27 | keyword-only | 0.926 | 0.605 |
+| `flask.eval.json` | [Flask](https://github.com/pallets/flask) `3.1.2` (Python) | BSD-3-Clause | 27 | keyword-only | **0.926** | 0.605 |
+| `flask.eval.json` | 〃 | 〃 | 27 | hybrid (voyage-code-3) | 0.889 | 0.604 |
+| `flask.eval.json` | 〃 | 〃 | 27 | hybrid (openai-3-small / MiniLM) | 0.852 | 0.619 |
 
-Each set's committed baseline (`*.baseline.json`) records the search mode it
-was measured in — compare like with like (`oce eval` warns on a mode mismatch).
+Each baseline records the search mode it was measured in — compare like with
+like (`oce eval` warns on a mode mismatch).
 
 ## Running one
 
@@ -24,24 +26,37 @@ oce eval -w flask-3.1.2 -p none \
   --baseline eval/external/flask.baseline.json
 ```
 
-No embedding key needed: `-p none` runs the keyword-only (BM25) path, which is
-also what the committed Flask baseline measured. Run without `-p none` (with a
-real embedding provider) to measure hybrid mode — expect the definition-style
-queries to improve; see the known misses below.
+No embedding key needed for the keyword baseline (`-p none`). With a key,
+swap `-p voyage` (or `-p openai`) and compare against the matching hybrid
+baseline.
 
-## Known misses (keyword-only)
+## What the numbers say (and don't)
 
-Two of the 27 Flask cases miss in BM25, and both miss the same way: the
-defining module is textually sparse, so files that *import* the name outrank
-the file that *defines* it.
+**On this set, keyword-only currently beats every hybrid configuration.** The
+definition-shaped queries here ("the main Flask application class") are BM25's
+home turf: exact vocabulary, rank-1 hits. Fusion then *demotes* those hits
+when the semantic ranker prefers tests and docs — the flagship voyage-code-3
+hybrid drops recall to 0.889, and general-purpose embedders (openai
+text-embedding-3-small, local MiniLM) drop it further to 0.852. The inversion
+holds on this repo's own gold set too, in the other direction: hybrid 0.943
+vs keyword 0.886, because those queries paraphrase intent rather than name
+symbols.
 
-- `response-wrapper` — `class Response(ResponseBase)` sits in
-  `src/flask/wrappers.py`, but the word "Response" is denser in `app.py`.
-- `globals-proxy` — `src/flask/globals.py` is 51 lines of `LocalProxy`
-  declarations; every module importing `LocalProxy` outranks it.
+The actionable conclusion is not "turn embeddings off" — the agent's live
+queries are paraphrase-shaped — it is that **fusion tuning is measurable open
+work**: weight the vector leg by BM25 confidence, or gate fusion when lexical
+hits are strong. Both baselines above are the before/after harness for that
+work, which is exactly why they are committed even where they are
+unflattering.
 
-These are kept, not rephrased into hits: a retrieval change that fixes them is
-real progress, and they are exactly where semantic ranking should win.
+## Known misses
+
+Three of 27 cases miss in keyword-only, all the same way: the defining module
+is textually sparse, so files that *import* the name outrank the file that
+*defines* it (`wrappers.py`, `globals.py` — and `app.py`'s size dilutes it).
+Hybrid does not rescue them either — the semantic leg ranks tests and docs
+high on these queries too. Fixes for these belong in ranking (symbol-boost on
+definition chunks is the obvious lever), not in rephrasing the gold.
 
 ## Adding a set
 
