@@ -45,7 +45,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 ### 1. Install
 
 ```bash
-npm install -g open-context     # Node 22+
+npm install -g @dhaxor/open-context     # Node 22+
 ```
 
 ### 2. Pick a model — free options included
@@ -252,7 +252,7 @@ Options:
 ### Programmatic API
 
 ```typescript
-import { OpenContext, ContextAgent, defaultAgentTools } from "open-context";
+import { OpenContext, ContextAgent, defaultAgentTools } from "@dhaxor/open-context";
 
 // 1. Create and index
 const ctx = await OpenContext.create({
@@ -300,7 +300,7 @@ ctx.close();
 ### MCP Server Integration
 
 ```typescript
-import { runMCPServer } from "open-context";
+import { runMCPServer } from "@dhaxor/open-context";
 
 await runMCPServer({
   workspaceRoot: "./my-project",

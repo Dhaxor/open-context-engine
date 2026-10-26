@@ -1,6 +1,6 @@
 {
-  "name": "open-context",
-  "version": "0.4.3",
+  "name": "@dhaxor/open-context",
+  "version": "0.4.4",
   "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

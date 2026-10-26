@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.4 — npm package is `@dhaxor/open-context`
+
+npm's typosquat guard rejects the unscoped name `open-context` as too similar
+to the existing `opencontext`, and suggests the scoped form — which also can
+never be taken or impersonated. Install:
+
+```bash
+npm install -g @dhaxor/open-context
+```
+
+Same CLI (`oce`), same code. The 0.4.2/0.4.3 tags taught us the two things
+that had to be fixed for any name to ship: the publish gate and the token.
+
 ## 0.4.3 — republish of 0.4.2
 
 The 0.4.2 tag's `npm publish` failed before reaching the registry: the

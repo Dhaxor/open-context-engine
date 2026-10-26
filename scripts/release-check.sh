@@ -28,7 +28,7 @@ pass() { printf '\033[32m✓ %s\033[0m\n' "$1"; }
 cd "$ROOT"
 VERSION="$(node -p "require('./package.json').version")"
 
-step "pack open-context@$VERSION"
+step "pack @dhaxor/open-context@$VERSION"
 TARBALL="$WORK/$(npm pack --silent --pack-destination "$WORK" | tail -1)"
 [ -f "$TARBALL" ] || fail "npm pack produced no tarball"
 pass "$(basename "$TARBALL") ($(du -h "$TARBALL" | cut -f1))"
@@ -124,4 +124,4 @@ pass "healthy on :$PORT, token required, session reachable"
 kill "$TRACE_PID" 2>/dev/null || true
 TRACE_PID=""
 
-printf '\n\033[32mRelease check passed for open-context@%s\033[0m\n' "$VERSION"
+printf '\n\033[32mRelease check passed for @dhaxor/open-context@%s\033[0m\n' "$VERSION"
