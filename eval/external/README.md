@@ -12,6 +12,9 @@ These sets score OCE against codebases it has never seen, in other languages.
 | `flask.eval.json` | [Flask](https://github.com/pallets/flask) `3.1.2` (Python) | BSD-3-Clause | 27 | keyword-only | **0.926** | 0.605 |
 | `flask.eval.json` | 〃 | 〃 | 27 | hybrid (voyage-code-3) | 0.889 | 0.604 |
 | `flask.eval.json` | 〃 | 〃 | 27 | hybrid (openai-3-small / MiniLM) | 0.852 | 0.619 |
+| `flask.eval.json` | 〃 | 〃 | 27 | hybrid (MiniLM, **adaptive fusion**) | **0.963** | **0.757** |
+| `gin.eval.json` | [gin](https://github.com/gin-gonic/gin) `v1.10.0` (Go) | MIT | 26 | keyword-only | **0.846** | 0.634 |
+| `gin.eval.json` | 〃 | 〃 | 26 | hybrid (MiniLM, adaptive fusion) | **0.846** | **0.691** |
 
 Each baseline records the search mode it was measured in — compare like with
 like (`oce eval` warns on a mode mismatch).
@@ -24,11 +27,21 @@ curl -sL https://github.com/pallets/flask/archive/refs/tags/3.1.2.tar.gz | tar x
 oce eval -w flask-3.1.2 -p none \
   --cases eval/external/flask.eval.json \
   --baseline eval/external/flask.baseline.json
+
+# gin (Go) — pass the ABSOLUTE workspace path; see the known quirk below.
+curl -sL https://github.com/gin-gonic/gin/archive/refs/tags/v1.10.0.tar.gz | tar xz
+oce eval -w "$PWD/gin-1.10.0" -p none \
+  --cases eval/external/gin.eval.json \
+  --baseline eval/external/gin.baseline.json
 ```
 
 No embedding key needed for the keyword baseline (`-p none`). With a key,
 swap `-p voyage` (or `-p openai`) and compare against the matching hybrid
 baseline.
+
+Known quirk: a RELATIVE `-w` path can walk zero files on Windows
+(`workspaceRoot` is not resolved before the file walk) — use an absolute
+path. Tracked for a fix.
 
 ## What the numbers say (and don't)
 

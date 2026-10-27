@@ -1,0 +1,716 @@
+{
+  "generatedAt": "2026-10-27T22:43:21.839Z",
+  "k": 10,
+  "caseCount": 26,
+  "aggregate": {
+    "cases": 26,
+    "recallAtK": 0.8461538461538461,
+    "mrr": 0.6913919413919414,
+    "ndcgAtK": 0.7303070038919469,
+    "hitRate": 0.8461538461538461,
+    "contextRecall": 0.8076923076923077,
+    "contextHitRate": 0.8076923076923077
+  },
+  "results": [
+    {
+      "id": "engine-struct",
+      "query": "the main Engine struct definition",
+      "expectedPaths": [
+        "gin.go"
+      ],
+      "retrievedFiles": [
+        "gin.go",
+        "binding/validate_test.go",
+        "binding/binding_nomsgpack.go",
+        "binding/binding.go",
+        "docs/doc.md",
+        "context.go",
+        "routergroup.go",
+        ".github/ISSUE_TEMPLATE.md",
+        "gin_integration_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 39
+    },
+    {
+      "id": "engine-constructor-new",
+      "query": "how do I create a new Engine instance without middleware",
+      "expectedPaths": [
+        "gin.go"
+      ],
+      "retrievedFiles": [
+        "ginS/gins.go",
+        "render/html.go",
+        "gin_test.go",
+        "test_helpers.go",
+        "context_test.go",
+        "binding/validate_test.go",
+        "middleware_test.go",
+        "debug.go",
+        "debug_test.go",
+        "docs/doc.md"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 35
+    },
+    {
+      "id": "default-middleware",
+      "query": "which middleware does Default attach to the engine",
+      "expectedPaths": [
+        "gin.go"
+      ],
+      "retrievedFiles": [
+        "gin.go",
+        "ginS/gins.go",
+        "binding/default_validator.go",
+        "context_test.go",
+        "binding/validate_test.go",
+        "context.go",
+        "debug_test.go",
+        "debug.go",
+        "middleware_test.go",
+        "docs/doc.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 37
+    },
+    {
+      "id": "context-type",
+      "query": "the Context struct that carries request-scoped values",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "context_test.go",
+        "gin.go",
+        "binding/validate_test.go",
+        "docs/doc.md",
+        "tree_test.go",
+        "logger.go",
+        "context_appengine.go",
+        "tree.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 34
+    },
+    {
+      "id": "context-next",
+      "query": "what does Context Next do for middleware chaining",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "middleware_test.go",
+        "context_test.go",
+        "routes_test.go",
+        "utils_test.go",
+        "benchmarks_test.go",
+        "auth.go",
+        "docs/doc.md",
+        "ginS/gins.go",
+        "CHANGELOG.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 28
+    },
+    {
+      "id": "context-abort",
+      "query": "aborting a request chain with a status code and JSON body",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "context_test.go",
+        "middleware_test.go",
+        "logger.go",
+        "binding/binding_test.go",
+        "docs/doc.md",
+        "benchmarks_test.go",
+        "binding/json.go",
+        "response_writer_test.go",
+        "response_writer.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 27
+    },
+    {
+      "id": "context-param",
+      "query": "reading a named route parameter like /user/:id",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "routes_test.go",
+        "tree_test.go",
+        "gin_test.go",
+        "gin.go",
+        "ginS/gins.go",
+        "docs/doc.md",
+        "benchmarks_test.go",
+        "routergroup.go",
+        "context_test.go"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 24
+    },
+    {
+      "id": "context-query",
+      "query": "getting a URL query string value from the request",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "context_test.go",
+        "binding/query.go",
+        "gin.go",
+        "gin_integration_test.go",
+        "tree_test.go",
+        "tree.go",
+        "docs/doc.md",
+        "binding/binding_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 32
+    },
+    {
+      "id": "context-postform",
+      "query": "reading a POST form field value",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "binding/binding_test.go",
+        "context.go",
+        "binding/form_mapping.go",
+        "binding/form.go",
+        "context_test.go",
+        "binding/form_mapping_test.go",
+        "binding/multipart_form_mapping.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 25
+    },
+    {
+      "id": "context-json-response",
+      "query": "rendering a JSON response from a handler",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "render/json.go",
+        "context.go",
+        "render/render_test.go",
+        "response_writer_test.go",
+        "context_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 42
+    },
+    {
+      "id": "h-map-type",
+      "query": "the shorthand map[string]any type used for JSON payloads",
+      "expectedPaths": [
+        "utils.go"
+      ],
+      "retrievedFiles": [
+        "errors.go",
+        "render/json.go",
+        "binding/binding_test.go",
+        "binding/json_test.go",
+        "binding/form_mapping.go",
+        "render/render_test.go",
+        "utils.go",
+        "context.go",
+        "docs/doc.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.14285714285714285,
+        "ndcg": 0.3333333333333333,
+        "hit": true,
+        "firstHitRank": 7,
+        "contextRecall": 0
+      },
+      "elapsedMs": 33
+    },
+    {
+      "id": "routergroup-struct",
+      "query": "the RouterGroup definition with its handlers and basePath",
+      "expectedPaths": [
+        "routergroup.go"
+      ],
+      "retrievedFiles": [
+        "routergroup.go",
+        "routergroup_test.go",
+        "ginS/gins.go",
+        "gin.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 30
+    },
+    {
+      "id": "mode-setting",
+      "query": "setting the framework mode to release or debug",
+      "expectedPaths": [
+        "mode.go"
+      ],
+      "retrievedFiles": [
+        "debug.go",
+        "debug_test.go",
+        "mode.go",
+        "mode_test.go",
+        "gin_test.go",
+        "docs/doc.md",
+        "logger.go",
+        "CHANGELOG.md",
+        "context_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
+        "hit": true,
+        "firstHitRank": 3,
+        "contextRecall": 1
+      },
+      "elapsedMs": 31
+    },
+    {
+      "id": "mode-reading",
+      "query": "reading back the current gin mode at runtime",
+      "expectedPaths": [
+        "mode.go"
+      ],
+      "retrievedFiles": [
+        "mode.go",
+        "mode_test.go",
+        "debug_test.go",
+        "version.go",
+        "debug.go",
+        "docs/doc.md",
+        "gin.go",
+        "ginS/gins.go",
+        "gin_integration_test.go",
+        "logger.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 36
+    },
+    {
+      "id": "response-writer-interface",
+      "query": "the ResponseWriter interface that wraps http.ResponseWriter",
+      "expectedPaths": [
+        "response_writer.go"
+      ],
+      "retrievedFiles": [
+        "response_writer.go",
+        "response_writer_test.go",
+        "render/xml.go",
+        "render/render.go",
+        "gin.go",
+        "utils_test.go",
+        "render/msgpack.go",
+        "context.go",
+        "utils.go",
+        "context_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 29
+    },
+    {
+      "id": "error-type",
+      "query": "the ErrorType enumeration for grouped errors",
+      "expectedPaths": [
+        "errors.go"
+      ],
+      "retrievedFiles": [
+        "errors.go",
+        "logger.go",
+        "routergroup.go",
+        "ginS/gins.go",
+        ".goreleaser.yaml",
+        "context.go",
+        "testdata/protoexample/test.pb.go",
+        "docs/doc.md",
+        "binding/binding_nomsgpack.go",
+        "binding/binding.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 39
+    },
+    {
+      "id": "logger-config",
+      "query": "configuring the request logging middleware format",
+      "expectedPaths": [
+        "logger.go"
+      ],
+      "retrievedFiles": [
+        "logger.go",
+        "middleware_test.go",
+        "context.go",
+        "docs/doc.md",
+        "context_test.go",
+        "benchmarks_test.go",
+        "binding/binding_test.go",
+        "logger_test.go",
+        "binding/multipart_form_mapping.go",
+        "CHANGELOG.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 50
+    },
+    {
+      "id": "recovery-middleware",
+      "query": "the panic recovery middleware handler",
+      "expectedPaths": [
+        "recovery.go"
+      ],
+      "retrievedFiles": [
+        "recovery_test.go",
+        "recovery.go",
+        "middleware_test.go",
+        "benchmarks_test.go",
+        "routergroup_test.go",
+        "docs/doc.md",
+        "utils_test.go",
+        "context.go",
+        "gin_test.go",
+        "routergroup.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 42
+    },
+    {
+      "id": "auth-basic",
+      "query": "basic auth middleware for credentials",
+      "expectedPaths": [
+        "auth.go"
+      ],
+      "retrievedFiles": [
+        "auth.go",
+        "auth_test.go",
+        "middleware_test.go",
+        "routes_test.go",
+        "docs/doc.md",
+        "routergroup.go",
+        "CHANGELOG.md"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 36
+    },
+    {
+      "id": "test-context-helper",
+      "query": "creating a test Context with a recorder for unit tests",
+      "expectedPaths": [
+        "context_test.go"
+      ],
+      "retrievedFiles": [
+        "context_test.go",
+        "test_helpers.go",
+        "debug_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 33
+    },
+    {
+      "id": "deprecated-handler",
+      "query": "old handler signatures kept for backwards compatibility",
+      "expectedPaths": [
+        "deprecated.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "gin.go",
+        "middleware_test.go",
+        "context_test.go",
+        "routergroup.go",
+        "gin_test.go",
+        "tree_test.go",
+        "recovery.go",
+        "ginS/gins.go",
+        "debug.go"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 28
+    },
+    {
+      "id": "debug-warnings",
+      "query": "the warnings printed when HTML templates are set",
+      "expectedPaths": [
+        "debug.go"
+      ],
+      "retrievedFiles": [
+        "render/html.go",
+        "debug.go",
+        "debug_test.go",
+        "context.go",
+        "gin.go",
+        "context_test.go",
+        "ginS/gins.go",
+        "gin_test.go",
+        "benchmarks_test.go",
+        "render/render_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 27
+    },
+    {
+      "id": "context-copy",
+      "query": "copying the Context so a handler can outlive the request",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "context.go",
+        "context_test.go",
+        "gin_integration_test.go",
+        "routergroup_test.go",
+        "docs/doc.md",
+        "routergroup.go",
+        "gin.go",
+        "gin_test.go",
+        "tree_test.go",
+        "recovery_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 35
+    },
+    {
+      "id": "handler-names",
+      "query": "the full chain of registered handler names for debugging",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "gin.go",
+        "context.go",
+        "context_test.go",
+        "middleware_test.go",
+        "debug.go",
+        "debug_test.go",
+        "routergroup.go",
+        "gin_test.go",
+        "binding/form_mapping_benchmark_test.go",
+        "routes_test.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
+      },
+      "elapsedMs": 30
+    },
+    {
+      "id": "is-aborted",
+      "query": "checking whether the request chain was aborted",
+      "expectedPaths": [
+        "context.go"
+      ],
+      "retrievedFiles": [
+        "tree_test.go",
+        "middleware_test.go",
+        "routergroup_test.go",
+        "gin.go",
+        "benchmarks_test.go",
+        "context_test.go",
+        "recovery_test.go",
+        "gin_integration_test.go",
+        "logger_test.go",
+        "response_writer.go"
+      ],
+      "metrics": {
+        "recall": 0,
+        "reciprocalRank": 0,
+        "ndcg": 0,
+        "hit": false,
+        "firstHitRank": null,
+        "contextRecall": 0
+      },
+      "elapsedMs": 28
+    },
+    {
+      "id": "engine-options",
+      "query": "the OptionFunc pattern for configuring an Engine at construction",
+      "expectedPaths": [
+        "gin.go"
+      ],
+      "retrievedFiles": [
+        "gin.go",
+        "ginS/gins.go",
+        "binding/validate_test.go",
+        "binding/default_validator.go",
+        "binding/binding_nomsgpack.go",
+        "CODE_OF_CONDUCT.md",
+        "debug_test.go",
+        "context.go",
+        "context_test.go",
+        "debug.go"
+      ],
+      "metrics": {
+        "recall": 1,
+        "reciprocalRank": 1,
+        "ndcg": 1,
+        "hit": true,
+        "firstHitRank": 1,
+        "contextRecall": 1
+      },
+      "elapsedMs": 33
+    }
+  ],
+  "meanLatencyMs": 33.19230769230769,
+  "searchMode": "hybrid"
+}
