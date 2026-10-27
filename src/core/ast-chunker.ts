@@ -108,10 +108,25 @@ export class AstChunker {
       if (covered < file.contents.length * 0.35) return this.opts.fallback.chunkFile(file);
       const lines = file.contents.split("\n");
       const out: Chunk[] = [];
+      // Members of one-line classes, getters on a shared line, and similar
+      // dense layouts can yield multiple chunks with the same
+      // `${path}:${start}-${end}` + node text — same id. Suffix repeats so
+      // the store's UNIQUE(chunks.id) never rejects a file.
+      const idSeen = new Set<string>();
       for (const c of materialized) {
         const body = lines.slice(c.startLine - 1, c.endLine).join("\n");
         for (const piece of this.splitOversize(body, c.startLine, c.endLine)) {
-          out.push(this.mk(file, piece.body, piece.start, piece.end, c.name, c.kind, c.parent, lang));
+          const chunk = this.mk(file, piece.body, piece.start, piece.end, c.name, c.kind, c.parent, lang);
+          if (idSeen.has(chunk.id)) {
+            let n = 1;
+            let id = computeBlobName(`${file.path}:${piece.start}-${piece.end}#${n}`, piece.body);
+            while (idSeen.has(id)) id = computeBlobName(`${file.path}:${piece.start}-${piece.end}#${++n}`, piece.body);
+            idSeen.add(id);
+            out.push({ ...chunk, id });
+          } else {
+            idSeen.add(chunk.id);
+            out.push(chunk);
+          }
         }
       }
       return out;
@@ -135,9 +150,13 @@ export class AstChunker {
         // signature lines only, so it coexists with the member chunks without
         // duplicating bodies. This is the declaration home that
         // getChunksBySymbol / find-symbol-definition / definition-shaped
-        // ranking all need.
+        // ranking all need. Skipped for one-line classes: there the header IS
+        // the whole node, and its members share those same lines.
         if (spec.classlike?.has(child.type) && this.containerName(child, spec)) {
-          out.push({ node: child, kind: "class", parent, headerLines: this.headerLines(child) });
+          const hl = this.headerLines(child);
+          if (hl.end < child.endPosition.row + 1) {
+            out.push({ node: child, kind: "class", parent, headerLines: hl });
+          }
         }
         this.collect(child, spec, scoped, out);
       } else {

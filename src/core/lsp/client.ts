@@ -9,6 +9,8 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createMessageReader, encodeMessage, type JsonRpcMessage } from "./protocol";
 import { pathToFileURL } from "url";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface LspLocation { uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }
 
@@ -34,6 +36,9 @@ export class LspClient {
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
   private reader: ReturnType<typeof createMessageReader>;
   private disposed = false;
+  /** Files announced via textDocument/didOpen — servers only answer queries
+   *  about files they know. */
+  private opened = new Set<string>();
 
   private constructor(private proc: ChildProcess, private opts: LspStartOptions) {
     this.reader = createMessageReader(msg => this.onMessage(msg));
@@ -114,7 +119,25 @@ export class LspClient {
     this.proc.stdin?.write(encodeMessage({ jsonrpc: "2.0", method, params }));
   }
 
+  /** Announce a file to the server (textDocument/didOpen) if not already
+   *  opened. Language servers index opened files; queries about files the
+   *  server has never seen return empty. Best-effort: unreadable file → skip
+   *  (the query will come back empty and the caller falls back). */
+  private ensureOpened(pathAbs: string): void {
+    const uri = pathToFileURL(pathAbs).href;
+    if (this.opened.has(uri)) return;
+    try {
+      const text = fs.readFileSync(pathAbs, "utf8");
+      const languageId = LANGUAGE_BY_EXT[path.extname(pathAbs).toLowerCase()] ?? "plaintext";
+      this.notify("textDocument/didOpen", {
+        textDocument: { uri, languageId, version: 1, text },
+      });
+      this.opened.add(uri);
+    } catch { /* unreadable — let the query answer empty */ }
+  }
+
   async definition(pathAbs: string, line: number, character: number): Promise<LspLocation[]> {
+    this.ensureOpened(pathAbs);
     const result = await this.request("textDocument/definition", {
       textDocument: { uri: pathToFileURL(pathAbs).href },
       position: { line, character },
@@ -123,6 +146,7 @@ export class LspClient {
   }
 
   async references(pathAbs: string, line: number, character: number, includeDeclaration = false): Promise<LspLocation[]> {
+    this.ensureOpened(pathAbs);
     const result = await this.request("textDocument/references", {
       textDocument: { uri: pathToFileURL(pathAbs).href },
       position: { line, character },
@@ -157,3 +181,10 @@ function asLocations(result: unknown): LspLocation[] {
 function timeout(ms: number, what: string, code: "timeout"): Promise<never> {
   return new Promise((_, reject) => setTimeout(() => reject(new LspError(`${what} timed out after ${ms}ms`, code)), ms));
 }
+
+const LANGUAGE_BY_EXT: Record<string, string> = {
+  ".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript",
+  ".jsx": "javascriptreact", ".mjs": "javascript", ".cjs": "javascript",
+  ".py": "python", ".go": "go", ".rs": "rust", ".rb": "ruby",
+  ".java": "java", ".cs": "csharp", ".php": "php", ".kt": "kotlin", ".swift": "swift",
+};
