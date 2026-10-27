@@ -147,12 +147,14 @@ afterEach(async () => {
   await disposeAllLspClients();
   store.close();
   // The killed child may release its CWD handle a beat after exit; Windows
-  // refuses to delete a directory a process still has open. Retry briefly.
+  // refuses to delete a directory a process still has open. stdin.end() in
+  // dispose() makes well-behaved servers exit immediately; retry covers the
+  // rest (CI runners can be slow about reaping).
   for (let attempt = 0; ; attempt++) {
     try { fs.rmSync(workspace, { recursive: true, force: true }); break; }
     catch (e) {
-      if (attempt >= 8) throw e;
-      await new Promise(r => setTimeout(r, 150));
+      if (attempt >= 20) throw e;
+      await new Promise(r => setTimeout(r, 250));
     }
   }
 });

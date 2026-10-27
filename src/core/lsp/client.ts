@@ -136,8 +136,10 @@ export class LspClient {
     this.disposed = true;
     try { await this.request("shutdown", undefined, 2_000); } catch { /* server may already be gone */ }
     try { this.notify("exit", {}); } catch { /* ditto */ }
-    // Kill promptly: on Windows a live child holds its CWD, which blocks
-    // deleting the workspace it was started in. Graceful-then-hard.
+    // Close the pipe: well-behaved servers exit when stdin closes, which also
+    // releases their CWD handle (on Windows a live child blocks deleting the
+    // directory it was started in). Then enforce.
+    try { this.proc.stdin?.end(); } catch { /* gone */ }
     const proc = this.proc;
     const kill = () => { try { if (!proc.killed) proc.kill(); } catch { /* gone */ } };
     setTimeout(kill, 250).unref?.();

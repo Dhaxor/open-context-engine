@@ -101,16 +101,18 @@ jobs:
         with:
           node-version: "22.22.0"
       - run: npm ci
+      # The secrets context is not readable in step-level `if:` — the empty-key
+      # check lives in the script, which exits 0 and says what to configure.
       - name: Run agent tasks
-        if: ${{ secrets.OCE_NIGHTLY_LLM_KEY != '' }}
         env:
           OCE_NIGHTLY_LLM_KEY: ${{ secrets.OCE_NIGHTLY_LLM_KEY }}
           OCE_NIGHTLY_LLM_PROVIDER: ${{ vars.OCE_NIGHTLY_LLM_PROVIDER }}
         run: |
+          if [ -z "$OCE_NIGHTLY_LLM_KEY" ]; then
+            echo "Skipped: set the OCE_NIGHTLY_LLM_KEY secret (and OCE_NIGHTLY_LLM_PROVIDER variable) to run the agent eval nightly."
+            exit 0
+          fi
           node dist/cli/index.js eval-agent \
             --tasks eval/agent/tasks.json \
             -p "${OCE_NIGHTLY_LLM_PROVIDER:-google}" \
             2>&1 | tee "$RUNNER_TEMP/agent-eval.txt"
-      - name: Skipped — no key
-        if: ${{ secrets.OCE_NIGHTLY_LLM_KEY == '' }}
-        run: echo "Set the OCE_NIGHTLY_LLM_KEY secret (and OCE_NIGHTLY_LLM_PROVIDER variable) to run the agent eval nightly."
