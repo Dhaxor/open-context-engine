@@ -54,7 +54,7 @@ export function registerSearchCommands(program: import("commander").Command, io:
       mr.close();
     });
 
-  program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)")
+  withStoreOptions(program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)"))
     .requiredOption("--cases <file>", "JSON file of eval cases: [{ id, query, expectedPaths: [..] }]")
     .option("-w, --workspace <path>", "Workspace", process.cwd())
     .option("-p, --provider <provider>", "Embedding provider")
@@ -65,6 +65,7 @@ export function registerSearchCommands(program: import("commander").Command, io:
     .option("--no-expand", "Disable symbol/graph expansion — measures what expansion contributes")
     .option("--no-packed", "Skip the packed-context check (one extra search per case)")
     .option("--no-index", "Skip the incremental index before evaluating (use the index as-is)")
+    .option("--no-adaptive-fusion", "A/B: equal-weight RRF — disables the per-query-shape fusion weights")
     .option("--out <file>", "Write the full report JSON to this file")
     .option("--baseline <file>", "Compare against a previously saved report and print deltas")
     .option("--json", "Print the report as JSON to stdout (suppresses the table)")
@@ -75,7 +76,9 @@ export function registerSearchCommands(program: import("commander").Command, io:
       const cases = parseEvalCases(JSON.parse(await fs.promises.readFile(opts.cases, "utf8")));
       const k = Math.max(1, Number(opts.topK));
       const retrieveK = opts.retrieveK ? Math.max(k, Number(opts.retrieveK)) : k * 3;
-      const ctx = await OpenContext.create(resolveConfig(opts, io));
+      const config = resolveConfig(opts, io);
+      if (opts.adaptiveFusion === false) config.search = { ...config.search, adaptiveFusion: false };
+      const ctx = await OpenContext.create(config);
       try {
         if (opts.index !== false) {
           diag.info("Refreshing index...");

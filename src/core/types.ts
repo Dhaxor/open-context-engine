@@ -72,6 +72,9 @@ export interface SearchConfig {
   candidateK?: number;
   bm25Weight?: number;
   vectorWeight?: number;
+  /** Tilt the configured weights per query shape (definition → BM25, intent →
+   *  semantic). Default true; false restores plain equal-weight RRF. */
+  adaptiveFusion?: boolean;
   rerank?: boolean;
   expandSymbols?: boolean;
   recencyWeight?: number;
@@ -126,6 +129,9 @@ export const EMBEDDING_MODELS: Record<string, { provider: string; model: string;
   "nomic-embed-text": { provider: "ollama", model: "nomic-embed-text", dimension: 768, maxTokens: 8192, batchSize: 1 },
   // In-process ONNX models (zero API key, zero server — see LocalEmbeddingProvider).
   "all-MiniLM-L6-v2": { provider: "local", model: "Xenova/all-MiniLM-L6-v2", dimension: 384, maxTokens: 512, batchSize: 16 },
+  // Better on code (8k-token window), but gated on Hugging Face: downloads 401
+  // until the user is granted access (huggingface.co/Xenova/jina-embeddings-v2-base-code).
+  // Opt-in for that reason — the default must work on a fresh machine.
   "jina-embeddings-v2-base-code": { provider: "local", model: "Xenova/jina-embeddings-v2-base-code", dimension: 768, maxTokens: 8192, batchSize: 8 },
 };
 /** Default model per provider when the CLI/extension is given only a provider name. */
@@ -133,6 +139,6 @@ export const DEFAULT_MODEL_FOR_PROVIDER: Record<EmbeddingConfig["provider"], str
   voyage: "voyage-code-3",
   openai: "text-embedding-3-small",
   ollama: "nomic-embed-text",
-  local: "jina-embeddings-v2-base-code",
+  local: "all-MiniLM-L6-v2",
   none: "none",
 };

@@ -6,6 +6,7 @@ import { Reranker } from "./reranker";
 import { packSearchResults, PackingDecision } from "./context-packer";
 import { RecencyScores, applyRecencyBoost } from "./git-recency";
 import { expandQuery } from "./query-expander";
+import { fusionProfile } from "./query-profile";
 import { QueryCache } from "./query-cache";
 import { GraphExpander } from "./graph-expander";
 import { createLogger, errText } from "./log";
@@ -153,9 +154,13 @@ export class HybridRetriever {
   async retrieveDebug(query: string, opts: RetrieveOptions = {}): Promise<RetrievalDebugReport> {
     const { ranked, trimmed, expansion: expanded } = await this.runPipeline(query, opts);
     const packed = packSearchResults(expanded.results, { maxTotalChars: this.search.maxOutputLength });
+    const fusion = this.search.adaptiveFusion === false ? null : fusionProfile(query);
     return {
       query,
-      signals: [...querySignals(query)],
+      signals: [
+        ...querySignals(query),
+        ...(fusion ? [`fusion: ${fusion.shape}-shaped (bm25×${fusion.bm25}, vector×${fusion.vector})`] : ["fusion: balanced (adaptive off)"]),
+      ],
       editorContext: {
         activePath: opts.activePath,
         openPaths: opts.openPaths ?? [],
@@ -175,6 +180,11 @@ export class HybridRetriever {
   private async rank(query: string, opts: RetrieveOptions = {}): Promise<RankedStages> {
     const candidateK = opts.topK != null ? Math.max(opts.topK * 4, 40) : (this.search.candidateK ?? 60);
     const finalK = opts.topK ?? this.search.topK;
+
+    // Opt-out for callers that want the raw configured weights (A/B harness).
+    const fusion = this.search.adaptiveFusion === false
+      ? { shape: "intent" as const, vector: 1, bm25: 1, signals: [] }
+      : fusionProfile(query);
 
     const { original, expanded } = expandQuery(query);
     const vectorQuery = expanded;
@@ -200,8 +210,13 @@ export class HybridRetriever {
 
     let fused = applyEditorContextBoost(applySymbolAwareBoost(reciprocalRankFusion(
       [
-        { results: vectorHits, weight: this.search.vectorWeight ?? 1.0 },
-        { results: bm25Hits, weight: this.search.bm25Weight ?? 1.0 },
+        // Adaptive fusion: the query's shape tilts the configured weights.
+        // Definition-shaped queries lean BM25 (exact-vocabulary gold sits at
+        // BM25 rank 1 and equal-weight RRF demotes it below vector-preferred
+        // doc hits — the measured Flask inversion); intent-shaped queries
+        // lean semantic. See query-profile.ts for the profile math.
+        { results: vectorHits, weight: (this.search.vectorWeight ?? 1.0) * fusion.vector },
+        { results: bm25Hits, weight: (this.search.bm25Weight ?? 1.0) * fusion.bm25 },
       ],
       this.search.candidateK ?? 60,
     ), query), opts);
