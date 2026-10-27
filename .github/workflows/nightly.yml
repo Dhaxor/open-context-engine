@@ -1,0 +1,116 @@
+# Nightly quality run: the checks that are too slow (or too flaky-prone) for
+# every push, run on a schedule so drift is caught the day it happens, not the
+# day it ships.
+#
+#   - Full test matrix (mirrors test.yml — nightly re-confirms what CI already
+#     gates, catching runner-side rot like the onnxruntime postinstall flake).
+#   - Retrieval eval against both committed gold sets: deltas vs the committed
+#     baselines are reported as step summaries. A fail is soft (report-only):
+#     small index/runner nondeterminism can move numbers a hair; a HUMAN reads
+#     the summary and decides. Hard regression > silent drift, but automation
+#     shouldn't page anyone for ±0.01.
+#   - Agent eval (`oce eval-agent`): skipped unless a model key is configured
+#     as a secret (OCE_NIGHTLY_LLM_PROVIDER / OCE_NIGHTLY_LLM_KEY) — the tasks
+#     need a real coding model.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # daily 03:17 UTC — off the top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Full test matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            node: "24"
+          - os: ubuntu-22.04
+            node: "22.22.0"
+          - os: macos-latest
+            node: "22.22.0"
+          - os: windows-latest
+            node: "22.22.0"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run typecheck:core
+      - run: npx vitest run
+
+  retrieval-eval:
+    name: Retrieval eval (both gold sets)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+      - run: npm ci
+      - name: Repo gold set — keyword-only
+        run: |
+          node dist/cli/index.js eval -p none --store-path "$RUNNER_TEMP/repo-kw" \
+            --cases eval/oce.eval.json \
+            --baseline eval/baseline.keyword.json 2>&1 | tee "$RUNNER_TEMP/repo-kw.txt"
+      - name: Repo gold set — hybrid (local MiniLM, adaptive fusion)
+        run: |
+          node dist/cli/index.js eval -p local -m all-MiniLM-L6-v2 --store-path "$RUNNER_TEMP/repo-hybrid" \
+            --cases eval/oce.eval.json \
+            --baseline eval/minilm.baseline.json 2>&1 | tee "$RUNNER_TEMP/repo-hybrid.txt"
+      - name: Flask gold set — keyword-only
+        run: |
+          curl -sL https://github.com/pallets/flask/archive/refs/tags/3.1.2.tar.gz | tar xz
+          node dist/cli/index.js eval -w flask-3.1.2 -p none --store-path "$RUNNER_TEMP/flask-kw" \
+            --cases eval/external/flask.eval.json \
+            --baseline eval/external/flask.baseline.json 2>&1 | tee "$RUNNER_TEMP/flask-kw.txt"
+      - name: Flask gold set — hybrid (local MiniLM, adaptive fusion)
+        run: |
+          node dist/cli/index.js eval -w flask-3.1.2 -p local -m all-MiniLM-L6-v2 --store-path "$RUNNER_TEMP/flask-hybrid" \
+            --cases eval/external/flask.eval.json \
+            --baseline eval/external/flask.minilm.baseline.json 2>&1 | tee "$RUNNER_TEMP/flask-hybrid.txt"
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## Nightly retrieval eval"
+            for f in "$RUNNER_TEMP"/repo-kw.txt "$RUNNER_TEMP"/repo-hybrid.txt "$RUNNER_TEMP"/flask-kw.txt "$RUNNER_TEMP"/flask-hybrid.txt; do
+              [ -f "$f" ] && { echo '```'; cat "$f"; echo '```'; }
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  agent-eval:
+    name: Agent eval (needs a model key)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+      - run: npm ci
+      - name: Run agent tasks
+        if: ${{ secrets.OCE_NIGHTLY_LLM_KEY != '' }}
+        env:
+          OCE_NIGHTLY_LLM_KEY: ${{ secrets.OCE_NIGHTLY_LLM_KEY }}
+          OCE_NIGHTLY_LLM_PROVIDER: ${{ vars.OCE_NIGHTLY_LLM_PROVIDER }}
+        run: |
+          node dist/cli/index.js eval-agent \
+            --tasks eval/agent/tasks.json \
+            -p "${OCE_NIGHTLY_LLM_PROVIDER:-google}" \
+            2>&1 | tee "$RUNNER_TEMP/agent-eval.txt"
+      - name: Skipped — no key
+        if: ${{ secrets.OCE_NIGHTLY_LLM_KEY == '' }}
+        run: echo "Set the OCE_NIGHTLY_LLM_KEY secret (and OCE_NIGHTLY_LLM_PROVIDER variable) to run the agent eval nightly."

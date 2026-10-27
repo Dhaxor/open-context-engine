@@ -7,7 +7,9 @@
       "calc.test.js": "const { addPercentages } = require('./calc.js');\n\nif (addPercentages([10, 20, 30]) !== 60) { throw new Error('three items'); }\nif (addPercentages([5]) !== 5) { throw new Error('single item'); }\nif (addPercentages([]) !== 0) { throw new Error('empty'); }\nconsole.log('calc tests ok');\n",
       "_verify.js": "const { addPercentages } = require('./calc.js');\nconst assert = require('assert');\nassert.strictEqual(addPercentages([10, 20, 30]), 60);\nassert.strictEqual(addPercentages([5]), 5);\nassert.strictEqual(addPercentages([1, 2, 3, 4]), 10);\nassert.strictEqual(addPercentages([]), 0);\nconsole.log('verify ok');\n"
     },
-    "verify": { "command": "node _verify.js" }
+    "verify": {
+      "command": "node _verify.js"
+    }
   },
   {
     "id": "create-module",
@@ -16,7 +18,9 @@
       "README.md": "# Stats\n\nThis workspace needs a stats.js module. See the instruction.\n",
       "_verify.js": "const { mean, median } = require('./stats.js');\nconst assert = require('assert');\nassert.strictEqual(mean([1, 2, 3, 4]), 2.5);\nassert.strictEqual(mean([]), 0);\nassert.strictEqual(median([1, 3, 2]), 2);\nassert.strictEqual(median([1, 2, 3, 4]), 2.5);\nassert.strictEqual(median([]), 0);\nassert.strictEqual(median([7]), 7);\nconsole.log('verify ok');\n"
     },
-    "verify": { "command": "node _verify.js" }
+    "verify": {
+      "command": "node _verify.js"
+    }
   },
   {
     "id": "rename-symbol",
@@ -27,7 +31,9 @@
       "session.js": "const { getUserData } = require('./user-store.js');\n\nfunction startSession(id) {\n  const user = getUserData(id);\n  return 'session-for-' + user.name;\n}\n\nmodule.exports = { startSession };\n",
       "_verify.js": "const fs = require('fs');\nconst assert = require('assert');\nfor (const f of ['user-store.js', 'profile.js', 'session.js']) {\n  const src = fs.readFileSync(f, 'utf8');\n  assert.ok(!src.includes('getUserData'), f + ' still references getUserData');\n}\nconst { renderProfile } = require('./profile.js');\nconst { startSession } = require('./session.js');\nassert.strictEqual(renderProfile(7), '<h1>user-7</h1>');\nassert.strictEqual(startSession(2), 'session-for-user-2');\nconsole.log('verify ok');\n"
     },
-    "verify": { "command": "node _verify.js" }
+    "verify": {
+      "command": "node _verify.js"
+    }
   },
   {
     "id": "delete-dead-code",
@@ -38,7 +44,9 @@
       "profile.js": "function renderProfile(id) {\n  return 'profile-' + id;\n}\n\nmodule.exports = { renderProfile };\n",
       "_verify.js": "const fs = require('fs');\nconst assert = require('assert');\nassert.ok(!fs.existsSync('legacy-billing.js'), 'legacy-billing.js still exists');\nconst indexSrc = fs.readFileSync('index.js', 'utf8');\nassert.ok(!indexSrc.includes('legacy'), 'index.js still references legacy');\nconst { main } = require('./index.js');\nassert.strictEqual(main(3), 'profile-3');\nconsole.log('verify ok');\n"
     },
-    "verify": { "command": "node _verify.js" }
+    "verify": {
+      "command": "node _verify.js"
+    }
   },
   {
     "id": "add-endpoint",
@@ -47,6 +55,46 @@
       "router.js": "const routes = {\n  'GET /': () => ({ body: 'home' }),\n  'POST /echo': (payload) => ({ body: payload }),\n};\n\nfunction dispatch(method, path, payload) {\n  const handler = routes[method + ' ' + path];\n  if (!handler) { throw new Error('no route: ' + method + ' ' + path); }\n  return handler(payload);\n}\n\nmodule.exports = { dispatch };\n",
       "_verify.js": "const { dispatch } = require('./router.js');\nconst assert = require('assert');\nassert.deepStrictEqual(dispatch('GET', '/health'), { status: 'ok' });\nassert.strictEqual(dispatch('GET', '/').body, 'home');\nassert.strictEqual(dispatch('POST', '/echo', 'x').body, 'x');\nconsole.log('verify ok');\n"
     },
-    "verify": { "command": "node _verify.js" }
+    "verify": {
+      "command": "node _verify.js"
+    }
+  },
+  {
+    "id": "test-driven-feature",
+    "instruction": "Implement feature: a rate limiter. Create rate-limiter.js exporting a CommonJS class RateLimiter whose constructor takes (maxEvents, windowMs) and whose method allow(key) returns true the first maxEvents times a given key is seen within windowMs milliseconds, then false until the window expires. Time must come from an injectable clock: the constructor accepts an optional third argument `now` (a function returning milliseconds) defaulting to Date.now. Do not modify rate-limiter.test.js or _verify.js. Make the provided test file pass.",
+    "files": {
+      "rate-limiter.test.js": "const { RateLimiter } = require('./rate-limiter.js');\nconst assert = require('assert');\n\nlet t = 0;\nconst rl = new RateLimiter(2, 1000, () => t);\nassert.strictEqual(rl.allow('a'), true);\nassert.strictEqual(rl.allow('a'), true);\nassert.strictEqual(rl.allow('a'), false, 'third event in window must be denied');\nt = 1001;\nassert.strictEqual(rl.allow('a'), true, 'window expiry must reset the count');\nassert.strictEqual(rl.allow('b'), true, 'keys are independent');\nconsole.log('rate-limiter tests ok');\n",
+      "README.md": "# Rate limiter feature\n\nSee the instruction. The test file in this workspace is the spec.\n",
+      "_verify.js": "const { RateLimiter } = require('./rate-limiter.js');\nconst assert = require('assert');\nlet t = 0;\nconst rl = new RateLimiter(3, 500, () => t);\nfor (let i = 0; i < 3; i++) assert.strictEqual(rl.allow('x'), true);\nassert.strictEqual(rl.allow('x'), false);\nt = 499;\nassert.strictEqual(rl.allow('x'), false, 'window has not expired at 499ms');\nt = 500;\nassert.strictEqual(rl.allow('x'), true);\nconst real = new RateLimiter(1, 60000);\nassert.strictEqual(real.allow('k'), true);\nassert.strictEqual(real.allow('k'), false);\nconsole.log('verify ok');\n"
+    },
+    "verify": {
+      "command": "node rate-limiter.test.js && node _verify.js"
+    }
+  },
+  {
+    "id": "cross-file-dependency",
+    "instruction": "config-loader.js reads config.json via a callback-style API (loadConfig(path, callback)). Refactor it to return a Promise instead: loadConfig(path) must resolve with the parsed config object and reject with the underlying error on failure. Update every caller (server.js and worker.js) to use the promise API, preserving current behavior for valid and missing files. Do not modify config.json or _verify.js.",
+    "files": {
+      "config-loader.js": "const fs = require('fs');\n\nfunction loadConfig(path, callback) {\n  fs.readFile(path, 'utf8', (err, data) => {\n    if (err) { callback(err); return; }\n    try {\n      callback(null, JSON.parse(data));\n    } catch (e) {\n      callback(e);\n    }\n  });\n}\n\nmodule.exports = { loadConfig };\n",
+      "config.json": "{ \"retries\": 3, \"verbose\": false }\n",
+      "server.js": "const { loadConfig } = require('./config-loader.js');\n\nfunction start() {\n  loadConfig('config.json', (err, cfg) => {\n    if (err) { return 'startup-failed'; }\n    return 'retries:' + cfg.retries;\n  });\n}\n\nmodule.exports = { start };\n",
+      "worker.js": "const { loadConfig } = require('./config-loader.js');\n\nfunction tick() {\n  loadConfig('missing.json', (err, cfg) => {\n    if (err) { return 'no-config'; }\n    return 'ok:' + cfg.verbose;\n  });\n}\n\nmodule.exports = { tick };\n",
+      "_verify.js": "const assert = require('assert');\nconst { loadConfig } = require('./config-loader.js');\nconst { start } = require('./server.js');\nconst { tick } = require('./worker.js');\nconst fs = require('fs');\nfor (const f of ['server.js', 'worker.js', 'config-loader.js']) {\n  const src = fs.readFileSync(f, 'utf8');\n  assert.ok(!src.includes('callback'), f + ' still uses the callback API');\n}\n(async () => {\n  const cfg = await loadConfig('config.json');\n  assert.strictEqual(cfg.retries, 3);\n  assert.strictEqual(await start(), 'retries:3');\n  assert.strictEqual(await tick(), 'no-config');\n  await assert.rejects(() => loadConfig('missing.json'), undefined, 'missing file must reject');\n  console.log('verify ok');\n})().catch(e => { console.error(e.message); process.exit(1); });\n"
+    },
+    "verify": {
+      "command": "node _verify.js"
+    }
+  },
+  {
+    "id": "precision-edit",
+    "instruction": "In utils.js, the function slugify lowercases and hyphenates a title but leaks a subtle bug: consecutive whitespace collapses are missing, so 'a  b' becomes 'a--b' when it should become 'a-b'. Fix ONLY that behavior: single spaces, leading/trailing whitespace, tabs, and existing output for simple words must keep working exactly as the existing tests expect. Do not rename anything, do not reformat the file, and do not modify utils.test.js or _verify.js. The diff against utils.js should touch as few lines as possible.",
+    "files": {
+      "utils.js": "function slugify(title) {\n  const trimmed = title.trim().toLowerCase();\n  let out = '';\n  for (const ch of trimmed) {\n    if (ch === ' ') {\n      out += '-';\n    } else if (/[a-z0-9]/.test(ch)) {\n      out += ch;\n    } else {\n      out += '';\n    }\n  }\n  return out;\n}\n\nfunction shout(title) {\n  return slugify(title).toUpperCase().replace(/-/g, '_');\n}\n\nmodule.exports = { slugify, shout };\n",
+      "utils.test.js": "const { slugify, shout } = require('./utils.js');\nconst assert = require('assert');\nassert.strictEqual(slugify('Hello World'), 'hello-world');\nassert.strictEqual(slugify('  Trimmed  '), 'trimmed');\nassert.strictEqual(slugify('A  B'), 'a-b', 'consecutive spaces must collapse');\nassert.strictEqual(slugify('Tabs\tHere'), 'tabs-here');\nassert.strictEqual(shout('Hello World'), 'HELLO_WORLD');\nconsole.log('utils tests ok');\n",
+      "_verify.js": "const assert = require('assert');\nconst { slugify, shout } = require('./utils.js');\nassert.strictEqual(slugify('Hello World'), 'hello-world');\nassert.strictEqual(slugify('A  B'), 'a-b');\nassert.strictEqual(slugify('Tabs\tHere'), 'tabs-here');\nassert.strictEqual(slugify('!!!'), '');\nassert.strictEqual(slugify('A -- B'), 'a-b');\nassert.strictEqual(shout('Multi  Space'), 'MULTI_SPACE');\nconsole.log('verify ok');\n"
+    },
+    "verify": {
+      "command": "node utils.test.js && node _verify.js"
+    }
   }
 ]

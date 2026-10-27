@@ -45,6 +45,12 @@ workspaces, `--json` emits the full report.
 | `rename-symbol` | consistent multi-file refactor, no stragglers |
 | `delete-dead-code` | removal without breaking the live path |
 | `add-endpoint` | extending an existing pattern in place |
+| `test-driven-feature` | reading a test file as the spec; injectable-clock design; pass/fail under a real test suite |
+| `cross-file-dependency` | callback→promise refactor across a module and two call sites, error paths preserved |
+| `precision-edit` | fixing one behavior while an unrelated output contract and a minimal-diff constraint hold |
+
+The suite runs nightly in CI (`.github/workflows/nightly.yml`): retrieval evals
+always, agent tasks whenever an `OCE_NIGHTLY_LLM_KEY` secret is configured.
 
 ## Adding a task
 

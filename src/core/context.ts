@@ -499,6 +499,10 @@ export class OpenContext {
 
   getWorkspaceRoot(): string { return this.workspaceRoot; }
 
+  /** Store access for capability modules (LSP symbol lookup) that need the
+   *  anchor data but not the retrieval pipeline. Not for mutation. */
+  getStore(): SqliteStore { return this.store; }
+
   getIndexedFiles(): { path: string; chunkCount: number; lastModified: number }[] {
     const state = this.store.getState(this.workspaceRoot, this.embeddingConfig.provider, this.embedder.getModel());
     const counts = this.store.getChunkCountsByPath();

@@ -9,11 +9,43 @@ import { FileWatcher } from "../core/file-watcher";
 import { AuditLogger } from "../core/audit";
 import { renderDefinition, renderReference } from "../agent/agent";
 import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
+import { createLspFinder, type LspFinder } from "../core/lsp";
 import { packageVersion } from "../version";
 
 export interface CreateMCPServerOptions {
   /** When set, every MCP tool invocation is appended to the audit log. */
   audit?: AuditLogger;
+}
+
+/** LSP symbol lookup, best-effort. Returns null whenever no language server
+ *  is installed or it misbehaves — callers then use the AST index untouched.
+ *  OCE_LSP=off disables the layer entirely (same fallback). */
+async function withLsp<T>(context: OpenContext, fn: (finder: LspFinder) => Promise<T | null>): Promise<T | null> {
+  if (process.env.OCE_LSP === "off") return null;
+  try {
+    const finder = createLspFinder(context.getWorkspaceRoot(), context.getStore());
+    return await fn(finder);
+  } catch {
+    return null;
+  }
+}
+
+/** Render an LSP hit with real source when the index has a chunk covering it,
+ *  as a bare location otherwise. Tagged "LSP" so callers can see the grade of
+ *  the evidence. */
+function renderLspHit(context: OpenContext, hit: { path: string; startLine: number; endLine: number }, symbol: string, kind: "definition" | "reference"): string {
+  const chunks = context.getStore().getChunksByPath(hit.path, 200);
+  const covering = chunks.find(c => c.startLine <= hit.startLine && c.endLine >= hit.endLine)
+    ?? chunks.find(c => c.path === hit.path && c.symbolName === symbol);
+  const chunk = covering ?? {
+    id: `${hit.path}:${hit.startLine}-${hit.endLine}`,
+    path: hit.path,
+    startLine: hit.startLine,
+    endLine: hit.endLine,
+    contents: "",
+  };
+  const tag = kind === "definition" ? renderDefinition(chunk) : renderReference(chunk, symbol);
+  return `${tag}\n  [LSP-verified]`;
 }
 
 export async function createMCPServer(context: OpenContext, opts: CreateMCPServerOptions = {}): Promise<McpServer> {
@@ -70,7 +102,7 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
   });
 
   server.registerTool("find-symbol-definition", {
-    description: "Find where a symbol (function, class, method, type) is DEFINED, by exact name. Precise and instant — prefer over codebase-retrieval when the exact identifier is known. Returns defining chunk(s) with path, line range, and source.",
+    description: "Find where a symbol (function, class, method, type) is DEFINED, by exact name. Precise and instant — prefer over codebase-retrieval when the exact identifier is known. Returns defining chunk(s) with path, line range, and source. Uses a language server when one is installed (marked LSP); otherwise the AST index.",
     inputSchema: {
       symbol: z.string().describe("Exact symbol name, e.g. 'HybridRetriever'. Case-sensitive."),
     },
@@ -79,6 +111,13 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
       const symbol = String(p.symbol ?? "").trim();
       audit("find-symbol-definition", { symbol });
       if (!symbol) return { content: [{ type: "text" as const, text: "No symbol given." }], isError: true };
+      const lspHits = await withLsp(context, f => f.definition(symbol));
+      if (lspHits) {
+        const text = lspHits.length
+          ? lspHits.map(h => renderLspHit(context, h, symbol, "definition")).join("\n\n")
+          : `No definition found for '${symbol}' (language server).`;
+        return { content: [{ type: "text" as const, text }] };
+      }
       const defs = context.findSymbolDefinitions(symbol, 5);
       const text = defs.length
         ? defs.map(c => renderDefinition(c)).join("\n\n")
@@ -88,7 +127,7 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
   });
 
   server.registerTool("find-symbol-references", {
-    description: "Find every indexed place a symbol/identifier is USED (exact word-boundary match, case-sensitive). Use to trace callers, check impact of a change, or find usage examples.",
+    description: "Find every place a symbol/identifier is USED (exact word-boundary match, case-sensitive). Use to trace callers, check impact of a change, or find usage examples. Uses a language server when one is installed (compiler-accurate, marked LSP); otherwise the AST index.",
     inputSchema: {
       symbol: z.string().describe("Exact identifier to look up, e.g. 'vectorSearch'."),
       path: z.string().optional().describe("Optional: restrict to one indexed file path."),
@@ -98,6 +137,16 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
       const symbol = String(p.symbol ?? "").trim();
       audit("find-symbol-references", { symbol, path: p.path });
       if (!symbol) return { content: [{ type: "text" as const, text: "No symbol given." }], isError: true };
+      // Path-filtered lookups stay on the index: LSP results are workspace-wide.
+      if (!p.path) {
+        const lspHits = await withLsp(context, f => f.references(symbol, 12));
+        if (lspHits) {
+          const text = lspHits.length
+            ? lspHits.map(h => renderLspHit(context, h, symbol, "reference")).join("\n")
+            : `No references to '${symbol}' found (language server).`;
+          return { content: [{ type: "text" as const, text }] };
+        }
+      }
       const refs = context.findSymbolReferences(symbol, p.path ? String(p.path) : undefined, 12);
       const text = refs.length
         ? refs.map(c => renderReference(c, symbol)).join("\n")
