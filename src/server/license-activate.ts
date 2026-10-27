@@ -29,6 +29,30 @@ export interface ActivateEnv {
   POLAR_ENTERPRISE_BENEFIT_ID?: string;
   DEFAULT_SEATS?: string;
   LICENSE_DAYS?: string;
+  /** Cloudflare ratelimit binding (wrangler.jsonc unsafe.bindings). Optional:
+   *  absent in unit tests and local dev, where the limiter degrades to allow. */
+  ACTIVATE_RATE_LIMITER?: { limit(o: { key: string; period: number }): Promise<{ success: boolean }> };
+}
+
+/** Max accepted JSON body. The activate endpoint needs ~200 bytes; anything
+ *  larger is either abuse or a probe. */
+const MAX_BODY_BYTES = 4096;
+
+/** Per-IP activation attempts per minute window when the binding is present. */
+const RATE_LIMIT = { limit: 20, period: 60 };
+
+async function allowedByRateLimit(request: Request, env: ActivateEnv): Promise<boolean> {
+  const rl = env.ACTIVATE_RATE_LIMITER;
+  if (!rl?.limit) return true; // binding absent (tests / wrangler dev) — allow
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  try {
+    const res = await rl.limit({ key: `activate:${ip}`, period: RATE_LIMIT.period });
+    return !!res?.success;
+  } catch {
+    // A limiter outage must not take the endpoint down; Polar-side checks
+    // still gate every request on a valid key.
+    return true;
+  }
 }
 
 /** Consumer mail domains that must not become org bindings — a gmail address
@@ -59,6 +83,13 @@ function json(status: number, body: unknown): Response {
 export async function handleActivate(request: Request, env: ActivateEnv): Promise<Response> {
   if (!env.LICENSE_SIGNING_KEY || !env.POLAR_ACCESS_TOKEN) {
     return json(503, { error: "license server not configured" });
+  }
+  if (!(await allowedByRateLimit(request, env))) {
+    return json(429, { error: "too many activation attempts — try again in a minute" });
+  }
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > MAX_BODY_BYTES) {
+    return json(413, { error: "request body too large" });
   }
   let input: ActivationInput;
   try {
@@ -103,15 +134,27 @@ export async function handleActivate(request: Request, env: ActivateEnv): Promis
     return json(403, { error: `this license key is ${status} — contact support` });
   }
 
-  // Record the activation with Polar (best-effort; seat-limit enforcement
-  // lives there, and a failure here must not block a legitimate activation).
+  // Record the activation with Polar. Seat limits are enforced here: when
+  // Polar refuses the activation because the key's limit is exhausted, the
+  // whole activation is refused — the issued token would outlive the seat
+  // check otherwise. Other failures stay best-effort (a legitimate key must
+  // still activate if the recording endpoint hiccups).
   try {
-    await fetch(`${api}/v1/license-keys/activations`, {
+    const rec = await fetch(`${api}/v1/license-keys/activations`, {
       method: "POST",
       headers: { authorization: `Bearer ${env.POLAR_ACCESS_TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ license_key: input.licenseKey, identifier: input.email }),
     });
-  } catch { /* best-effort */ }
+    if (!rec.ok) {
+      const detail = String(await rec.json().then(b => b?.detail ?? b?.error ?? "").catch(() => ""));
+      if (rec.status === 400 || rec.status === 403 || rec.status === 422) {
+        if (/limit|exceed|maximum/i.test(detail)) {
+          return json(403, { error: "activation limit reached for this license key — contact support" });
+        }
+        return json(rec.status, { error: `Polar refused the activation: ${detail || rec.status}` });
+      }
+    }
+  } catch { /* best-effort for reachability failures */ }
 
   const payload = buildPayload(polar, input, env);
   const token = signToken(payload, env.LICENSE_SIGNING_KEY);

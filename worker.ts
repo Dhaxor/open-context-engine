@@ -14,6 +14,7 @@ export interface Env {
   POLAR_ENTERPRISE_BENEFIT_ID?: string;
   DEFAULT_SEATS?: string;
   LICENSE_DAYS?: string;
+  ACTIVATE_RATE_LIMITER?: { limit(o: { key: string; period: number }): Promise<{ success: boolean }> };
 }
 
 export default {

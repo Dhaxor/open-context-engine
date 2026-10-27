@@ -100,6 +100,56 @@ describe("handleActivate", () => {
   });
 });
 
+describe("hardening", () => {
+  it("429s when the rate limiter binding refuses the IP", async () => {
+    vi.stubGlobal("fetch", polarKeyFetch());
+    const env = { ...ENV, ACTIVATE_RATE_LIMITER: { limit: async () => ({ success: false }) } };
+    const res = await handleActivate(activateRequest({ licenseKey: "polar_lk_abc123def", email: "dev@acme.com" }), env);
+    expect(res.status).toBe(429);
+  });
+
+  it("allows requests when the rate limiter binding is absent (tests/dev)", async () => {
+    const res = await handleActivate(activateRequest({ licenseKey: "polar_lk_abc123def", email: "dev@acme.com" }), ENV);
+    expect(res.status).toBe(200);
+  });
+
+  it("413s oversized bodies before parsing", async () => {
+    const big = "x".repeat(5000);
+    const req = new Request("https://site.example/api/license/activate", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-length": String(big.length) },
+      body: JSON.stringify({ licenseKey: big, email: "dev@acme.com" }),
+    });
+    const res = await handleActivate(req, ENV);
+    expect(res.status).toBe(413);
+  });
+
+  it("403s when Polar says the activation limit is exhausted", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: any, init?: any) => {
+      const url = String(input);
+      if (url.endsWith("/activations") && init?.method === "POST") {
+        return new Response(JSON.stringify({ detail: "activation limit exceeded for this license key" }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ id: "pk_1", status: "granted", benefit: "benefit_team" }), { status: 200 });
+    }) as unknown as typeof fetch);
+    const res = await handleActivate(activateRequest({ licenseKey: "polar_lk_abc123def", email: "dev@acme.com" }), ENV);
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as any).error).toMatch(/activation limit/);
+  });
+
+  it("still activates when Polar's activation recording fails for non-limit reasons", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: any, init?: any) => {
+      const url = String(input);
+      if (url.endsWith("/activations") && init?.method === "POST") {
+        return new Response(JSON.stringify({ detail: "something transient" }), { status: 500 });
+      }
+      return new Response(JSON.stringify({ id: "pk_1", status: "granted", benefit: "benefit_team" }), { status: 200 });
+    }) as unknown as typeof fetch);
+    const res = await handleActivate(activateRequest({ licenseKey: "polar_lk_abc123def", email: "dev@acme.com" }), ENV);
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("handleRequest routing", () => {
   const assets = { fetch: async (r: Request) => new Response("asset:" + new URL(r.url).pathname, { status: 200 }) };
   const env = { ...ENV, ASSETS: assets };

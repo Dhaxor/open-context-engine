@@ -12,5 +12,15 @@
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  "unsafe": {
+    "bindings": [
+      {
+        "name": "ACTIVATE_RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "1001",
+        "simple": { "limit": 20, "period": 60 }
+      }
+    ]
+  }
 }
