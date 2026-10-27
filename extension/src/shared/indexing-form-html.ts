@@ -12,6 +12,7 @@ export function indexingFormHtml(): string {
           <div class="idx-stat"><span class="idx-label">Workspace</span><span class="idx-value" id="idxStatusRoot">—</span></div>
           <div class="idx-stat"><span class="idx-label">Files · chunks</span><span class="idx-value" id="idxStatusCounts">—</span></div>
           <div class="idx-stat"><span class="idx-label">Search mode</span><span class="idx-value" id="idxStatusMode">—</span></div>
+          <div class="idx-stat"><span class="idx-label">Symbol tools</span><span class="idx-value" id="idxStatusSymbols">—</span></div>
           <div class="idx-stat"><span class="idx-label">Embeddings</span><span class="idx-value" id="idxStatusModel">—</span></div>
         </div>
         <div class="emb-hint" id="idxStatusReason" hidden></div>

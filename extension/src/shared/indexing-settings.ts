@@ -23,6 +23,8 @@ export interface IndexingSettingsPayload {
     indexedFiles: number;
     totalChunks: number;
     searchMode: string;
+    symbolTool?: "lsp" | "ast";
+    symbolToolName?: string;
     degradedReason?: string;
     embeddingProvider: string;
     embeddingModel: string;

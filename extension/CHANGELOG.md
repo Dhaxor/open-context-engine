@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.6.0
+
+- **The Indexing panel shows what grade of symbol lookup the workspace can
+  serve** — an installed language server (with its name) when one covers the
+  dominant source language, otherwise the AST index. Informational: the MCP
+  symbol tools pick the best available automatically.
+- **Class declarations are indexed.** A chunker fix means Python/TS/JS class
+  definitions now exist as searchable chunks with their own symbol names —
+  find-symbol-definition works for classes, and definition-shaped ranking can
+  lift the declaring file above importers (external Flask recall@10
+  0.926 → 0.963).
 ## 0.5.0
 
 - **Local embeddings work out of the box.** The default local embedding

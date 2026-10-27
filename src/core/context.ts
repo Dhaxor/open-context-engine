@@ -5,6 +5,7 @@ import { EmbeddingProvider, createEmbeddingProvider, isAuthError } from "./embed
 import { SqliteStore } from "./sqlite-store";
 import { CodeChunker } from "./chunker";
 import { AstChunker } from "./ast-chunker";
+import { resolveServerCommand } from "./lsp/servers";
 import { FileFilter } from "./file-filter";
 import { computeBlobName, isBinaryBuffer, isKeyishPath, resolveWorkspacePath } from "./utils";
 import { formatSearchOutput } from "./search";
@@ -27,6 +28,8 @@ import { EmbedCache, contentHash } from "./embed-cache";
 import * as os from "os";
 
 const CONCURRENT_EMBED_BATCHES = 2;
+
+const SYMBOL_LSP_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".go", ".rs"]);
 
 export class OpenContext {
   private embeddingConfig!: EmbeddingConfig;
@@ -509,10 +512,27 @@ export class OpenContext {
     return state.files.map(f => ({ path: f.path, chunkCount: counts.get(f.path) ?? 0, lastModified: f.lastModified }));
   }
 
-  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string; searchMode: "hybrid" | "keyword-only"; degradedReason?: string; degradedKind?: string; staleReason?: string } {
+  getStatus(): { indexedFiles: number; totalChunks: number; provider: string; model: string; lastSynced: string; searchMode: "hybrid" | "keyword-only"; symbolTool?: "lsp" | "ast"; symbolToolName?: string; degradedReason?: string; degradedKind?: string; staleReason?: string } {
     const vectorAvailable = this.store.isVectorAvailable();
     const staleReason = this.store.getStaleReason();
     const diagnosis = vectorAvailable ? undefined : this.store.getVectorDiagnosis();
+    // What grade of symbol lookup this workspace can serve: a language server
+    // if one is installed for the dominant source extension, else the AST
+    // index. Informational only — the symbol tools degrade automatically.
+    let symbolTool: "lsp" | "ast" = "ast";
+    let symbolToolName: string | undefined;
+    try {
+      const counts = new Map<string, number>();
+      for (const p of this.store.getIndexedPaths()) {
+        const dot = p.lastIndexOf(".");
+        const ext = dot >= 0 ? p.slice(dot).toLowerCase() : "";
+        counts.set(ext, (counts.get(ext) ?? 0) + 1);
+      }
+      let best = "", bestN = 0;
+      for (const [ext, n] of counts) if (n > bestN && SYMBOL_LSP_EXTENSIONS.has(ext)) { best = ext; bestN = n; }
+      const spec = best ? resolveServerCommand(best) : null;
+      if (spec) { symbolTool = "lsp"; symbolToolName = spec.command; }
+    } catch { /* informational only */ }
     return {
       indexedFiles: this.store.getFileCount(),
       totalChunks: this.store.getChunkCount(),
@@ -520,6 +540,8 @@ export class OpenContext {
       model: this.embedder.getModel(),
       lastSynced: new Date().toISOString(),
       searchMode: vectorAvailable ? "hybrid" : "keyword-only",
+      ...(symbolTool ? { symbolTool } : {}),
+      ...(symbolToolName ? { symbolToolName } : {}),
       // `kind` separates a CHOICE (keyword_only) from a failure (sqlite-vec
       // could not load) — the two need very different messages.
       ...(diagnosis ? { degradedReason: diagnosis.title, degradedKind: diagnosis.kind } : {}),

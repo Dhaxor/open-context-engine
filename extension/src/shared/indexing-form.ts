@@ -21,6 +21,7 @@ export function wireIndexingForm(opts: IndexingFormOptions): IndexingFormControl
   const countsEl = opts.$("idxStatusCounts");
   const modeEl = opts.$("idxStatusMode");
   const modelEl = opts.$("idxStatusModel");
+  const symbolsEl = opts.$("idxStatusSymbols");
   const reasonEl = opts.$("idxStatusReason");
   const rebuildBtn = opts.$("idxRebuild");
 
@@ -67,6 +68,11 @@ export function wireIndexingForm(opts: IndexingFormOptions): IndexingFormControl
           ? `${s.indexedFiles.toLocaleString()} · ${s.totalChunks.toLocaleString()}`
           : "not indexed";
         if (modeEl) modeEl.textContent = s.searchMode === "keyword-only" ? "keyword (BM25)" : s.searchMode;
+        if (symbolsEl) {
+          symbolsEl.textContent = s.symbolTool === "lsp"
+            ? `LSP (${s.symbolToolName ?? "language server"})`
+            : "AST index";
+        }
         if (modelEl) modelEl.textContent = `${s.embeddingProvider}/${s.embeddingModel}`;
         if (reasonEl) {
           reasonEl.textContent = s.degradedReason ? `⚠ ${s.degradedReason}` : "";
