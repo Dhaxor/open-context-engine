@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs — Open Context Engine</title>
+<meta name="description" content="Task-based guides for Open Context Engine: connect it to Claude Code, Cursor, or any MCP client; pick a search mode; share a team index in CI; activate a Team license.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<style>
+  .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 24px; }
+  .doc-card { border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 18px 20px; }
+  .doc-card h3 { margin: 0 0 8px; font-size: 16px; }
+  .doc-card p { margin: 0 0 10px; font-size: 14px; opacity: .85; }
+  .doc-card pre { margin: 0; font-size: 12.5px; overflow-x: auto; background: rgba(255,255,255,.04); padding: 10px 12px; border-radius: 8px; }
+  .doc-card code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 34px 0 10px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.65; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  .tag { display: inline-block; font-family: var(--mono, monospace); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; opacity: .65; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">docs/index <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Docs</h1>
+    <p class="sub">Task-based guides. The full command reference lives in the repo README and <code>oce --help</code>; these pages cover the paths people actually walk.</p>
+  </section>
+
+  <div class="wrap doc-grid">
+    <div class="doc-card">
+      <span class="tag">5 minutes</span>
+      <h3>Start free, stay local</h3>
+      <p>Install, get a working model (free tiers first), index, search — no API key required for retrieval.</p>
+      <pre>npm install -g @dhaxor/open-context
+oce setup          # picks a free model if you have one
+oce index          # indexes the current directory
+oce search "auth middleware"</pre>
+    </div>
+    <div class="doc-card">
+      <span class="tag">MCP</span>
+      <h3>Plug into Claude Code, Cursor, or any MCP client</h3>
+      <p>The engine speaks MCP over stdio and HTTP. Retrieval, files, and symbol tools become your assistant's ground truth.</p>
+      <pre>claude mcp add oce -- oce mcp
+# or, for HTTP clients:
+oce mcp --http --port 8940</pre>
+    </div>
+    <div class="doc-card">
+      <span class="tag">Agent</span>
+      <h3>Run the Trace workspace</h3>
+      <p>The agent with an evidence rail: see what's in context, pin it, evict it, rewind it.</p>
+      <pre>oce trace        # browser workspace
+oce              # same thing, in the terminal</pre>
+    </div>
+  </div>
+
+  <section class="doc">
+    <h2>Search modes: pick with intent</h2>
+    <p>OCE degrades, never dies: with no embedding key it runs <strong>keyword-only</strong> (BM25) and says so on every surface. Adding an embedding provider turns on <strong>hybrid</strong> search — BM25 fused with vector similarity, with the fusion weights adapting to each query's shape (exact symbols lean lexical; paraphrases lean semantic). Measure both on your own repo:</p>
+    <pre>oce eval --cases eval/oce.eval.json          # committed 44-case gold set
+oce bench                                    # indexing throughput on your machine</pre>
+    <p>Free semantic options: <code>oce setup --embeddings ollama</code> (local, no key) or <code>--embeddings local</code> (in-process, no server). Voyage-code-3 gives the best code-retrieval numbers.</p>
+
+    <h2>Use with Claude Code</h2>
+    <p>Add the MCP server once per project (or <code>-s user</code> for all of them):</p>
+    <pre>claude mcp add oce --scope project -- oce mcp</pre>
+    <p>Claude Code then gets <code>codebase-retrieval</code>, <code>find-symbol-definition</code>, <code>find-symbol-references</code>, <code>read-file</code>, and <code>index-status</code> — all served from the local index. The first call indexes the workspace; after that, indexing is incremental.</p>
+
+    <h2>Use with Cursor / other MCP clients</h2>
+    <p>Point the client at the HTTP endpoint with a bearer token, or run stdio:</p>
+    <pre>oce mcp --http --port 8940 --auth-token $OCE_MCP_AUTH_TOKEN</pre>
+    <pre>// .cursor/mcp.json
+{ "mcpServers": { "oce": { "url": "http://127.0.0.1:8940/mcp",
+                           "headers": { "Authorization": "Bearer $OCE_MCP_TOKEN" } } } }</pre>
+
+    <h2>Share one index across a team (Team plan)</h2>
+    <p>Index once in CI, publish the artifact, and teammates pull it — only their local diff re-embeds, because identical code hashes to identical vectors:</p>
+    <pre># CI: build and publish (file path, S3, or any HTTP endpoint)
+oce push-index ./team-index.tar
+oce push-index https://indexes.example.com/upload --token $OCE_INDEX_TOKEN
+
+# Teammate: pull and go (their diff re-embeds, nothing else)
+oce pull-index https://indexes.example.com/team-index.tar</pre>
+    <p>Team features gate on an offline-verifiable license. See <a href="pricing.html">pricing</a> — activation is one command: <code>oce activate polar_lk_…</code>.</p>
+
+    <h2>Activate a license</h2>
+    <pre>oce activate polar_lk_xxxxxxxx     # the key from your Polar order email
+oce license                        # plan, seats, expiry, grace window</pre>
+    <p>The key is verified with Polar once; what gets saved is a signed token that checks out locally forever — air-gapped machines stay activated. A full signed token (<code>xxx.yyy</code>) also activates offline directly.</p>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>"keyword-only mode"</strong> — no embedding provider configured. <code>oce setup --embeddings ollama</code> fixes it for free.</li>
+      <li><strong>Embedding 401 on first local run</strong> — you opted into the gated jina model; switch back with <code>oce setup --embeddings local</code> (MiniLM, ungated).</li>
+      <li><strong>Search feels lexical only</strong> — check <code>oce status</code>; if <code>sqlite-vec</code> couldn't load on your platform, the engine runs keyword-only by design.</li>
+      <li><strong>Agent edits look wrong</strong> — every edit is a diff you can undo from the evidence rail; <code>oce audit --verify</code> proves the log wasn't touched.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

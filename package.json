@@ -1,7 +1,7 @@
 {
   "name": "@dhaxor/open-context",
   "version": "0.4.7",
-  "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
+  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -53,7 +53,7 @@
     "typecheck": "npm run typecheck:core && npm run typecheck:extension",
     "test": "npm run test:core && npm run test:extension",
     "test:watch": "vitest",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run build:web && wrangler deploy",
     "preview": "wrangler dev",
     "prepublishOnly": "npm run verify:core",
     "typecheck:core": "tsc --noEmit && tsc -p tsconfig.studio.json",
@@ -62,7 +62,8 @@
     "test:extension": "npm --prefix extension run test",
     "verify:core": "npm run typecheck:core && npm run test:core",
     "verify:extension": "npm --prefix extension run verify",
-    "verify": "npm run verify:core && npm run verify:extension"
+    "verify": "npm run verify:core && npm run verify:extension",
+    "build:web": "node scripts/build-benchmarks.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
