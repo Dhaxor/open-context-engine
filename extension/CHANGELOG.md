@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.5.0
+
+- **Local embeddings work out of the box.** The default local embedding
+  model is the ungated all-MiniLM-L6-v2; the previous default is gated
+  on Hugging Face and 401s on first download. The settings enum marks
+  which models are gated.
+
 ## 0.4.7
 
 - Version sync; no extension changes.

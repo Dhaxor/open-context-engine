@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 — trusted publishing, adaptive fusion, compiler-grade symbol tools
+
+- **npm publishes with zero secrets.** Trusted Publishing (OIDC): the
+  registry trusts this repository's npm-publish.yml workflow directly —
+  no granular token to rotate or leak, ahead of npm's Jan-2027 removal
+  of token-based direct publishing.
+- **Adaptive fusion.** Queries are classified by shape (definition vs
+  intent) and the BM25/semantic fusion weights tilt accordingly. Hybrid
+  recall@10 on the external Flask gold set: 0.852 → 0.926 — parity with
+  keyword-only, previously hybrid's worst ground. A/B with
+  `oce eval --no-adaptive-fusion`.
+- **LSP-backed symbol tools.** find-symbol-definition / references use a
+  language server when one is installed (tsserver, pyright, gopls,
+  rust-analyzer; `OCE_LSP_*_CMD` overrides, `OCE_LSP=off` to disable),
+  falling back to the AST index untouched. Results are tagged
+  [LSP-verified].
+- **Self-serve Team licenses.** `oce activate polar_lk_…` exchanges a
+  Polar license key for an offline-verifiable signed token; the pricing
+  page's checkout now completes the loop without support.
+- **Local embeddings work out of the box.** The default local model is
+  the ungated all-MiniLM-L6-v2 (the previous default 401s on Hugging
+  Face); a refused model download explains the fix.
+- **Docs + generated benchmarks** on the Worker-served site: /docs task
+  guides and /benchmarks rendered from the committed eval reports.
+  Nightly CI runs the full matrix plus both gold sets and the agent
+  eval suite.
+
 ## 0.4.7
 
 - Re-release: 0.4.5 and 0.4.6 never reached the registry. 0.4.5's publish
