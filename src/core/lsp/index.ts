@@ -115,8 +115,11 @@ export function createLspFinder(rootAbs: string, store: SqliteStore, log?: (s: s
       return hits;
     } catch (e) {
       // A dead or misbehaving server is a downgrade trigger, not an error.
+      // Drop it from the cache AND stop the process — a leaked child would
+      // hold its CWD (blocking workspace deletion on Windows) forever.
       log?.(`lsp: ${kind} failed: ${(e as LspError).message}`);
       clients.delete(serverKey(rootAbs, spec));
+      await client.dispose().catch(() => {});
       return null;
     }
   };
