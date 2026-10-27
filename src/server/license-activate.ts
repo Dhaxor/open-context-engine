@@ -86,8 +86,10 @@ export async function handleActivate(request: Request, env: ActivateEnv): Promis
       headers: { authorization: `Bearer ${env.POLAR_ACCESS_TOKEN}` },
     });
     if (!res.ok) {
-      return json(res.status === 404 ? 400 : 502, {
-        error: res.status === 404
+      // 404 and 422 both mean "this key can't be looked up" — 422 is what the
+      // API returns for a key that matches no record (verified live 2026-10-27).
+      return json(res.status === 404 || res.status === 422 ? 400 : 502, {
+        error: res.status === 404 || res.status === 422
           ? "license key not recognized — check the key from your order email"
           : "could not verify the license key (Polar unavailable), try again shortly",
       });
