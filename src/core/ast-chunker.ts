@@ -18,6 +18,12 @@ interface LanguageSpec {
   /** Custom name resolution, checked before nameFields — for grammars with
    *  declarator chains (C/C++) or no name fields at all (Kotlin). */
   resolveName?: (node: TsNode) => string | undefined;
+  /** Class-like containers that should ALSO emit a header chunk (the class
+   *  signature lines, symbolName = class name) in addition to their members.
+   *  Without it the class declaration itself is unindexed — no
+   *  getChunksBySymbol("Response"), no find-symbol-definition for classes,
+   *  and definition-shaped ranking has no declaration home to lift. */
+  classlike?: Set<string>;
 }
 
 const SPECS: Record<string, LanguageSpec> = {
@@ -86,7 +92,7 @@ export class AstChunker {
     const parsed = provided ?? (await this.parseFile(file));
     if (!parsed) return this.opts.fallback.chunkFile(file);
     try {
-      const collected: { node: TsNode; kind: SymbolKind; parent: string | null }[] = [];
+      const collected: { node: TsNode; kind: SymbolKind; parent: string | null; headerLines?: { start: number; end: number } }[] = [];
       this.collect(parsed.tree.rootNode, spec, null, collected);
       if (!collected.length) return this.opts.fallback.chunkFile(file);
       const materialized = collected.map(c => ({
@@ -95,8 +101,8 @@ export class AstChunker {
         name: this.nameOf(c.node, spec),
         startIndex: c.node.startIndex,
         endIndex: c.node.endIndex,
-        startLine: c.node.startPosition.row + 1,
-        endLine: c.node.endPosition.row + 1,
+        startLine: c.headerLines?.start ?? c.node.startPosition.row + 1,
+        endLine: c.headerLines?.end ?? c.node.endPosition.row + 1,
       }));
       const covered = materialized.reduce((s, c) => s + (c.endIndex - c.startIndex), 0);
       if (covered < file.contents.length * 0.35) return this.opts.fallback.chunkFile(file);
@@ -118,18 +124,44 @@ export class AstChunker {
     }
   }
 
-  private collect(node: TsNode, spec: LanguageSpec, parent: string | null, out: { node: TsNode; kind: SymbolKind; parent: string | null }[]): void {
+  private collect(node: TsNode, spec: LanguageSpec, parent: string | null, out: { node: TsNode; kind: SymbolKind; parent: string | null; headerLines?: { start: number; end: number } }[]): void {
     for (const child of node.namedChildren) {
       if (!child) continue;
       const kind = spec.atomic.get(child.type);
       if (kind) { out.push({ node: child, kind, parent }); continue; }
       if (spec.containers.has(child.type)) {
         const scoped = this.containerName(child, spec) ?? parent;
+        // Named class-like containers also emit their own header chunk — the
+        // signature lines only, so it coexists with the member chunks without
+        // duplicating bodies. This is the declaration home that
+        // getChunksBySymbol / find-symbol-definition / definition-shaped
+        // ranking all need.
+        if (spec.classlike?.has(child.type) && this.containerName(child, spec)) {
+          out.push({ node: child, kind: "class", parent, headerLines: this.headerLines(child) });
+        }
         this.collect(child, spec, scoped, out);
       } else {
         this.collect(child, spec, parent, out);
       }
     }
+  }
+
+  /** Line range of a class-like node's signature: from the class keyword to
+   *  the start of its first real body statement — comments and a leading
+   *  docstring stay included, since they document the declaration. */
+  private headerLines(node: TsNode): { start: number; end: number } {
+    let end = node.endPosition.row;
+    for (const child of node.namedChildren) {
+      if (!child) continue;
+      if (child.type === "comment") continue;
+      // A docstring is an expression_statement wrapping a bare string.
+      const isDocstring = child.type === "expression_statement" &&
+        child.namedChildren.length === 1 && child.namedChildren[0] !== null && child.namedChildren[0].type === "string";
+      if (isDocstring) { end = Math.max(end, child.endPosition.row); continue; }
+      end = child.startPosition.row;
+      break;
+    }
+    return { start: node.startPosition.row + 1, end: Math.max(end + 1, node.startPosition.row + 1) };
   }
 
   private containerName(node: TsNode, spec: LanguageSpec): string | null {
@@ -202,6 +234,7 @@ function tsSpec(): LanguageSpec {
       "module", "internal_module", "namespace_declaration",
       "class_body", "program", "statement_block", "export_statement",
     ]),
+    classlike: new Set(["class_declaration", "abstract_class_declaration"]),
     nameFields: ["name"],
   };
 }
@@ -213,6 +246,7 @@ function pySpec(): LanguageSpec {
       ["decorated_definition", "function"],
     ]),
     containers: new Set(["class_definition", "module", "block"]),
+    classlike: new Set(["class_definition"]),
     nameFields: ["name"],
   };
 }

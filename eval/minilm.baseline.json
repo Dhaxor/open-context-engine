@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-27T01:15:06.843Z",
+  "generatedAt": "2026-10-27T22:21:10.253Z",
   "k": 10,
   "caseCount": 44,
   "aggregate": {
     "cases": 44,
     "recallAtK": 0.9318181818181818,
-    "mrr": 0.6913780663780663,
-    "ndcgAtK": 0.7434539034020967,
+    "mrr": 0.6904040404040404,
+    "ndcgAtK": 0.7380517463422621,
     "hitRate": 0.9545454545454546,
     "contextRecall": 0.9090909090909091,
     "contextHitRate": 0.9318181818181818
@@ -21,14 +21,14 @@
       "retrievedFiles": [
         "src/core/retriever.ts",
         "src/core/query-profile.ts",
-        "README.md",
-        "extension/dev/gen-harness.mjs",
-        "src/core/retriever.test.ts",
         "src/core/query-profile.test.ts",
+        "extension/dev/gen-harness.mjs",
+        "web/benchmarks.html",
+        "README.md",
+        "src/core/retriever.test.ts",
         "src/core/sqlite-store.ts",
         "web/index.html",
-        "src/core/streaming-retriever.ts",
-        "src/trace/retrieval.test.ts"
+        "src/core/streaming-retriever.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -38,7 +38,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 673
+      "elapsedMs": 57
     },
     {
       "id": "gitignore-filtering",
@@ -48,11 +48,11 @@
       ],
       "retrievedFiles": [
         "src/core/policy.ts",
+        "src/core/types.ts",
         "src/core/file-filter.ts",
         ".contextignore",
-        "src/core/types.ts",
-        "extension/CHANGELOG.md",
         ".gitignore",
+        "extension/CHANGELOG.md",
         "README.md",
         "src/core/freshness.ts",
         "src/trace/worktree.ts",
@@ -60,13 +60,13 @@
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.5,
-        "ndcg": 0.6309297535714575,
+        "reciprocalRank": 0.3333333333333333,
+        "ndcg": 0.5,
         "hit": true,
-        "firstHitRank": 2,
+        "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 33
+      "elapsedMs": 47
     },
     {
       "id": "voyage-embeddings",
@@ -78,8 +78,8 @@
         "src/core/embedder.ts",
         "src/core/types.ts",
         "extension/package.json",
-        "README.md",
         "src/core/reranker.ts",
+        "README.md",
         "src/cli/config.ts",
         "src/cli/config.test.ts",
         "extension/src/services/ContextService.ts",
@@ -94,7 +94,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 36
     },
     {
       "id": "sqlite-schema",
@@ -104,11 +104,11 @@
       ],
       "retrievedFiles": [
         "src/core/sqlite-store.ts",
-        "README.md",
-        "src/core/sqlite-store.test.ts",
         "src/core/context.ts",
-        "extension/dev/gen-harness.mjs",
-        "extension/README.md"
+        "README.md",
+        "src/core/types.ts",
+        "src/core/sqlite-store.test.ts",
+        "extension/dev/gen-harness.mjs"
       ],
       "metrics": {
         "recall": 1,
@@ -118,7 +118,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 36
     },
     {
       "id": "tree-sitter-chunking",
@@ -129,14 +129,14 @@
       "retrievedFiles": [
         "src/core/ast-graph/other-languages.ts",
         "extension/.vscodeignore",
+        "src/core/context.ts",
         "src/core/ast-graph-extractor.ts",
         "src/core/chunker.ts",
         "src/core/dependency-packer.test.ts",
         "README.md",
         "src/core/chunk-worker.ts",
-        "src/core/context.ts",
         "src/core/ast-languages.test.ts",
-        "src/core/chunker.test.ts"
+        "src/core/code-graph.ts"
       ],
       "metrics": {
         "recall": 0,
@@ -146,7 +146,7 @@
         "firstHitRank": null,
         "contextRecall": 0
       },
-      "elapsedMs": 35
+      "elapsedMs": 53
     },
     {
       "id": "graph-expansion",
@@ -161,20 +161,20 @@
         "src/trace/ledger.ts",
         "extension/dev/gen-harness.mjs",
         "src/core/sqlite-store.ts",
+        "src/core/context.ts",
         "src/core/code-graph.ts",
         "src/core/dependency-packer.test.ts",
-        "src/core/graph-expander.ts",
-        "README.md"
+        "src/core/graph-expander.ts"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.1111111111111111,
-        "ndcg": 0.3010299956639812,
+        "reciprocalRank": 0.1,
+        "ndcg": 0.2890648263178879,
         "hit": true,
-        "firstHitRank": 9,
+        "firstHitRank": 10,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 43
     },
     {
       "id": "ast-edge-extraction",
@@ -187,12 +187,12 @@
         "src/core/ast-languages.test.ts",
         "src/core/ast-graph-extractor.ts",
         "src/core/ast-graph/other-languages.ts",
+        "src/core/ast-chunker.ts",
         "src/core/ast-graph-extractor.test.ts",
         "src/core/ast-graph/python.test.ts",
         "src/core/ast-graph-shared.ts",
         "src/core/ast-graph/typescript.test.ts",
-        "src/core/sqlite-store.ts",
-        "README.md"
+        "src/core/sqlite-store.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -202,7 +202,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 34
     },
     {
       "id": "edit-tools",
@@ -215,11 +215,11 @@
         "src/eval/agent-runner.ts",
         "src/agent/agent.ts",
         "src/agent/edit-tools.test.ts",
-        "src/agent/types.ts",
         "src/agent/permissions.ts",
+        "src/agent/types.ts",
         "src/agent/session-memory.ts",
+        "src/core/policy.ts",
         "extension/src/chat/webview/main.ts",
-        "src/core/file-watcher.ts",
         "src/agent/default-tools.test.ts"
       ],
       "metrics": {
@@ -230,7 +230,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 31
+      "elapsedMs": 40
     },
     {
       "id": "license-verify",
@@ -239,16 +239,16 @@
         "src/core/license.ts"
       ],
       "retrievedFiles": [
-        "scripts/license-tool.mjs",
+        "src/cli/commands/license.ts",
         "src/core/license.ts",
+        "src/core/license-types.ts",
+        "scripts/license-tool.mjs",
         "extension/src/services/ContextService.ts",
-        "web/pricing.html",
-        "src/core/license.test.ts",
-        "src/core/audit.ts",
-        "src/cli/config.ts",
+        "src/server/license-activate.ts",
+        "src/server/license-activate.test.ts",
         "src/core/policy.ts",
-        "extension/src/shared/model-keys-form.ts",
-        "package-lock.json"
+        "src/core/license.test.ts",
+        "web/pricing.html"
       ],
       "metrics": {
         "recall": 1,
@@ -258,7 +258,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 18
+      "elapsedMs": 31
     },
     {
       "id": "mcp-tools",
@@ -270,13 +270,13 @@
         "src/mcp/server.ts",
         "src/cli/commands/mcp.ts",
         "src/agent/agent.ts",
-        "web/index.html",
         "src/mcp/server.test.ts",
+        "web/index.html",
+        "web/docs.html",
         "README.md",
         "src/trace/protocol.ts",
         "src/agent/permissions.ts",
-        "extension/src/chat/webview/main.ts",
-        "src/trace/server.ts"
+        "src/agent/extra-tools.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -286,7 +286,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 41
     },
     {
       "id": "watch-debounce",
@@ -300,11 +300,11 @@
         "src/core/live-index.ts",
         "src/trace/registry.ts",
         "extension/CHANGELOG.md",
-        "src/core/freshness.ts",
         "src/trace/worktree.ts",
+        "src/core/freshness.ts",
         "src/trace/checkpoints.ts",
-        "src/core/freshness.test.ts",
-        "src/agent/edit-tools.ts"
+        "src/core/context.ts",
+        "src/core/freshness.test.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -314,7 +314,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 25
+      "elapsedMs": 38
     },
     {
       "id": "query-synonyms",
@@ -329,10 +329,10 @@
         "src/core/multi-context.ts",
         "src/core/query-expander.test.ts",
         "src/agent/extra-tools.ts",
-        "extension/src/chat/ChatView.ts",
-        "src/eval/runner.ts",
-        "scripts/studio-demo.js",
-        "src/core/context.ts"
+        "src/core/context.ts",
+        "src/core/retriever.ts",
+        "src/core/types.ts",
+        "extension/src/chat/ChatView.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -342,7 +342,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 32
     },
     {
       "id": "context-packing",
@@ -356,11 +356,11 @@
         "src/core/sqlite-store.ts",
         "src/trace/format.ts",
         "src/core/context-packer.test.ts",
-        "src/core/embedder.ts",
-        "src/agent/session-memory.ts",
-        "src/core/ast-chunker.ts",
         "src/core/retriever.ts",
-        "extension/dev/gen-harness.mjs"
+        "src/core/embedder.ts",
+        "src/core/lsp/client.ts",
+        "src/agent/session-memory.ts",
+        "src/core/ast-chunker.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -370,7 +370,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 34
     },
     {
       "id": "recency-boost",
@@ -379,26 +379,26 @@
         "src/core/git-recency.ts"
       ],
       "retrievedFiles": [
+        "src/core/types.ts",
         "README.md",
         "src/core/freshness.ts",
+        "src/core/context.ts",
         "src/cli/commands/search.ts",
         "src/core/sqlite-store.ts",
         "src/core/git-recency.test.ts",
         "src/core/file-filter.ts",
         "src/core/git-recency.ts",
-        "src/agent/env.ts",
-        "src/core/types.ts",
-        "src/core/freshness.test.ts"
+        "src/agent/env.ts"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.14285714285714285,
-        "ndcg": 0.3333333333333333,
+        "reciprocalRank": 0.1111111111111111,
+        "ndcg": 0.3010299956639812,
         "hit": true,
-        "firstHitRank": 7,
+        "firstHitRank": 9,
         "contextRecall": 1
       },
-      "elapsedMs": 19
+      "elapsedMs": 32
     },
     {
       "id": "step-budget",
@@ -426,7 +426,7 @@
         "firstHitRank": null,
         "contextRecall": 0
       },
-      "elapsedMs": 24
+      "elapsedMs": 43
     },
     {
       "id": "native-binding-errors",
@@ -437,14 +437,14 @@
       "retrievedFiles": [
         "src/core/native-binding-error.ts",
         "extension/src/services/NativeBindingSelector.ts",
-        "extension/CHANGELOG.md",
         "src/core/native-binding-error.test.ts",
-        "extension/PUBLISHING.md",
         "src/core/sqlite-store.ts",
+        "extension/PUBLISHING.md",
         "src/core/embedder.ts",
         ".github/workflows/release-vsix.yml",
+        "extension/CHANGELOG.md",
         "extension/scripts/verify-vsix.mjs",
-        "src/cli/config.ts"
+        ".github/workflows/test.yml"
       ],
       "metrics": {
         "recall": 1,
@@ -454,7 +454,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 43
     },
     {
       "id": "freshness-check",
@@ -463,9 +463,9 @@
         "src/core/freshness.ts"
       ],
       "retrievedFiles": [
-        "src/core/sqlite-store.ts",
         "src/core/context.ts",
         "src/core/types.ts",
+        "src/core/sqlite-store.ts",
         "src/core/freshness.ts",
         "src/trace/worktree.ts",
         "README.md",
@@ -482,7 +482,7 @@
         "firstHitRank": 4,
         "contextRecall": 1
       },
-      "elapsedMs": 25
+      "elapsedMs": 41
     },
     {
       "id": "history-compaction",
@@ -494,12 +494,12 @@
         "src/agent/agent.ts",
         "src/trace/format.ts",
         "src/agent/utils.ts",
-        "src/core/embedder.ts",
         "src/agent/step-budget.test.ts",
         "extension/src/chat/webview/main.ts",
         "src/trace/ledger.ts",
         "src/agent/harness2.test.ts",
         "src/trace/view-model.ts",
+        "src/core/embedder.ts",
         "src/agent/types.ts"
       ],
       "metrics": {
@@ -510,7 +510,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 30
     },
     {
       "id": "edit-review-undo",
@@ -527,8 +527,8 @@
         "extension/src/chat/webview/messages.ts",
         "src/trace/worktree.ts",
         "src/trace/studio/components.tsx",
-        "extension/src/services/AgentService.ts",
-        "src/agent/edit-tools.test.ts"
+        "extension/src/services/VSCodeEditApplier.ts",
+        "src/core/policy.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -538,7 +538,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 36
     },
     {
       "id": "native-binding-selector",
@@ -551,11 +551,11 @@
         "extension/src/services/NativeBindingSelector.ts",
         "extension/src/services/NativeBindingSelector.test.ts",
         ".github/workflows/release-vsix.yml",
+        "extension/CHANGELOG.md",
         "src/core/sqlite-store.ts",
         "extension/scripts/smoke-native.cjs",
         "src/core/native-binding-error.test.ts",
         "extension/src/extension.ts",
-        "extension/CHANGELOG.md",
         "desktop/README.md"
       ],
       "metrics": {
@@ -566,7 +566,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 24
+      "elapsedMs": 33
     },
     {
       "id": "vscode-agent-build",
@@ -594,7 +594,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 24
+      "elapsedMs": 33
     },
     {
       "id": "vscode-edit-applier",
@@ -610,9 +610,9 @@
         "src/eval/agent-runner.ts",
         "src/agent/edit-tools.ts",
         "extension/src/services/EditReviewService.test.ts",
+        "src/core/policy.ts",
         "extension/src/chat/ChatView.ts",
-        "README.md",
-        "src/agent/agent.ts"
+        "README.md"
       ],
       "metrics": {
         "recall": 1,
@@ -622,7 +622,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 28
     },
     {
       "id": "chat-history-store",
@@ -634,9 +634,9 @@
         "extension/src/services/ChatHistoryStore.ts",
         "extension/src/chat/webview/main.ts",
         "extension/src/chat/ChatView.ts",
-        "src/agent/session-store.ts",
         "src/trace/registry.ts",
         "src/trace/studio/app.tsx",
+        "src/agent/session-store.ts",
         "desktop/main.js",
         "src/trace/server.ts",
         "src/trace/view-model.test.ts",
@@ -650,7 +650,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 36
     },
     {
       "id": "chat-webview-render",
@@ -662,13 +662,13 @@
         "extension/src/chat/webview/main.ts",
         "src/agent/agent.ts",
         "src/trace/studio/safety.test.ts",
+        "src/core/context.ts",
         "src/core/streaming-retriever.ts",
-        "src/trace/markdown.test.ts",
         "src/trace/markdown.ts",
+        "src/trace/markdown.test.ts",
         "src/trace/session.test.ts",
-        "src/cli/ui.test.ts",
-        "README.md",
-        "extension/src/chat/webview/tour.ts"
+        "src/core/streaming-retriever.test.ts",
+        "src/cli/ui.test.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -678,7 +678,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 42
     },
     {
       "id": "chatview-host",
@@ -690,11 +690,10 @@
         "extension/src/chat/webview/messages.ts",
         "extension/src/services/ChatHistoryStore.ts",
         "extension/src/chat/ChatView.ts",
-        "extension/src/chat/webview/messages.test.ts",
         "extension/src/chat/webview/main.ts",
+        "extension/src/chat/webview/messages.test.ts",
         "extension/src/chat/webview/tour.ts",
-        "extension/src/settings/SettingsPanel.ts",
-        "extension/src/chat/webview/main.test.ts"
+        "extension/src/settings/SettingsPanel.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -704,7 +703,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 33
     },
     {
       "id": "model-routing",
@@ -716,10 +715,10 @@
         "src/agent/model-router.ts",
         "src/agent/step-budget.ts",
         "extension/package.json",
+        "src/core/retriever.ts",
         "README.md",
         "src/agent/session-memory.ts",
         "src/cli/commands/search.ts",
-        "src/core/retriever.ts",
         "src/core/sqlite-store.ts",
         "src/core/graph-expander.ts",
         "src/agent/extra-tools.ts"
@@ -732,7 +731,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 23
+      "elapsedMs": 33
     },
     {
       "id": "session-memory",
@@ -743,14 +742,14 @@
       "retrievedFiles": [
         "src/agent/session-memory.ts",
         "src/agent/agent.ts",
-        "README.md",
         "src/agent/agent-intelligence.test.ts",
         "extension/README.md",
         "src/agent/types.ts",
+        "README.md",
         "extension/dev/gen-harness.mjs",
         "src/agent/delegate.ts",
         "src/trace/session.ts",
-        "extension/CHANGELOG.md"
+        "web/index.html"
       ],
       "metrics": {
         "recall": 1,
@@ -760,7 +759,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 25
+      "elapsedMs": 42
     },
     {
       "id": "llm-providers",
@@ -772,13 +771,13 @@
         "src/agent/providers.ts",
         "extension/package.json",
         "extension/src/chat/webview/messages.ts",
+        "extension/src/shared/model-settings.ts",
         "src/cli/commands/agent.ts",
         "README.md",
         "extension/README.md",
         "extension/src/services/AgentService.ts",
         "src/core/embedder.ts",
-        "extension/src/chat/ChatView.ts",
-        "src/agent/model-router.ts"
+        "extension/src/chat/ChatView.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -788,7 +787,7 @@
         "firstHitRank": 1,
         "contextRecall": 0
       },
-      "elapsedMs": 21
+      "elapsedMs": 31
     },
     {
       "id": "tool-result-truncation",
@@ -816,7 +815,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 19
+      "elapsedMs": 36
     },
     {
       "id": "shell-tool",
@@ -826,15 +825,15 @@
       ],
       "retrievedFiles": [
         "src/agent/extra-tools.ts",
-        "src/cli/commands/agent.ts",
         "src/core/policy.ts",
+        "src/core/lsp/client.ts",
         "extension/package.json",
-        "src/cli/commands/mcp.ts",
+        "src/cli/commands/agent.ts",
         "src/agent/agent.ts",
-        "src/trace/session.ts",
+        "src/cli/commands/mcp.ts",
         "src/agent/types.ts",
-        "src/trace/studio/client.ts",
-        "README.md"
+        "src/trace/session.ts",
+        "src/trace/studio/client.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -844,7 +843,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 30
     },
     {
       "id": "live-index-helper",
@@ -854,15 +853,15 @@
       ],
       "retrievedFiles": [
         "src/core/live-index.ts",
+        "src/core/context.ts",
+        "src/core/types.ts",
         "src/cli/commands/indexing.ts",
         "src/core/file-watcher.test.ts",
-        "src/core/context.ts",
         "extension/src/shared/indexing-form-html.ts",
-        "src/core/types.ts",
         "src/core/file-watcher.ts",
         "README.md",
         "src/cli/commands/mcp.ts",
-        "extension/CHANGELOG.md"
+        "src/core/freshness.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -872,7 +871,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 26
+      "elapsedMs": 33
     },
     {
       "id": "query-embedding-cache",
@@ -884,9 +883,9 @@
         "src/core/query-cache.ts",
         "src/core/multi-context.ts",
         "src/core/query-cache.test.ts",
-        "extension/src/services/ContextService.ts",
         "src/core/context.ts",
         "src/core/retriever.ts",
+        "extension/src/services/ContextService.ts",
         "extension/src/providers/SearchProvider.ts",
         "extension/src/chat/ChatView.ts",
         "src/eval/runner.ts",
@@ -900,7 +899,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 16
+      "elapsedMs": 39
     },
     {
       "id": "graph-edge-queries",
@@ -913,9 +912,9 @@
         "src/core/sqlite-store.ts",
         "src/core/graph-extractor.ts",
         "src/core/graph-expander.ts",
+        "src/core/context.ts",
         "src/core/ast-graph-extractor.ts",
         "src/trace/protocol.ts",
-        "src/core/context.ts",
         "README.md",
         "src/core/ast-graph-extractor.test.ts",
         "src/core/ast-graph/test-utils.ts"
@@ -928,7 +927,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 18
+      "elapsedMs": 34
     },
     {
       "id": "dependency-packing",
@@ -943,10 +942,10 @@
         "src/trace/protocol.ts",
         "src/eval/metrics.ts",
         "src/trace/format.ts",
+        "src/core/context.ts",
         "src/trace/view-model.ts",
         "src/core/context-packer.test.ts",
-        "src/agent/agent-intelligence.test.ts",
-        "src/core/context.ts"
+        "src/core/types.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -956,7 +955,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 24
+      "elapsedMs": 38
     },
     {
       "id": "streaming-stages",
@@ -965,8 +964,8 @@
         "src/core/streaming-retriever.ts"
       ],
       "retrievedFiles": [
-        "src/core/streaming-retriever.ts",
         "src/core/retriever.ts",
+        "src/core/streaming-retriever.ts",
         "src/trace/protocol.ts",
         "src/trace/retrieval.ts",
         "src/core/streaming-retriever.test.ts",
@@ -974,17 +973,17 @@
         "src/core/retriever.integration.test.ts",
         "extension/src/health/RetrievalDebugPanel.ts",
         "src/trace/studio/components.tsx",
-        "extension/dev/gen-harness.mjs"
+        "src/core/query-profile.test.ts"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 1,
-        "ndcg": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
         "hit": true,
-        "firstHitRank": 1,
+        "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 37
     },
     {
       "id": "line-chunking-fallback",
@@ -1000,8 +999,8 @@
         "src/core/context-packer.ts",
         "src/core/chunker.test.ts",
         "src/trace/desktop/shell.ts",
-        "src/core/embedder.ts",
         "src/core/sqlite-store.ts",
+        "src/core/embedder.ts",
         "src/core/utils.ts"
       ],
       "metrics": {
@@ -1012,7 +1011,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 32
     },
     {
       "id": "guidelines-loading",
@@ -1022,15 +1021,15 @@
       ],
       "retrievedFiles": [
         "src/core/guidelines.ts",
-        "src/eval/agent-runner.ts",
         "src/agent/agent.ts",
+        "src/eval/agent-runner.ts",
         "src/core/context.ts",
         "src/cli/commands/agent.ts",
+        "src/agent/plan.ts",
         "src/agent/types.ts",
         "extension/src/services/AgentService.ts",
         "src/agent/delegate.ts",
-        "src/core/search.ts",
-        "extension/package.json"
+        "src/core/search.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -1040,7 +1039,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 35
     },
     {
       "id": "regex-extraction-fallback",
@@ -1049,11 +1048,11 @@
         "src/core/graph-extractor.ts"
       ],
       "retrievedFiles": [
-        "src/core/ast-graph/test-utils.ts",
         "src/core/ast-graph-extractor.ts",
+        "src/core/ast-graph/test-utils.ts",
         "src/core/graph-extractor.ts",
-        "extension/.vscodeignore",
         "src/core/retriever.ts",
+        "extension/.vscodeignore",
         "README.md",
         "src/core/ast-graph/shared.ts",
         "src/core/sqlite-store.ts",
@@ -1068,7 +1067,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 48
     },
     {
       "id": "multi-repo-context",
@@ -1082,11 +1081,11 @@
         "README.md",
         "extension/src/chat/webview/main.ts",
         "extension/package.json",
-        "package.json",
         "src/agent/agent.ts",
         "src/cli/commands/search.ts",
         "src/core/multi-context.test.ts",
-        "extension/src/chat/ChatView.ts"
+        "extension/src/chat/ChatView.ts",
+        "web/docs.html"
       ],
       "metrics": {
         "recall": 1,
@@ -1096,7 +1095,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 18
+      "elapsedMs": 33
     },
     {
       "id": "eval-metrics",
@@ -1106,15 +1105,15 @@
       ],
       "retrievedFiles": [
         "src/trace/retrieval.ts",
-        "src/trace/ledger.ts",
-        "README.md",
-        "src/eval/metrics.ts",
-        "src/trace/protocol.ts",
         "src/core/retriever.ts",
-        "src/eval/metrics.test.ts",
-        "src/eval/runner.ts",
+        "src/trace/ledger.ts",
+        "src/eval/metrics.ts",
+        "web/benchmarks.html",
+        "src/trace/protocol.ts",
         "web/index.html",
-        "src/agent/agent.ts"
+        "README.md",
+        "src/eval/metrics.test.ts",
+        "src/eval/runner.ts"
       ],
       "metrics": {
         "recall": 1,
@@ -1124,7 +1123,7 @@
         "firstHitRank": 4,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 32
     },
     {
       "id": "eval-runner-compare",
@@ -1134,13 +1133,13 @@
       ],
       "retrievedFiles": [
         "src/eval/runner.ts",
-        "README.md",
         "src/cli/commands/eval-agent.ts",
-        "src/eval/runner.test.ts",
-        "src/trace/retrieval.ts",
         "src/core/retriever.ts",
-        "src/eval/metrics.ts",
+        "src/eval/runner.test.ts",
+        ".github/workflows/nightly.yml",
+        "src/trace/retrieval.ts",
         "src/trace/retrieval.test.ts",
+        "src/eval/metrics.ts",
         "src/eval/agent-runner.test.ts",
         "src/eval/agent-runner.ts"
       ],
@@ -1152,7 +1151,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 34
     },
     {
       "id": "agent-loop-flow",
@@ -1165,8 +1164,8 @@
         "src/agent/agent.ts",
         "src/agent/types.ts",
         "extension/src/services/AgentService.ts",
-        "src/eval/agent-runner.ts",
         "src/agent/harness.test.ts",
+        "src/eval/agent-runner.ts",
         "src/agent/plan.ts",
         "src/agent/harness2.test.ts",
         "src/core/embedder.ts",
@@ -1181,7 +1180,7 @@
         "firstHitRank": 1,
         "contextRecall": 0.5
       },
-      "elapsedMs": 23
+      "elapsedMs": 54
     },
     {
       "id": "edit-apply-review-flow",
@@ -1198,8 +1197,8 @@
         "src/eval/agent-runner.ts",
         "src/trace/checkpoints.ts",
         "extension/src/services/VSCodeEditApplier.ts",
-        "extension/README.md",
         "src/agent/agent.ts",
+        "extension/README.md",
         "extension/src/services/EditReviewService.test.ts"
       ],
       "metrics": {
@@ -1210,7 +1209,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 25
+      "elapsedMs": 44
     },
     {
       "id": "indexing-flow",
@@ -1220,28 +1219,28 @@
         "src/core/file-filter.ts"
       ],
       "retrievedFiles": [
+        "src/core/context.ts",
         "src/cli/commands/indexing.ts",
         "src/core/embedder.ts",
-        "src/core/context.ts",
+        "src/core/types.ts",
         "extension/src/shared/indexing-settings.ts",
         "extension/README.md",
         "extension/src/services/ContextService.test.ts",
-        "src/core/types.ts",
+        "src/core/lsp/index.ts",
         "extension/package.json",
-        "extension/src/services/ContextService.ts",
-        "README.md"
+        "extension/src/services/ContextService.ts"
       ],
       "metrics": {
         "recall": 0.5,
-        "reciprocalRank": 0.3333333333333333,
-        "ndcg": 0.3065735963827292,
+        "reciprocalRank": 1,
+        "ndcg": 0.6131471927654584,
         "hit": true,
-        "firstHitRank": 3,
+        "firstHitRank": 1,
         "contextRecall": 0.5
       },
-      "elapsedMs": 21
+      "elapsedMs": 36
     }
   ],
-  "meanLatencyMs": 37.54545454545455,
+  "meanLatencyMs": 37.56818181818182,
   "searchMode": "hybrid"
 }

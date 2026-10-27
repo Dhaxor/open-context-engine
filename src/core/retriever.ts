@@ -243,6 +243,9 @@ export class HybridRetriever {
         log.info("reranker failed; using fused order", { error: errText(err) });
       }
     }
+    if (this.search.adaptiveFusion !== false && fusion.shape === "definition") {
+      results = promoteDeclarationMatches(results, query);
+    }
     return { vectorHits, bm25Hits, fused, results, finalK };
   }
 
@@ -331,8 +334,38 @@ export function applySymbolAwareBoost(results: SearchResult[], query: string): S
     .map(({ result, boosted }) => ({ ...result, score: boosted }));
 }
 
-export function applyEditorContextBoost(results: SearchResult[], opts: RetrieveOptions): SearchResult[] {
-  const activePath = normalizePath(opts.activePath);
+/**
+ * Definition-shaped queries NAME a symbol; when a fused chunk DECLARES that
+ * exact symbol (its symbolName matches an identifier token from the query),
+ * it is the definition home even when the file is textually sparse — Flask's
+ * wrappers.py lost to helpers.py's make_response on "Response subclass
+ * returned by views". A large additive bonus (relative to the current top
+ * score) lifts the declaration above importers and mentions, which
+ * multipliers cannot do from a low base rank. Capped at 3 promotions so one
+ * query can't flood the list with same-symbol chunks.
+ */
+export function promoteDeclarationMatches(results: SearchResult[], query: string): SearchResult[] {
+  if (!results.length) return results;
+  const idents = extractIdentifiers(query)
+    .map(normalize)
+    .filter(t => t.length >= 3 && !STOP.has(t));
+  if (!idents.length) return results;
+  const top = Math.max(...results.map(r => r.score), 0.0001);
+  let promoted = 0;
+  return results
+    .map(r => {
+      if (promoted >= 3) return r;
+      const sym = normalize(r.chunk.symbolName);
+      if (sym && idents.includes(sym)) {
+        promoted++;
+        return { ...r, score: r.score + top * 0.6 };
+      }
+      return r;
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+export function applyEditorContextBoost(results: SearchResult[], opts: RetrieveOptions): SearchResult[] {  const activePath = normalizePath(opts.activePath);
   const openPaths = new Set((opts.openPaths ?? []).map(normalizePath).filter(Boolean) as string[]);
   const contextSignals = querySignals(opts.contextText ?? "");
   if (!activePath && !openPaths.size && !contextSignals.size) return results;

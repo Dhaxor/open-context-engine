@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-10-27T01:15:50.523Z",
+  "generatedAt": "2026-10-27T22:21:03.575Z",
   "k": 10,
   "caseCount": 27,
   "aggregate": {
     "cases": 27,
-    "recallAtK": 0.9259259259259259,
-    "mrr": 0.6411522633744856,
-    "ndcgAtK": 0.7107785787993363,
-    "hitRate": 0.9259259259259259,
-    "contextRecall": 0.9259259259259259,
-    "contextHitRate": 0.9259259259259259
+    "recallAtK": 0.9629629629629629,
+    "mrr": 0.757201646090535,
+    "ndcgAtK": 0.8080382177654836,
+    "hitRate": 0.9629629629629629,
+    "contextRecall": 0.9629629629629629,
+    "contextHitRate": 0.9629629629629629
   },
   "results": [
     {
@@ -38,7 +38,7 @@
         "firstHitRank": 4,
         "contextRecall": 1
       },
-      "elapsedMs": 711
+      "elapsedMs": 737
     },
     {
       "id": "blueprint-class",
@@ -48,25 +48,25 @@
       ],
       "retrievedFiles": [
         "src/flask/sansio/blueprints.py",
+        "src/flask/blueprints.py",
+        "tests/test_cli.py",
         "src/flask/cli.py",
         "tests/test_blueprints.py",
-        "tests/test_cli.py",
-        "src/flask/blueprints.py",
         "docs/blueprints.rst",
-        "docs/tutorial/views.rst",
         "src/flask/sansio/app.py",
+        "docs/tutorial/views.rst",
         "docs/cli.rst",
-        "src/flask/sansio/scaffold.py"
+        "tests/test_async.py"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.2,
-        "ndcg": 0.38685280723454163,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
         "hit": true,
-        "firstHitRank": 5,
+        "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 39
     },
     {
       "id": "blueprint-sansio-base",
@@ -76,15 +76,15 @@
       ],
       "retrievedFiles": [
         "src/flask/sansio/blueprints.py",
+        "src/flask/blueprints.py",
         "docs/blueprints.rst",
+        "tests/test_async.py",
         "tests/test_views.py",
         "docs/extensiondev.rst",
         "tests/test_blueprints.py",
         "docs/tutorial/views.rst",
         "docs/patterns/appdispatch.rst",
-        "docs/design.rst",
-        "docs/lifecycle.rst",
-        "src/flask/sansio/app.py"
+        "docs/design.rst"
       ],
       "metrics": {
         "recall": 1,
@@ -94,7 +94,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 30
     },
     {
       "id": "config-class",
@@ -120,7 +120,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 27
+      "elapsedMs": 33
     },
     {
       "id": "app-context",
@@ -148,7 +148,7 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 28
     },
     {
       "id": "after-this-request",
@@ -176,7 +176,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 33
+      "elapsedMs": 35
     },
     {
       "id": "secure-cookie-session",
@@ -199,7 +199,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 31
+      "elapsedMs": 34
     },
     {
       "id": "null-session",
@@ -208,26 +208,26 @@
         "src/flask/sessions.py"
       ],
       "retrievedFiles": [
-        "tests/test_basic.py",
         "src/flask/sessions.py",
+        "tests/test_basic.py",
         "docs/config.rst",
         "tests/test_reqctx.py",
         "src/flask/cli.py",
         "docs/quickstart.rst",
-        "docs/api.rst",
+        "src/flask/debughelpers.py",
         "docs/errorhandling.rst",
-        "CHANGES.rst",
-        "src/flask/testing.py"
+        "src/flask/testing.py",
+        "docs/api.rst"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.5,
-        "ndcg": 0.6309297535714575,
+        "reciprocalRank": 1,
+        "ndcg": 1,
         "hit": true,
-        "firstHitRank": 2,
+        "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 32
+      "elapsedMs": 30
     },
     {
       "id": "jinja-env",
@@ -254,7 +254,7 @@
         "firstHitRank": 4,
         "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 24
     },
     {
       "id": "template-loader",
@@ -278,7 +278,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 30
     },
     {
       "id": "test-client",
@@ -287,26 +287,26 @@
         "src/flask/testing.py"
       ],
       "retrievedFiles": [
-        "src/flask/app.py",
         "src/flask/testing.py",
+        "src/flask/app.py",
         "tests/test_request.py",
-        "tests/test_helpers.py",
         "tests/test_json.py",
+        "tests/test_helpers.py",
         "tests/test_blueprints.py",
         "tests/test_testing.py",
-        "tests/test_views.py",
         "tests/test_basic.py",
+        "tests/test_views.py",
         "docs/testing.rst"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.5,
-        "ndcg": 0.6309297535714575,
+        "reciprocalRank": 1,
+        "ndcg": 1,
         "hit": true,
-        "firstHitRank": 2,
+        "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 31
     },
     {
       "id": "environ-builder",
@@ -315,26 +315,26 @@
         "src/flask/testing.py"
       ],
       "retrievedFiles": [
+        "src/flask/testing.py",
         "tests/test_testing.py",
         "tests/test_reqctx.py",
         "tests/test_logging.py",
         "src/flask/app.py",
         "tests/test_basic.py",
-        "src/flask/testing.py",
         "tests/test_templating.py",
         "docs/deploying/mod_wsgi.rst",
-        "tests/test_config.py",
-        "tests/conftest.py"
+        "tests/conftest.py",
+        "tests/test_config.py"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.16666666666666666,
-        "ndcg": 0.3562071871080222,
+        "reciprocalRank": 1,
+        "ndcg": 1,
         "hit": true,
-        "firstHitRank": 6,
+        "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 24
+      "elapsedMs": 26
     },
     {
       "id": "method-view",
@@ -343,26 +343,26 @@
         "src/flask/views.py"
       ],
       "retrievedFiles": [
-        "tests/test_views.py",
         "src/flask/views.py",
+        "tests/test_views.py",
+        "tests/test_async.py",
         "docs/views.rst",
         "tests/test_helpers.py",
         "docs/async-await.rst",
         "tests/test_basic.py",
+        "src/flask/templating.py",
         "src/flask/sansio/app.py",
-        "docs/api.rst",
-        "src/flask/sansio/scaffold.py",
-        "docs/tutorial/views.rst"
+        "docs/api.rst"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.5,
-        "ndcg": 0.6309297535714575,
+        "reciprocalRank": 1,
+        "ndcg": 1,
         "hit": true,
-        "firstHitRank": 2,
+        "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 23
+      "elapsedMs": 27
     },
     {
       "id": "view-decorator",
@@ -374,8 +374,8 @@
         "tests/test_views.py",
         "tests/test_blueprints.py",
         "src/flask/views.py",
-        "tests/test_basic.py",
         "docs/patterns/viewdecorators.rst",
+        "tests/test_basic.py",
         "docs/tutorial/views.rst",
         "docs/api.rst",
         "docs/views.rst",
@@ -390,7 +390,7 @@
         "firstHitRank": 3,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 26
     },
     {
       "id": "request-wrapper",
@@ -408,7 +408,7 @@
         "src/flask/cli.py",
         "tests/test_user_error_handler.py",
         "src/flask/wrappers.py",
-        "docs/extensiondev.rst"
+        "tests/test_blueprints.py"
       ],
       "metrics": {
         "recall": 1,
@@ -418,7 +418,7 @@
         "firstHitRank": 9,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 23
     },
     {
       "id": "response-wrapper",
@@ -428,25 +428,25 @@
       ],
       "retrievedFiles": [
         "src/flask/helpers.py",
+        "src/flask/wrappers.py",
         "src/flask/app.py",
         "src/flask/views.py",
-        "docs/views.rst",
         "tests/test_user_error_handler.py",
+        "docs/views.rst",
         "tests/test_views.py",
         "tests/test_basic.py",
         "docs/patterns/subclassing.rst",
-        "tests/test_helpers.py",
-        "docs/quickstart.rst"
+        "tests/test_helpers.py"
       ],
       "metrics": {
-        "recall": 0,
-        "reciprocalRank": 0,
-        "ndcg": 0,
-        "hit": false,
-        "firstHitRank": null,
-        "contextRecall": 0
+        "recall": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
+        "hit": true,
+        "firstHitRank": 2,
+        "contextRecall": 1
       },
-      "elapsedMs": 20
+      "elapsedMs": 25
     },
     {
       "id": "stream-with-context",
@@ -474,7 +474,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 25
+      "elapsedMs": 28
     },
     {
       "id": "debug-flag",
@@ -484,6 +484,7 @@
       ],
       "retrievedFiles": [
         "src/flask/helpers.py",
+        "src/flask/templating.py",
         "src/flask/cli.py",
         "src/flask/app.py",
         "tests/test_helpers.py",
@@ -491,8 +492,7 @@
         "src/flask/logging.py",
         "src/flask/sansio/app.py",
         "CHANGES.rst",
-        "src/flask/config.py",
-        "tests/conftest.py"
+        "src/flask/config.py"
       ],
       "metrics": {
         "recall": 1,
@@ -502,7 +502,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 28
     },
     {
       "id": "cli-entry",
@@ -511,26 +511,26 @@
         "src/flask/cli.py"
       ],
       "retrievedFiles": [
-        "src/flask/app.py",
         "src/flask/cli.py",
+        "src/flask/app.py",
         "examples/tutorial/flaskr/db.py",
         "docs/cli.rst",
         "tests/test_cli.py",
-        "docs/appcontext.rst",
         "docs/tutorial/database.rst",
-        "src/flask/testing.py",
+        "docs/appcontext.rst",
         "docs/patterns/appfactories.rst",
+        "src/flask/testing.py",
         "docs/api.rst"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 0.5,
-        "ndcg": 0.6309297535714575,
+        "reciprocalRank": 1,
+        "ndcg": 1,
         "hit": true,
-        "firstHitRank": 2,
+        "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 27
+      "elapsedMs": 26
     },
     {
       "id": "find-best-app",
@@ -558,7 +558,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 24
+      "elapsedMs": 27
     },
     {
       "id": "logger-creation",
@@ -575,8 +575,8 @@
         "docs/patterns/appfactories.rst",
         "CHANGES.rst",
         "docs/api.rst",
-        "tests/test_basic.py",
-        "docs/quickstart.rst"
+        "docs/quickstart.rst",
+        "src/flask/app.py"
       ],
       "metrics": {
         "recall": 1,
@@ -586,7 +586,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 22
+      "elapsedMs": 21
     },
     {
       "id": "json-provider",
@@ -609,7 +609,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 21
+      "elapsedMs": 26
     },
     {
       "id": "session-tag",
@@ -621,8 +621,8 @@
         "src/flask/json/tag.py",
         "src/flask/sessions.py",
         "tests/test_testing.py",
-        "tests/test_basic.py",
         "tests/test_json_tag.py",
+        "tests/test_basic.py",
         "tests/test_reqctx.py"
       ],
       "metrics": {
@@ -633,7 +633,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 30
+      "elapsedMs": 32
     },
     {
       "id": "routing-redirect-debug",
@@ -651,7 +651,7 @@
         "docs/patterns/wtforms.rst",
         "docs/tutorial/blog.rst",
         "docs/quickstart.rst",
-        "CHANGES.rst"
+        "tests/test_logging.py"
       ],
       "metrics": {
         "recall": 1,
@@ -661,7 +661,7 @@
         "firstHitRank": 1,
         "contextRecall": 1
       },
-      "elapsedMs": 27
+      "elapsedMs": 33
     },
     {
       "id": "scaffold",
@@ -670,24 +670,22 @@
         "src/flask/sansio/scaffold.py"
       ],
       "retrievedFiles": [
-        "src/flask/sansio/scaffold.py",
         "src/flask/sansio/blueprints.py",
+        "src/flask/sansio/scaffold.py",
+        "src/flask/sansio/app.py",
         "docs/blueprints.rst",
         "src/flask/templating.py",
-        "src/flask/sansio/app.py",
-        "docs/tutorial/views.rst",
-        "docs/extensiondev.rst",
-        "examples/celery/src/task_app/tasks.py"
+        "src/flask/blueprints.py"
       ],
       "metrics": {
         "recall": 1,
-        "reciprocalRank": 1,
-        "ndcg": 1,
+        "reciprocalRank": 0.5,
+        "ndcg": 0.6309297535714575,
         "hit": true,
-        "firstHitRank": 1,
+        "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 28
+      "elapsedMs": 31
     },
     {
       "id": "globals-proxy",
@@ -703,8 +701,8 @@
         "CHANGES.rst",
         "docs/api.rst",
         "docs/appcontext.rst",
-        "tests/test_reqctx.py",
         "tests/test_basic.py",
+        "tests/test_reqctx.py",
         "docs/deploying/proxy_fix.rst"
       ],
       "metrics": {
@@ -715,7 +713,7 @@
         "firstHitRank": null,
         "contextRecall": 0
       },
-      "elapsedMs": 22
+      "elapsedMs": 21
     },
     {
       "id": "signals",
@@ -727,8 +725,8 @@
         "tests/test_signals.py",
         "src/flask/signals.py",
         "docs/signals.rst",
-        "src/flask/sansio/app.py",
         "src/flask/app.py",
+        "src/flask/sansio/app.py",
         "docs/api.rst",
         "src/flask/sansio/blueprints.py",
         "src/flask/sansio/scaffold.py",
@@ -743,9 +741,9 @@
         "firstHitRank": 2,
         "contextRecall": 1
       },
-      "elapsedMs": 30
+      "elapsedMs": 25
     }
   ],
-  "meanLatencyMs": 50.44444444444444,
+  "meanLatencyMs": 54.666666666666664,
   "searchMode": "hybrid"
 }
