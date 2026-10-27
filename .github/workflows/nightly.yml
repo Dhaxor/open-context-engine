@@ -79,20 +79,32 @@ jobs:
       - name: Flask gold set — keyword-only
         run: |
           curl -sL https://github.com/pallets/flask/archive/refs/tags/3.1.2.tar.gz | tar xz
-          node dist/cli/index.js eval -w flask-3.1.2 -p none --store-path "$RUNNER_TEMP/flask-kw" \
+          # Absolute -w: relative workspace roots can walk zero files on Windows.
+          node dist/cli/index.js eval -w "$PWD/flask-3.1.2" -p none --store-path "$RUNNER_TEMP/flask-kw" \
             --cases eval/external/flask.eval.json \
             --baseline eval/external/flask.baseline.json 2>&1 | tee "$RUNNER_TEMP/flask-kw.txt"
       - name: Flask gold set — hybrid (local MiniLM, adaptive fusion)
         run: |
-          node dist/cli/index.js eval -w flask-3.1.2 -p local -m all-MiniLM-L6-v2 --store-path "$RUNNER_TEMP/flask-hybrid" \
+          node dist/cli/index.js eval -w "$PWD/flask-3.1.2" -p local -m all-MiniLM-L6-v2 --store-path "$RUNNER_TEMP/flask-hybrid" \
             --cases eval/external/flask.eval.json \
             --baseline eval/external/flask.minilm.baseline.json 2>&1 | tee "$RUNNER_TEMP/flask-hybrid.txt"
+      - name: Gin gold set — keyword-only
+        run: |
+          curl -sL https://github.com/gin-gonic/gin/archive/refs/tags/v1.10.0.tar.gz | tar xz
+          node dist/cli/index.js eval -w "$PWD/gin-1.10.0" -p none --store-path "$RUNNER_TEMP/gin-kw" \
+            --cases eval/external/gin.eval.json \
+            --baseline eval/external/gin.baseline.json 2>&1 | tee "$RUNNER_TEMP/gin-kw.txt"
+      - name: Gin gold set — hybrid (local MiniLM, adaptive fusion)
+        run: |
+          node dist/cli/index.js eval -w "$PWD/gin-1.10.0" -p local -m all-MiniLM-L6-v2 --store-path "$RUNNER_TEMP/gin-hybrid" \
+            --cases eval/external/gin.eval.json \
+            --baseline eval/external/gin.minilm.baseline.json 2>&1 | tee "$RUNNER_TEMP/gin-hybrid.txt"
       - name: Summarize
         if: always()
         run: |
           {
             echo "## Nightly retrieval eval"
-            for f in "$RUNNER_TEMP"/repo-kw.txt "$RUNNER_TEMP"/repo-hybrid.txt "$RUNNER_TEMP"/flask-kw.txt "$RUNNER_TEMP"/flask-hybrid.txt; do
+            for f in "$RUNNER_TEMP"/repo-kw.txt "$RUNNER_TEMP"/repo-hybrid.txt "$RUNNER_TEMP"/flask-kw.txt "$RUNNER_TEMP"/flask-hybrid.txt "$RUNNER_TEMP"/gin-kw.txt "$RUNNER_TEMP"/gin-hybrid.txt; do
               [ -f "$f" ] && { echo '```'; cat "$f"; echo '```'; }
             done
           } >> "$GITHUB_STEP_SUMMARY"
@@ -121,3 +133,35 @@ jobs:
             --tasks eval/agent/tasks.json \
             -p "${OCE_NIGHTLY_LLM_PROVIDER:-google}" \
             2>&1 | tee "$RUNNER_TEMP/agent-eval.txt"
+
+  benchmarks:
+    name: Regenerate the benchmarks page
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+      - run: npm ci
+      # The page renders the committed baselines, so the public numbers stay
+      # exactly what the harness measured — new baselines land via the release
+      # train and this job refreshes the rendered page from them.
+      - run: npm run build:web
+      - name: Commit the refreshed page
+        run: |
+          if git diff --quiet web/benchmarks.html; then
+            echo "benchmarks.html already up to date"
+            exit 0
+          fi
+          git config user.name "oce-nightly"
+          git config user.email "nightly@opencontextengine.com"
+          git add web/benchmarks.html
+          git commit -m "chore(site): regenerate benchmarks page from committed baselines"
+          git push
+      - name: Deploy to Cloudflare
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy
