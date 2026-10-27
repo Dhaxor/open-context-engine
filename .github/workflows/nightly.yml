@@ -26,6 +26,11 @@ permissions:
 concurrency:
   group: nightly
   cancel-in-progress: false
+# onnxruntime-node's postinstall downloads its CUDA binaries from nuget.org —
+# the flakiest dependency in CI (three runs lost to it). Tests run on CPU, and
+# the CPU binaries ship inside the npm package, so skip the download.
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
 
 jobs:
   tests:

@@ -26,6 +26,11 @@ concurrency:
   group: npm-publish
   cancel-in-progress: false
 
+# onnxruntime-node postinstall: skip the flaky CUDA download from nuget.org
+# (the typecheck-only job never touches GPU).
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   publish:
     runs-on: ubuntu-22.04
