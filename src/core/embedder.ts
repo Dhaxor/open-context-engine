@@ -294,7 +294,19 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
         }
         if (transformers.env) transformers.env.cacheDir = localModelCacheDir();
         // q8 quantization: ~4x smaller download, near-identical retrieval quality.
-        return transformers.pipeline("feature-extraction", this.model, { dtype: "q8" });
+        try {
+          return await transformers.pipeline("feature-extraction", this.model, { dtype: "q8" });
+        } catch (err) {
+          const msg = String((err as any)?.message ?? err);
+          if (/\b401\b|unauthorized|gated|access/i.test(msg)) {
+            throw new Error(
+              `Model '${this.model}' refused the download (gated on Hugging Face). ` +
+              "Request access at huggingface.co/" + this.model + ", or switch to the " +
+              "ungated default: oce setup --embeddings local (all-MiniLM-L6-v2).",
+            );
+          }
+          throw err;
+        }
       })();
       // A failed load must be retryable (e.g. user installs the package mid-session).
       this.pipePromise.catch(() => { this.pipePromise = null; });

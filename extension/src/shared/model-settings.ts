@@ -11,12 +11,14 @@ export function defaultModelFor(provider: string): string {
   return provider;
 }
 
-/** Default embedding model per embedding provider. */
+/** Default embedding model per embedding provider. The local default must
+ *  download on a fresh machine — jina-embeddings-v2-base-code is gated on
+ *  Hugging Face (401 until access is granted), so it is opt-in. */
 export const DEFAULT_EMBEDDING_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: "text-embedding-3-small",
   voyage: "voyage-code-3",
   ollama: "nomic-embed-text",
-  local: "jina-embeddings-v2-base-code",
+  local: "all-MiniLM-L6-v2",
 };
 
 /** A setting's value only if the user set it somewhere — not package.json's default. */

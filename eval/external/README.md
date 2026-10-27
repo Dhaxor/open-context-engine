@@ -32,22 +32,31 @@ baseline.
 
 ## What the numbers say (and don't)
 
-**On this set, keyword-only currently beats every hybrid configuration.** The
-definition-shaped queries here ("the main Flask application class") are BM25's
-home turf: exact vocabulary, rank-1 hits. Fusion then *demotes* those hits
-when the semantic ranker prefers tests and docs — the flagship voyage-code-3
-hybrid drops recall to 0.889, and general-purpose embedders (openai
-text-embedding-3-small, local MiniLM) drop it further to 0.852. The inversion
-holds on this repo's own gold set too, in the other direction: hybrid 0.943
-vs keyword 0.886, because those queries paraphrase intent rather than name
-symbols.
+**History: keyword-only used to beat every hybrid configuration here.** The
+definition-shaped queries in this set ("the main Flask application class") are
+BM25's home turf: exact vocabulary, rank-1 hits. Equal-weight RRF fusion
+*demoted* those hits when the semantic ranker preferred tests and docs — the
+flagship voyage-code-3 hybrid dropped recall to 0.889, and general-purpose
+embedders (openai text-embedding-3-small, local MiniLM) dropped further to
+0.852, against keyword-only's 0.926.
 
-The actionable conclusion is not "turn embeddings off" — the agent's live
-queries are paraphrase-shaped — it is that **fusion tuning is measurable open
-work**: weight the vector leg by BM25 confidence, or gate fusion when lexical
-hits are strong. Both baselines above are the before/after harness for that
-work, which is exactly why they are committed even where they are
-unflattering.
+**Adaptive fusion closed that gap.** Queries are now classified by shape
+(identifier spellings, quoted code, file paths → definition; paraphrase →
+intent) and the fusion weights tilt accordingly (see
+`src/core/query-profile.ts`). Measured with local MiniLM on this set:
+
+| configuration | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| keyword-only | 0.926 | 0.605 | 0.685 |
+| hybrid, equal-weight RRF (`--no-adaptive-fusion`) | 0.852 | 0.619 | 0.678 |
+| hybrid, adaptive fusion | **0.926** | 0.641 | 0.711 |
+
+Hybrid reaches parity with keyword-only on definition-shaped ground and keeps
+its edge on paraphrase-shaped ground (this repo's own set: hybrid 0.943 vs
+keyword 0.886 with voyage; adaptive was neutral there with MiniLM,
+0.932 → 0.932). The earlier voyage numbers predate adaptive fusion and will
+be re-measured when a key is at hand; the mechanism is query-time only, so
+the committed baselines remain valid equal-weight references.
 
 ## Known misses
 

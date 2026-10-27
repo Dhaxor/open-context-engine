@@ -38,7 +38,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
 | 🚀 **Parallel Indexing** | Worker-thread parse/chunk pool kicks in automatically on large repos; `oce bench` measures throughput on yours. |
 | 🛟 **Degrades, Never Dies** | No embedding key, or no sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
-| 📏 **Measured, Not Guessed** | Retrieval quality is scored against committed gold sets — this repo's own and an external codebase — in **both** search modes: **hybrid recall@10 0.943 · keyword-only 0.886** here, **0.889 / 0.926** on Flask. Ranking changes ship with before/after deltas. The coding agent itself is scored too: `oce eval-agent` runs end-to-end tasks graded by verification scripts. |
+| 📏 **Measured, Not Guessed** | Retrieval quality is scored against committed gold sets — this repo's own and an external codebase — in **both** search modes, with **adaptive fusion** that tilts BM25/semantic weights per query shape: **hybrid recall@10 0.943 · keyword-only 0.886** here, **parity (0.926) on Flask** where hybrid previously lost. Ranking changes ship with before/after deltas. The coding agent itself is scored too: `oce eval-agent` runs end-to-end tasks graded by verification scripts. |
 
 ## 🚀 Quick Start
 
@@ -542,15 +542,15 @@ Reports **recall@k**, **MRR**, **nDCG@k**, **hit-rate**, and per-query latency, 
 
 Current numbers, measured fresh on this repo's committed 44-case gold set ([`eval/oce.eval.json`](eval/oce.eval.json)) and the external 27-case Flask set ([`eval/external/flask.eval.json`](eval/external/flask.eval.json)) — baselines committed beside them:
 
-| gold set | keyword-only (BM25) | hybrid (voyage-code-3) |
-|---|---|---|
-| this repo — recall@10 / MRR / nDCG@10 | 0.886 / 0.676 / 0.716 | **0.943 / 0.759 / 0.792** |
-| Flask 3.1.2 (external) — recall@10 / MRR / nDCG@10 | **0.926 / 0.605 / 0.685** | 0.889 / 0.604 / 0.676 |
+| gold set | keyword-only (BM25) | hybrid (voyage-code-3) | hybrid (local MiniLM, adaptive fusion) |
+|---|---|---|---|
+| this repo — recall@10 / MRR / nDCG@10 | 0.886 / 0.676 / 0.716 | **0.943 / 0.759 / 0.792** | 0.932 / 0.691 / 0.743 |
+| Flask 3.1.2 (external) — recall@10 / MRR / nDCG@10 | 0.926 / 0.605 / 0.685 | 0.889 / 0.604 / 0.676 | **0.926 / 0.641 / 0.711** |
 
 Two honest readings, and both matter:
 
 - **Hybrid earns its keep where queries paraphrase intent** — +6 points of recall on this repo's set, and it's the mode the agent actually runs in.
-- **Keyword wins on foreign codebases with definition-shaped queries** (a maintainer typing an exact symbol name). Fusion currently demotes confident BM25 hits when the semantic ranker prefers tests and docs; general-purpose embedders make it worse (openai/minilm hybrids scored 0.852 on the Flask set). Tuning that — fusion weighting, or gating when BM25 is confident — is open work, and both baselines are the harness for it.
+- **Adaptive fusion closed the definition-query gap.** Equal-weight RRF used to demote confident BM25 hits below vector-preferred docs/tests (MiniLM hybrid scored 0.852 on Flask, losing to keyword-only's 0.926). Queries are now classified by shape — identifier spellings, quoted code and file paths lean BM25; paraphrases lean semantic (`src/core/query-profile.ts`) — and the local-MiniLM hybrid reaches **parity with keyword-only (0.926) on the Flask set while keeping hybrid's edge on paraphrase queries**. The voyage columns predate adaptive fusion (query-time change only; the committed baselines remain the equal-weight reference). Re-run any of it yourself: `oce eval --no-adaptive-fusion` A/Bs the old behavior.
 
 The June baseline this section used to quote (hybrid 0.977) no longer reproduces on today's engine (0.943) — drift the harness now catches on every run instead of silently shipping.
 
