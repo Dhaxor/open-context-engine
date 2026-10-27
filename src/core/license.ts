@@ -18,13 +18,17 @@ import * as path from "path";
 /** Ed25519 public key (base64 SPKI DER) that license tokens are verified against.
  *  Generate your own with `node scripts/license-tool.mjs generate-keys` and paste it here;
  *  keep the matching private key secret. */
-const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEANybrLf3Rpvaxc78/z6W/BbTZHtJV0ys12BTMPp5lggw=";
+const EMBEDDED_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEAjP3vVw0uzpPW+zN36JKbnR+MdYI/l+GsHSB5kThQDTg=";
 
 /** Days a subscription license keeps working past `exp` — absorbs renewal lag, clock skew,
  *  and brief offline gaps so a single missed day never bricks an air-gapped install. */
 export const DEFAULT_GRACE_DAYS = 14;
 
-export type Plan = "community" | "team" | "enterprise";
+/** Payload shape (and Plan) live in license-types.ts so the Worker-side issuer
+ *  can depend on them without pulling this fs/os/path-touching module into a
+ *  bundle. */
+import type { LicensePayload, Plan } from "./license-types";
+export type { LicensePayload, Plan };
 
 export type Feature = "multi-repo" | "team-index" | "policies" | "sso" | "audit-log";
 
@@ -39,27 +43,7 @@ const FEATURE_MIN_PLAN: Record<Feature, Exclude<Plan, "community">> = {
 
 const PLAN_RANK: Record<Plan, number> = { community: 0, team: 1, enterprise: 2 };
 
-export interface LicensePayload {
-  /** Unique license id (for revocation lists). */
-  id: string;
-  /** Organization the license is issued to. */
-  org: string;
-  email?: string;
-  /** SSO-lite: bind activation to an email domain (e.g. "acme.com"). Activation
-   *  surfaces verify the activating user's email (git config user.email or
-   *  $OCE_ACTIVATION_EMAIL) ends with @<orgDomain>. Enforcement is best-effort
-   *  and offline-friendly — see checkOrgDomainBinding. */
-  orgDomain?: string;
-  plan: Exclude<Plan, "community">;
-  /** Seats purchased. Offline enforcement is honor-based; the control plane can audit. */
-  seats: number;
-  /** Optional explicit feature grants beyond the plan default. */
-  features?: string[];
-  /** Issued-at, unix seconds. */
-  iat: number;
-  /** Expiry, unix seconds. 0 = perpetual. */
-  exp: number;
-}
+
 
 export type LicenseReason = "missing" | "malformed" | "bad-signature" | "expired" | "revoked" | "ok";
 

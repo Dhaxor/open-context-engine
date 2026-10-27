@@ -5,6 +5,43 @@ import { loadPolicy, describePolicy } from "../../core/policy";
 import { defaultAuditDir, readAuditEvents, verifyAuditChain } from "../../core/audit";
 import { DEFAULT_MODEL_FOR_PROVIDER } from "../../core/types";
 
+/** Where Polar license keys are exchanged for signed tokens. Overridable for
+ *  tests/self-hosting; the default is the vendor's Worker. */
+export const DEFAULT_LICENSE_SERVER = process.env.OCE_LICENSE_SERVER || "https://open-context-engine.emperorduke5.workers.dev";
+
+/** A Polar license key (from the order email) is exchanged online for a signed
+ *  offline token. A full signed token (`xxx.yyy`) passes through untouched —
+ *  activation itself stays offline. */
+export async function maybeExchangePolarKey(key: string, io: CliIo): Promise<string> {
+  if (!/^polar_lk_/i.test(key.trim())) return key;
+  const email = resolveActivationEmail();
+  if (!email) {
+    io.fatal(
+      "Activating a Polar license needs your email for org binding. Set it with `git config user.email you@company.com` or OCE_ACTIVATION_EMAIL, then re-run.",
+    );
+  }
+  io.progress("Exchanging Polar license key…\n");
+  let token: string | undefined;
+  let failure: string | undefined;
+  try {
+    const res = await fetch(`${DEFAULT_LICENSE_SERVER}/api/license/activate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ licenseKey: key.trim(), email }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.token) {
+      failure = body?.error || `license server returned ${res.status}`;
+    } else {
+      token = String(body.token);
+    }
+  } catch {
+    failure = `could not reach the license server (${DEFAULT_LICENSE_SERVER}) — check your connection, or use the full signed token from support for offline activation`;
+  }
+  if (!token) io.fatal(`Activation failed: ${failure}.`);
+  return token;
+}
+
 export function registerMiscCommands(program: import("commander").Command, io: CliIo): void {
   const { text, json, error } = io;
 
@@ -165,11 +202,12 @@ export function registerMiscCommands(program: import("commander").Command, io: C
       for (const w of p.warnings) text(`⚠ ${w}`);
     });
 
-  program.command("activate <key>").description("Activate a Team/Enterprise license key").action(async (key: string) => {
+  program.command("activate <key>").description("Activate a Team/Enterprise license (a Polar license key from your order email, or a full signed token)").action(async (key: string) => {
     // Opportunistic revocation refresh (only when a URL is configured — the
     // engine never phones home unprompted). Best-effort: offline still works.
     try { const { refreshRevocations } = await import("../../core/license"); await refreshRevocations(); } catch {}
-    const status = verifyLicenseToken(key);
+    const token = await maybeExchangePolarKey(key, io);
+    const status = verifyLicenseToken(token);
     if (!status.valid) {
       const why = status.reason === "expired" ? "this license has expired"
         : status.reason === "bad-signature" ? "invalid signature (is the key correct and complete?)"
@@ -190,7 +228,7 @@ export function registerMiscCommands(program: import("commander").Command, io: C
     if (domainCheck === "unverifiable") {
       error(`⚠ License is bound to @${status.payload?.orgDomain} but no local email identity was found — proceeding. Set OCE_ACTIVATION_EMAIL or git config user.email to silence this.`);
     }
-    const p = saveLicenseToken(key);
+    const p = saveLicenseToken(token);
     const exp = status.payload?.exp ? new Date(status.payload.exp * 1000).toISOString().slice(0, 10) : "perpetual";
     text(`Activated ${status.plan} license for ${status.payload?.org} — ${status.payload?.seats} seat(s), expires ${exp}.`);
     text(`Saved to ${p}`);

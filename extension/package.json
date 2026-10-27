@@ -365,8 +365,8 @@
             "OpenAI text-embedding-3-large (3072 dim)",
             "OpenAI text-embedding-3-small (1536 dim)",
             "Nomic embed text via Ollama (768 dim)",
-            "Jina embeddings v2 base code \u2014 in-process local, code-tuned (768 dim)",
-            "all-MiniLM-L6-v2 \u2014 in-process local, small and fast (384 dim)"
+            "Jina embeddings v2 base code — in-process local, code-tuned (768 dim; gated on Hugging Face — downloads fail with 401 until access is granted)",
+            "all-MiniLM-L6-v2 — in-process local, small and fast (384 dim; ungated, the local default)"
           ],
           "default": "voyage-code-3",
           "description": "Embedding model name",
