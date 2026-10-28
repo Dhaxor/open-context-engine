@@ -1,5 +1,5 @@
-import { icon } from "../chat/webview/icons";
-import { esc } from "../chat/webview/render";
+import { icon } from "./webview/icons";
+import { esc } from "./webview/render";
 
 export const GET_TEAM_URL = "https://opencontextengine.com/pricing.html";
 

@@ -544,7 +544,9 @@ export class ContextService implements vscode.Disposable {
         return this.getConfigForPath(workspaceRoot);
     }
 
-    private async getConfigForPath(workspaceRoot: string): Promise<OpenContextConfig> {
+    /** The index config this window would use for `workspaceRoot` — also how a
+     *  parallel agent session indexes its own worktree. */
+    public async getConfigForPath(workspaceRoot: string): Promise<OpenContextConfig> {
         const cfg = vscode.workspace.getConfiguration("openContext");
         const provider = cfg.get<"openai" | "voyage" | "ollama" | "local">("embedding.provider", "voyage");
         // Not cfg.get: package.json's default ("voyage-code-3") would follow the

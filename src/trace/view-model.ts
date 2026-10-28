@@ -21,7 +21,9 @@ import type {
 export type Block =
   | { kind: "text"; text: string }
   | { kind: "retrieval"; trace: RetrievalTrace }
-  | { kind: "tool"; id: string; name: string; ok?: boolean; ms?: number; chars?: number }
+  /** `args` is what makes a collapsed tool line self-describing (which file,
+   *  which query, which command); `result` arrives only for direct `!` shell. */
+  | { kind: "tool"; id: string; name: string; args?: Record<string, unknown>; ok?: boolean; ms?: number; chars?: number; result?: string }
   | { kind: "edit"; edit: EditProposal }
   /** A delegation, with the child's own activity nested inside it. */
   | {
@@ -157,15 +159,20 @@ function applyEvent(state: ViewState, event: TraceEvent, seq: number): ViewState
           ? { ...block, text: block.text + event.text }
           : { kind: "text", text: event.text });
 
-    case "tool_call":
-      return pushBlock(state, { kind: "tool", id: event.call.id, name: event.call.name });
+    case "tool_call": {
+      const args = event.call.arguments;
+      return pushBlock(state, {
+        kind: "tool", id: event.call.id, name: event.call.name,
+        ...(args && Object.keys(args).length ? { args } : {}),
+      });
+    }
 
     case "tool_result":
       return mapLastTurn(state, turn => ({
         ...turn,
         blocks: turn.blocks.map(b =>
           b.kind === "tool" && b.id === event.id
-            ? { ...b, ok: event.ok, ms: event.ms, chars: event.chars }
+            ? { ...b, ok: event.ok, ms: event.ms, chars: event.chars, ...(event.result !== undefined ? { result: event.result } : {}) }
             : b),
       }));
 

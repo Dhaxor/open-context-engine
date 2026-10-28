@@ -11,17 +11,14 @@
  */
 
 import type { ApprovalDecision, ApprovalMode, TraceEnvelope } from "../protocol";
+import type { TraceTransport, TraceTransportHandlers } from "./transport";
 
-export interface TraceClientHandlers {
-  onEvent: (envelope: TraceEnvelope) => void;
-  onConnectionChange: (connected: boolean) => void;
-  onError?: (message: string) => void;
-}
+export type TraceClientHandlers = TraceTransportHandlers;
 
 const RECONNECT_MIN_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 
-export class TraceClient {
+export class TraceClient implements TraceTransport {
   private source: EventSource | null = null;
   private cursor = 0;
   private retryMs = RECONNECT_MIN_MS;

@@ -39,12 +39,13 @@ export class SessionStore {
     return `${stamp}-${randomBytes(3).toString("hex")}`;
   }
 
-  save(id: string, title: string, exportedSession: string, turns: number): void {
+  /** `updatedAt` defaults to now; an import of older conversations keeps theirs. */
+  save(id: string, title: string, exportedSession: string, turns: number, updatedAt: string = new Date().toISOString()): void {
     fs.mkdirSync(this.dir, { recursive: true });
     const payload: SavedSession = {
       id,
       title: title.slice(0, 80),
-      updatedAt: new Date().toISOString(),
+      updatedAt,
       turns,
       session: exportedSession,
     };

@@ -48,20 +48,9 @@ const options = {
   logLevel: "info",
 };
 
-// The chat webview is a separate browser bundle (its CSS import is emitted as dist/webview.css).
-// ChatView reads dist/webview.{js,css} and inlines them, so no asWebviewUri/CSP gymnastics.
-const webviewOptions = {
-  entryPoints: ["src/chat/webview/main.ts"],
-  bundle: true,
-  outfile: "dist/webview.js",
-  platform: "browser",
-  format: "iife",
-  target: "es2020",
-  sourcemap: false,
-  minify,
-  logLevel: "info",
-};
-
+// Each webview is a separate browser bundle (its CSS import is emitted beside
+// it). The host reads dist/<name>.{js,css} and inlines them, so no
+// asWebviewUri/CSP gymnastics.
 const settingsWebviewOptions = {
   entryPoints: ["src/settings/webview/main.ts"],
   bundle: true,
@@ -74,16 +63,41 @@ const settingsWebviewOptions = {
   logLevel: "info",
 };
 
+// The agent UIs are React. Both bundle Trace's shared view-model, composer and
+// markdown from ../src/trace, so the sidebar, the editor tab, Studio, and the
+// TUI fold the same events the same way. React resolves from the repo root's
+// node_modules (it is a root devDependency), keeping one copy in each bundle.
+const agentWebviewOptions = {
+  entryPoints: ["src/agent-ui/main.tsx"],
+  bundle: true,
+  outfile: "dist/agent.js",
+  platform: "browser",
+  format: "iife",
+  target: "es2020",
+  jsx: "automatic",
+  loader: { ".css": "css" },
+  define: { "process.env.NODE_ENV": minify ? '"production"' : '"development"' },
+  sourcemap: false,
+  minify,
+  logLevel: "info",
+};
+
+const studioWebviewOptions = {
+  ...agentWebviewOptions,
+  entryPoints: ["src/agent-ui/studio-main.tsx"],
+  outfile: "dist/trace-studio.js",
+};
+
+const builds = [options, settingsWebviewOptions, agentWebviewOptions, studioWebviewOptions];
+
 async function run() {
   if (watch) {
-    const ctx = await esbuild.context(options);
-    const wctx = await esbuild.context(webviewOptions);
-    const sctx = await esbuild.context(settingsWebviewOptions);
-    await Promise.all([ctx.watch(), wctx.watch(), sctx.watch()]);
-    console.log("[watch] esbuild watching extension + webview + settings…");
+    const contexts = await Promise.all(builds.map(b => esbuild.context(b)));
+    await Promise.all(contexts.map(c => c.watch()));
+    console.log("[watch] esbuild watching extension + webviews…");
   } else {
-    await Promise.all([esbuild.build(options), esbuild.build(webviewOptions), esbuild.build(settingsWebviewOptions)]);
-    console.log(`[build] wrote dist/extension.js + dist/webview.js + dist/settings-webview.js (${minify ? "minified" : "sourcemap"})`);
+    await Promise.all(builds.map(b => esbuild.build(b)));
+    console.log(`[build] wrote dist/extension.js + webview bundles (agent, trace-studio, settings) (${minify ? "minified" : "sourcemap"})`);
   }
 }
 

@@ -85,6 +85,39 @@ export class SessionRegistry {
     return entry;
   }
 
+  /**
+   * Swap the session behind an entry: a stack rebuilt for a settings change,
+   * or a fresh conversation in the same checkout. The entry keeps its place in
+   * the list, its workspace, and its branch; its id may change, because a new
+   * conversation is a new saved session.
+   *
+   * The old handle is NOT closed — whether its index outlives it (it usually
+   * does: the same checkout, the same store) is the caller's call.
+   */
+  replace(id: string, next: { id: string; handle: BuiltSessionHandle; title?: string }): boolean {
+    const entry = this.entries.get(id);
+    if (!entry || entry.status !== "ready") return false;
+    const updated: SessionEntry = {
+      ...entry,
+      id: next.id,
+      session: next.handle.session,
+      ...(next.title !== undefined ? { title: next.title } : {}),
+    };
+    // Rebuilt rather than re-keyed in place: a Map keeps insertion order, and
+    // the switcher's order should not jump because one session restarted.
+    const rebuilt = new Map<string, SessionEntry>();
+    for (const [key, value] of this.entries) {
+      if (key === id) rebuilt.set(next.id, updated);
+      else rebuilt.set(key, value);
+    }
+    this.entries = rebuilt;
+    this.closers.delete(id);
+    this.closers.set(next.id, next.handle.close);
+    if (this.activeId === id) this.activeId = next.id;
+    this.changed();
+    return true;
+  }
+
   onChange(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

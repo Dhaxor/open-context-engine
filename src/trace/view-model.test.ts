@@ -61,6 +61,18 @@ describe("reduce — transcript shape", () => {
     expect(state.turns[0].blocks[0]).toEqual({ kind: "tool", id: "c1", name: "read-file", ok: true, ms: 12, chars: 400 });
   });
 
+  it("keeps a tool call's arguments and a direct shell result on the block", () => {
+    const state = apply([
+      { type: "turn_start", turn: 1, prompt: "why" },
+      { type: "tool_call", call: { id: "c1", name: "read-file", arguments: { path: "src/a.ts", start_line: 4 } } },
+      { type: "tool_call", call: { id: "sh-1", name: "run-command", arguments: { command: "npm test" } } },
+      { type: "tool_result", id: "sh-1", name: "run-command", ok: true, ms: 5, chars: 2, result: "ok" },
+    ]);
+    // A collapsed line has to say which file / which command, not just "read-file".
+    expect(state.turns[0].blocks[0]).toMatchObject({ kind: "tool", args: { path: "src/a.ts", start_line: 4 } });
+    expect(state.turns[0].blocks[1]).toMatchObject({ kind: "tool", args: { command: "npm test" }, ok: true, result: "ok" });
+  });
+
   it("opens an implicit turn for events that arrive without one", () => {
     // Resumed sessions replay mid-conversation; dropping these would make the
     // agent's work invisible.

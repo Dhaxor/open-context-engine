@@ -27,6 +27,7 @@ import { AuditLogger, hashEvent } from "../core/audit";
 import { CheckpointStore } from "./checkpoints";
 import { ContextLedger } from "./ledger";
 import { extractMentions, rankPaths } from "./composer";
+import { transcriptEvents } from "./replay";
 import { toRetrievalTrace } from "./retrieval";
 import {
   Checkpoint, PendingApproval, RunPhase, SessionMeta, TraceEnvelope, TraceEvent,
@@ -55,6 +56,8 @@ export interface TraceSessionOptions {
   readFile?: (path: string) => Promise<string | null>;
   /** Run a shell command for `!`. Absent when policy disallows shell. */
   runCommand?: (command: string, signal?: AbortSignal) => Promise<string>;
+  /** The agent was restored from a saved session: replay it as the transcript. */
+  resumed?: { title: string; messages: readonly AgentMessage[] };
 }
 
 export type Unsubscribe = () => void;
@@ -83,6 +86,15 @@ export class TraceSession {
   constructor(private opts: TraceSessionOptions) {
     this.opts.permissions.setAsk(req => this.requestApproval(req));
     this.opts.plan.onUpdate(steps => this.emit({ type: "plan", steps }));
+    // A resumed conversation is retold into the buffer before anyone
+    // subscribes, so the first client sees the history the agent already has.
+    if (opts.resumed) {
+      const { events, turns } = transcriptEvents(opts.resumed.messages);
+      this.turn = turns;
+      this.title = opts.resumed.title;
+      this.opts.ledger.setTurn(turns);
+      for (const event of events) this.emit(event);
+    }
   }
 
   // ─── subscription ──────────────────────────────────────────────────────────

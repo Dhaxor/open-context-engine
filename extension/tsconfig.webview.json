@@ -1,0 +1,21 @@
+{
+  "//": "Typecheck only. The agent webviews (src/agent-ui) are browser bundles built by build.js (esbuild, React).",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "types": ["node"],
+    "typeRoots": ["../node_modules/@types", "./node_modules/@types"]
+  },
+  "include": ["src/agent-ui/**/*", "src/css.d.ts"],
+  "exclude": ["src/agent-ui/**/*.test.ts"]
+}

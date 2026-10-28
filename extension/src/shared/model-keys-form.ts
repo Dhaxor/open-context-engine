@@ -1,4 +1,4 @@
-import { esc } from "../chat/webview/render";
+import { esc } from "./webview/render";
 
 export const MODELS: Record<string, string[]> = {
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-codex", "gpt-5.3-codex", "gpt-5.1-codex-max", "gpt-5", "gpt-4.1"],

@@ -1,0 +1,23 @@
+/* Trace Studio inside a VS Code editor tab.
+   Studio is designed dark-only ("an instrument at night"). Under a dark or
+   high-contrast VS Code theme its surfaces and type follow the editor, so the
+   tab reads as part of the workbench; under a light theme it keeps its own
+   dark palette rather than being forced into one it was never drawn for. */
+
+body.vscode-dark,
+body.vscode-high-contrast {
+  --void: var(--vscode-editor-background);
+  --panel: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --lift: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  --overlay: var(--vscode-quickInput-background, var(--vscode-editorWidget-background));
+  --ink: var(--vscode-foreground);
+  --ink2: var(--vscode-descriptionForeground);
+  --edge: var(--vscode-widget-border, var(--vscode-panel-border, rgba(219, 230, 242, 0.08)));
+}
+
+body {
+  /* VS Code pads webview bodies; Studio's shell is a full-bleed grid. */
+  padding: 0;
+  --type-sans: var(--vscode-font-family);
+  --type-mono: var(--vscode-editor-font-family);
+}

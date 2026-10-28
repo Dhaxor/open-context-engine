@@ -13,6 +13,7 @@ import { createRoot } from "react-dom/client";
 import type { ApprovalMode } from "../protocol";
 import { parseComposer } from "../composer";
 import { TraceClient } from "./client";
+import { browserHost, type StudioHost, type TraceTransport, type TraceTransportHandlers } from "./transport";
 import { initialState, railEntries, reduce, type ViewState } from "../view-model";
 import {
   Composer, EvidenceRail, Notices, ReviewPanel, SessionSwitcher, Spine, StatusBar, Transcript,
@@ -22,8 +23,15 @@ import { CommandPalette, type PaletteAction } from "./palette";
 
 const MODES: ApprovalMode[] = ["suggest", "auto-edit", "full-auto"];
 
-function Studio() {
+export interface StudioOptions {
+  /** Build the transport. Default: the HTTP/EventSource client for `oce trace`. */
+  transport?: (handlers: TraceTransportHandlers) => TraceTransport;
+  host?: Partial<StudioHost>;
+}
+
+function Studio({ options }: { options: StudioOptions }) {
   const [state, dispatch] = React.useReducer(reduce, initialState);
+  const host = React.useMemo<StudioHost>(() => ({ ...browserHost, ...options.host }), [options.host]);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [railOpen, setRailOpen] = React.useState(false);
   const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
@@ -33,16 +41,17 @@ function Studio() {
   const [reviewing, setReviewing] = React.useState<{ id: string; title: string; review: SessionReview | null } | null>(null);
   const [landing, setLanding] = React.useState(false);
 
-  const client = React.useMemo(() => {
-    const token = TraceClient.tokenFromLocation();
-    return new TraceClient(token, {
+  const client = React.useMemo<TraceTransport>(() => {
+    const handlers: TraceTransportHandlers = {
       onEvent: envelope => dispatch({ type: "event", envelope }),
       onConnectionChange: connected => dispatch({ type: "connection", connected }),
       // Surfaces in the same notice strip as server-side problems, but through
       // its own action — a fake envelope would move the stream cursor.
       onError: message => dispatch({ type: "local-error", message }),
-    });
-  }, []);
+      onReset: () => dispatch({ type: "switch-session" }),
+    };
+    return options.transport ? options.transport(handlers) : new TraceClient(TraceClient.tokenFromLocation(), handlers);
+  }, [options]);
 
   React.useEffect(() => {
     client.connect();
@@ -77,14 +86,14 @@ function Studio() {
   }, [client, refreshSessions, viewedId]);
 
   const createSession = React.useCallback(async (preset?: string) => {
-    const title = preset ?? window.prompt("What is this session for?", "");
+    const title = preset ?? await host.ask("What is this session for?");
     if (title === null) return;
     try {
       const created = await client.createSession(title.trim() || "Untitled session");
       await refreshSessions();
       if (created?.id) selectSession(created.id);
     } catch { /* surfaced as a notice by the client */ }
-  }, [client, refreshSessions, selectSession]);
+  }, [client, host, refreshSessions, selectSession]);
 
   // The highlighted chip is what this window shows, not what the server calls
   // active — two windows can watch different sessions at the same time.
@@ -126,10 +135,10 @@ function Studio() {
     const message = changed
       ? `Close "${target?.title}"? Its ${changed} changed file${changed === 1 ? "" : "s"} stay in the worktree.`
       : `Close "${target?.title}"?`;
-    if (!window.confirm(message)) return;
+    if (!await host.confirm(message)) return;
     try { await client.closeSession(id); } catch { /* surfaced as a notice */ }
     await refreshSessions();
-  }, [client, refreshSessions, sessions]);
+  }, [client, host, refreshSessions, sessions]);
 
   const rewind = React.useCallback((hash: string) => {
     const target = state.checkpoints.find(c => c.hash === hash);
@@ -139,14 +148,10 @@ function Studio() {
       : `Rewind to ${target?.short}?`;
     // Rewinding rewrites files. It is reversible in principle and alarming in
     // practice, so it asks — the one destructive action in the UI that does.
-    if (window.confirm(message)) void client.rewind(hash).catch(() => {});
-  }, [client, state.checkpoints, state.turns]);
+    void host.confirm(message).then(ok => { if (ok) void client.rewind(hash).catch(() => {}); });
+  }, [client, host, state.checkpoints, state.turns]);
 
-  const cite = React.useCallback((path: string, line: number) => {
-    // Nothing owns "open in editor" yet; the path is what a user actually wants
-    // on the clipboard, so give them that rather than a dead click.
-    void navigator.clipboard?.writeText(line ? `${path}:${line}` : path).catch(() => {});
-  }, []);
+  const cite = React.useCallback((path: string, line: number) => host.openFile(path, line), [host]);
 
   const cycleMode = React.useCallback(() => {
     const current = state.meta?.mode ?? "suggest";
@@ -157,7 +162,7 @@ function Studio() {
   const actions = React.useMemo<PaletteAction[]>(() => [
     { id: "interrupt", label: "Interrupt the current turn", hint: "esc", run: () => void client.interrupt() },
     { id: "compact", label: "Compact the conversation", keywords: "context shrink summarize", run: () => void client.compact() },
-    { id: "reset", label: "Clear the conversation", keywords: "new reset", run: () => { if (window.confirm("Clear this conversation?")) void client.reset(); } },
+    { id: "reset", label: "Clear the conversation", keywords: "new reset", run: () => { void host.confirm("Clear this conversation?").then(ok => { if (ok) void client.reset(); }); } },
     ...MODES.map(mode => ({
       id: `mode-${mode}`,
       label: `Approval mode: ${mode}`,
@@ -178,7 +183,7 @@ function Studio() {
       keywords: `session ${s.branch ?? ""}`,
       run: () => selectSession(s.id),
     })),
-  ], [client, createSession, openReview, selectSession, viewedId, viewedSessions]);
+  ], [client, createSession, host, openReview, selectSession, viewedId, viewedSessions]);
 
   /**
    * One entry point for everything typed into the composer.
@@ -339,8 +344,8 @@ function Studio() {
   );
 }
 
-export function mount(container: HTMLElement): void {
-  createRoot(container).render(<Studio />);
+export function mount(container: HTMLElement, options: StudioOptions = {}): void {
+  createRoot(container).render(<Studio options={options} />);
 }
 
 export type { ViewState };

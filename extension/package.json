@@ -83,6 +83,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "openContext.openTrace",
+        "title": "Open Agent in Editor (Trace)",
+        "category": "Open Context",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "openContext.showStatus",
         "title": "Show Status",
         "category": "Open Context"
@@ -180,7 +186,7 @@
       "openContext": [
         {
           "id": "openContext.chat",
-          "name": "Chat",
+          "name": "Agent",
           "icon": "$(comments-view-icon)",
           "type": "webview"
         },
@@ -283,29 +289,39 @@
       ],
       "view/title": [
         {
-          "command": "openContext.indexWorkspace",
+          "command": "openContext.clearChat",
           "when": "view == openContext.chat",
           "group": "navigation@1"
         },
         {
-          "command": "openContext.selectIndexWorkspace",
+          "command": "openContext.openTrace",
           "when": "view == openContext.chat",
           "group": "navigation@2"
         },
         {
-          "command": "openContext.showIndexHealth",
+          "command": "openContext.openSettings",
           "when": "view == openContext.chat",
           "group": "navigation@3"
         },
         {
-          "command": "openContext.debugRetrieval",
+          "command": "openContext.indexWorkspace",
           "when": "view == openContext.chat",
-          "group": "navigation@4"
+          "group": "1_index@1"
         },
         {
-          "command": "openContext.openSettings",
+          "command": "openContext.selectIndexWorkspace",
           "when": "view == openContext.chat",
-          "group": "navigation@5"
+          "group": "1_index@2"
+        },
+        {
+          "command": "openContext.showIndexHealth",
+          "when": "view == openContext.chat",
+          "group": "2_debug@1"
+        },
+        {
+          "command": "openContext.debugRetrieval",
+          "when": "view == openContext.chat",
+          "group": "2_debug@2"
         },
         {
           "command": "openContext.indexWorkspace",
@@ -424,9 +440,24 @@
           "deprecationMessage": "Use the command 'Open Context: Set LLM API Key' instead; plain-text settings are synced and not secure.",
           "order": 6
         },
+        "openContext.agent.approvalMode": {
+          "type": "string",
+          "enum": [
+            "suggest",
+            "auto-edit",
+            "full-auto"
+          ],
+          "enumDescriptions": [
+            "Ask before every file edit and shell command",
+            "Apply file edits (each one stays reviewable and undoable); ask before shell commands",
+            "Never ask — for containers, CI, or throwaway checkouts"
+          ],
+          "default": "auto-edit",
+          "description": "When the agent asks before acting. The mode picker in the agent's composer changes this."
+        },
         "openContext.agent.maxSteps": {
           "type": "number",
-          "default": 10,
+          "default": 25,
           "description": "Maximum tool-use steps per agent turn"
         },
         "openContext.agent.maxTokens": {

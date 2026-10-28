@@ -81,6 +81,25 @@ describe("SessionRegistry", () => {
     expect(h.registry.list()).toEqual([expect.objectContaining({ id: "primary", active: true, status: "ready" })]);
   });
 
+  it("replaces the session behind an entry without moving it", async () => {
+    const h = harness();
+    primary(h);
+    const sibling = await h.registry.create("fix");
+    const next = fakeSession({ turn: 3 });
+    let changes = 0;
+    h.registry.onChange(() => { changes++; });
+
+    // A new conversation in the primary checkout is a new saved session id.
+    expect(h.registry.replace("primary", { id: "primary-2", handle: { session: next, close: async () => {} } })).toBe(true);
+    expect(h.registry.list().map(s => s.id)).toEqual(["primary-2", sibling.id]);
+    expect(h.registry.get("primary-2")).toBe(next);
+    expect(h.registry.get("primary")).toBeUndefined();
+    expect(h.registry.activeId_()).toBe("primary-2");
+    expect(h.registry.list()[0]).toMatchObject({ workspace: "/repo", branch: "main", turn: 3 });
+    expect(changes).toBe(1);
+    expect(h.registry.replace("nope", { id: "x", handle: { session: next, close: async () => {} } })).toBe(false);
+  });
+
   it("creates a session in its own worktree and branch", async () => {
     const h = harness();
     primary(h);
