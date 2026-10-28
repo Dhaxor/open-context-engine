@@ -28,8 +28,8 @@
     "../../dist",
     "src/**/*.test.ts",
     "test/**/*",
-    "src/chat/webview/main.ts",
-    "src/chat/webview/render.ts",
-    "src/chat/webview/styles.css"
+    "src/shared/webview/render.ts",
+    "src/shared/webview/styles.css",
+    "src/agent-ui/**/*"
   ]
 }

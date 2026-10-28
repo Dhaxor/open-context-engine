@@ -1,4 +1,4 @@
-import { icon } from "../chat/webview/icons";
+import { icon } from "./webview/icons";
 
 /** Model & API keys form — shared by chat quick panel and full settings page. */
 export function modelKeysFormHtml(): string {

@@ -21,8 +21,14 @@ const DIFF_SCHEME = "open-context-diff";
  * inverses applied through the same VS Code edit path used by the agent, and the
  * index is kept in sync after every revert.
  */
+export interface EditScope {
+    root: string;
+    reindex?: (path: string, contents: string | null) => Promise<void>;
+}
+
 export class EditReviewService implements vscode.Disposable {
     private edits = new Map<string, ReviewedEdit>();
+    private scopes = new Map<string, EditScope>();
     private order: string[] = [];
     private seq = 0;
     private readonly disposable: vscode.Disposable;
@@ -34,11 +40,45 @@ export class EditReviewService implements vscode.Disposable {
         this.disposable = vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, provider);
     }
 
-    record(edit: EditProposal): ReviewedEdit {
+    /**
+     * `scope` is where the edit landed when that is not the indexed workspace —
+     * a parallel session's worktree — so undo/redo write (and re-index) there
+     * rather than into the main checkout.
+     */
+    record(edit: EditProposal, scope?: EditScope): ReviewedEdit {
         const reviewed: ReviewedEdit = { ...edit, seq: ++this.seq, status: "applied" };
         this.edits.set(edit.id, reviewed);
         this.order.push(edit.id);
+        if (scope) this.scopes.set(edit.id, scope);
         return reviewed;
+    }
+
+    /**
+     * Every given edit in one multi-file diff editor — how a turn's changes are
+     * reviewed as a whole. The latest edit per file wins the "after" side and
+     * the earliest supplies "before", so a file edited three times reads as one
+     * change, not three.
+     */
+    async openChanges(ids: string[], title: string): Promise<void> {
+        const byPath = new Map<string, { first: ReviewedEdit; last: ReviewedEdit }>();
+        for (const id of ids) {
+            const edit = this.edits.get(id);
+            if (!edit) continue;
+            const seen = byPath.get(edit.path);
+            if (seen) seen.last = edit; else byPath.set(edit.path, { first: edit, last: edit });
+        }
+        if (!byPath.size) return;
+        if (byPath.size === 1) {
+            const [{ first, last }] = byPath.values();
+            if (first === last) return this.openDiff(first.id);
+        }
+        const root = await this.resolveRoot();
+        const resources = [...byPath.values()].map(({ first, last }) => [
+            vscode.Uri.file(path.resolve(this.scopes.get(last.id)?.root ?? root, last.path)),
+            this.virtualUri(first, "before"),
+            this.virtualUri(last, "after"),
+        ]);
+        await vscode.commands.executeCommand("vscode.changes", title, resources);
     }
 
     get(id: string): ReviewedEdit | undefined {
@@ -103,6 +143,7 @@ export class EditReviewService implements vscode.Disposable {
     /** Forget tracked edits (e.g. on a new chat session). Does not touch files. */
     clear(): void {
         this.edits.clear();
+        this.scopes.clear();
         this.order = [];
     }
 
@@ -116,9 +157,14 @@ export class EditReviewService implements vscode.Disposable {
      * redo  -> reapply newContents (or re-delete a removed file).
      */
     private async applyState(edit: ReviewedEdit, direction: "undo" | "redo"): Promise<void> {
-        const root = await this.resolveRoot();
+        const scope = this.scopes.get(edit.id);
+        const root = scope?.root ?? await this.resolveRoot();
         const applier = new VSCodeEditApplier(root);
-        const ctx = await ContextService.getInstance().getContext();
+        const reindex = scope?.reindex ?? (async (p: string, contents: string | null) => {
+            const ctx = await ContextService.getInstance().getContext();
+            if (contents === null) await ctx.removeFromIndex([p]);
+            else await ctx.addFiles([{ path: p, contents }]);
+        });
 
         const wantDeleted =
             (direction === "undo" && edit.kind === "create") ||
@@ -127,11 +173,11 @@ export class EditReviewService implements vscode.Disposable {
 
         if (wantDeleted) {
             await applier.removeFile(edit.path);
-            try { await ctx.removeFromIndex([edit.path]); } catch {}
+            try { await reindex(edit.path, null); } catch {}
             return;
         }
         await applier.writeFile(edit.path, target ?? "");
-        try { await ctx.addFiles([{ path: edit.path, contents: target ?? "" }]); } catch {}
+        try { await reindex(edit.path, target ?? ""); } catch {}
     }
 
     private virtualUri(edit: ReviewedEdit, side: "before" | "after"): vscode.Uri {

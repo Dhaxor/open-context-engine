@@ -1,4 +1,4 @@
-import { icon } from "../chat/webview/icons";
+import { icon } from "./webview/icons";
 
 /** Indexing section body — status card, behaviour toggles, chunking inputs.
  *  Dynamic values are set via textContent by indexing-form.ts; this HTML is

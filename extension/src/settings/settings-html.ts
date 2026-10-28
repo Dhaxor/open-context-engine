@@ -1,4 +1,4 @@
-import { icon } from "../chat/webview/icons";
+import { icon } from "../shared/webview/icons";
 import { modelKeysFormHtml } from "../shared/model-keys-form-html";
 import { indexingFormHtml } from "../shared/indexing-form-html";
 

@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { ContextService } from "./services/ContextService";
-import { ChatView } from "./chat/ChatView";
+import { AgentView } from "./trace/AgentView";
+import { TraceHost } from "./trace/TraceHost";
+import { TracePanel } from "./trace/TracePanel";
 import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
@@ -86,13 +88,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     svc.bindExtensionContext(context);
     const reviewService = new EditReviewService(async () => (await svc.getContext()).getWorkspaceRoot());
     context.subscriptions.push(reviewService);
-    const chatView = new ChatView(context.extensionUri, context, reviewService);
-    SettingsPanel.onLicenseChanged = () => chatView.refreshLicense();
+    const traceHost = new TraceHost(reviewService, context);
+    const agentView = new AgentView(context.extensionUri, traceHost, reviewService);
+    // The license plan rides in the host state every agent webview receives.
+    SettingsPanel.onLicenseChanged = () => traceHost.notifyStateChanged();
     const treeProvider = new IndexedFilesProvider(context);
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(ChatView.viewType, chatView, {
-            // Keep the chat DOM (and any in-progress stream) alive when the panel is
+        traceHost,
+        agentView,
+        vscode.window.registerWebviewViewProvider(AgentView.viewType, agentView, {
+            // Keep the agent DOM (and any in-progress turn) alive when the panel is
             // hidden or moved, instead of tearing it down and losing the conversation.
             webviewOptions: { retainContextWhenHidden: true },
         }),
@@ -229,7 +235,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }, token, rebase),
             );
             await restartWatching();
-            chatView.refreshConfig();
+            traceHost.notifyStateChanged();
         }),
 
         vscode.commands.registerCommand("openContext.reindexFile", async (uri?: vscode.Uri) => {
@@ -281,9 +287,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand("openContext.quickSearch", async () => SearchProvider.search()),
-        vscode.commands.registerCommand("openContext.openChat", () => chatView.focus()),
-        vscode.commands.registerCommand("openContext.clearChat", () => chatView.clearChat()),
-        vscode.commands.registerCommand("openContext.restartTour", () => chatView.startTour(true)),
+        vscode.commands.registerCommand("openContext.openChat", () => agentView.focus()),
+        vscode.commands.registerCommand("openContext.clearChat", () => agentView.newConversation()),
+        // The guided tour belonged to the old chat UI; the agent's empty state
+        // now carries the quick starts it pointed at, so this opens that.
+        vscode.commands.registerCommand("openContext.restartTour", () => agentView.focus()),
+        vscode.commands.registerCommand("openContext.openTrace", () => TracePanel.show(context.extensionUri, traceHost, reviewService)),
         vscode.commands.registerCommand("openContext.showIndexHealth", () => IndexHealthPanel.show()),
         vscode.commands.registerCommand("openContext.debugRetrieval", () => RetrievalDebugPanel.show()),
         vscode.commands.registerCommand("openContext.openIndexedFile", async (relPath: string, line?: number) => {
@@ -317,7 +326,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const r = svc.activateLicense(key.trim());
             if (r.ok) vscode.window.showInformationMessage(`Activated ${r.status.plan} license.`);
             else vscode.window.showErrorMessage(`Activation failed: ${r.error}`);
-            chatView.refreshLicense();
+            traceHost.notifyStateChanged();
         }),
 
         vscode.commands.registerCommand("openContext.showMemories", async () => {
@@ -338,7 +347,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 "Clear",
             );
             if (pick !== "Clear") return;
-            let cleared = chatView.getAgentService().clearMemories();
+            let cleared = traceHost.clearMemories();
             if (cleared === null) {
                 // Agent (and its memory) not built this session — clear the file directly.
                 try {
@@ -396,8 +405,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             if (!editor) return;
             const selection = editor.document.getText(editor.selection);
             if (!selection) return;
-            chatView.focus();
-            setTimeout(() => chatView.addMessage("Explain this code with context from the codebase:\n\n```\n" + selection + "\n```"), 300);
+            agentView.compose("Explain this code with context from the codebase:\n\n```\n" + selection + "\n```", true);
         }),
 
         vscode.commands.registerCommand("openContext.findSimilar", async () => {

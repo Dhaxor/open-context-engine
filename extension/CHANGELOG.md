@@ -1,5 +1,34 @@
 # Change Log
 
+## Unreleased
+
+- **A rebuilt, agentic sidebar.** The chat panel is now the Agent view, running
+  the same Trace session as `oce trace` (Studio and the TUI fold the same
+  events with the same reducer):
+  - **Live plan** — the model's own checklist, updated as it works.
+  - **Activity you can read** — searches, file reads, and commands fold into
+    one line per run ("3 searches · 4 files"), each saying what it touched;
+    expand a search to see every chunk's score and why it was retrieved.
+  - **Sub-agents** — a delegated investigation shows its own steps nested
+    under it while it runs.
+  - **Approvals** — an approval mode picker in the composer (Ask first /
+    Auto-edit / Full auto, setting `openContext.agent.approvalMode`). Ask-first
+    edits and commands show the diff, a blast-radius risk, and how many indexed
+    callers the change reaches; answer with y / a / n.
+  - **Changes tray** — every turn that edits files ends with the files it
+    changed, a multi-file diff review, and undo / reapply.
+  - **Checkpoints** — rewind the conversation and the files to any earlier turn.
+  - **Context window** — a meter of what the model sees, with pin / evict per
+    retrieved chunk.
+  - **Parallel sessions** — in a git repository, start another session in its
+    own worktree and branch; review its diff and land it when done.
+- **Open Agent in Editor** opens Trace Studio in an editor tab — timeline,
+  transcript, and evidence rail — on the same sessions as the sidebar.
+- Conversations persist per workspace and reopen with their transcript; chats
+  from the previous sidebar are imported into the history once.
+- `openContext.agent.maxSteps` now defaults to 25 (was 10): multi-step agent
+  work was hitting the cap.
+
 ## 0.6.0
 
 - **The Indexing panel shows what grade of symbol lookup the workspace can

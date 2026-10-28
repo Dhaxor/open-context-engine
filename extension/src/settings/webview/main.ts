@@ -1,4 +1,4 @@
-import "../../chat/webview/styles.css";
+import "../../shared/webview/styles.css";
 import "./styles.css";
 import { wireModelKeysForm } from "../../shared/model-keys-form";
 import { wireIndexingForm } from "../../shared/indexing-form";

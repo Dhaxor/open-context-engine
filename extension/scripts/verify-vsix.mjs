@@ -168,7 +168,7 @@ try {
   }
 
   // 2) build-time-only renderer deps must be pruned (they live inside
-  //    dist/webview.js; shipping them is dead weight).
+  //    dist/settings-webview.js; shipping them is dead weight).
   for (const pruned of ["highlight.js", "markdown-it"]) {
     if (fs.existsSync(path.join(nmDir, pruned))) {
       console.error(`FAIL  pruned package shipped: ${pruned} should be excluded by .vscodeignore.`);

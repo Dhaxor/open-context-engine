@@ -13,24 +13,22 @@
 
 import { OpenContext } from "../core/context";
 import { OpenContextConfig } from "../core/types";
-import { ContextAgent, defaultAgentTools, defaultCodebaseTools, LLMProvider, RetrievalObserver } from "../agent/agent";
+import type { ContextAgent, LLMProvider } from "../agent/agent";
 import { checkReady, resolveProvider } from "../agent/presets";
-import { AgentPlan } from "../agent/plan";
-import { PermissionManager } from "../agent/permissions";
+import type { AgentPlan } from "../agent/plan";
+import type { PermissionManager } from "../agent/permissions";
 import { SessionStore } from "../agent/session-store";
 import { EditProposal, ToolDefinition } from "../agent/types";
-import { environmentProvider } from "../agent/env";
 import { FsEditApplier } from "../agent/edit-tools";
 import { AuditLogger, defaultAuditDir } from "../core/audit";
 import { policyRequiresAudit } from "../core/policy";
 import { getLicense, isEntitled } from "../core/license";
 import { loadFileConfig } from "./config-file";
 import { Diagnostics } from "../core/diagnostics";
-import { ContextLedger } from "../trace/ledger";
-import { CheckpointStore } from "../trace/checkpoints";
-import { TraceSession } from "../trace/session";
-import { SessionMeta } from "../trace/protocol";
-import { contextWindowFor } from "../agent/providers";
+import type { ContextLedger } from "../trace/ledger";
+import type { CheckpointStore } from "../trace/checkpoints";
+import type { TraceSession } from "../trace/session";
+import { assembleAgentStack, type AgentStack } from "../trace/stack";
 
 const FALLBACK_MODEL: Record<string, string> = {
   openai: "gpt-4o",
@@ -159,75 +157,7 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
 
   const model = opts.llmModel || FALLBACK_MODEL[provider] || "gpt-4o";
 
-  // Approvals: interactive sessions get edits+shell BEHIND the approval flow
-  // (suggest mode asks per mutation); --print has no approver, so tools stay
-  // opt-in via the explicit flags.
-  const permissions = new PermissionManager({
-    mode: opts.fullAuto ? "full-auto" : opts.autoEdit ? "auto-edit" : interactive ? "suggest" : "full-auto",
-  });
-  const plan = new AgentPlan();
   const editLog: EditProposal[] = [];
-
-  // The traced surfaces need the ledger before the agent exists (tools capture
-  // the observer) and the session before the ledger can be fed — so the
-  // observer is indirected through a holder rather than reordering the wiring.
-  const ledger = traced
-    ? new ContextLedger({
-      windowTokens: contextWindowFor(model),
-      systemPrompt: () => baseEnvironment(),
-      toolSchemas: () => tools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })),
-      maxOutputLength: config.search?.maxOutputLength,
-    })
-    : undefined;
-  const applier = new FsEditApplier(config.workspaceRoot);
-  const checkpoints = traced
-    ? new CheckpointStore({
-      applier,
-      onRestored: async paths => {
-        // Re-index restored files so retrieval reflects the rewound tree.
-        for (const p of paths) {
-          try {
-            const contents = await applier.readFile(p);
-            if (contents === null) await ctx.removeFromIndex([p]);
-            else await ctx.addFiles([{ path: p, contents }]);
-          } catch {}
-        }
-      },
-    })
-    : undefined;
-  const observer: { fn?: RetrievalObserver } = {};
-  // Same indirection as retrieval: the tools capture these before the session
-  // that fulfils them exists.
-  const delegation: { observer?: import("../agent/delegate").DelegateObserver } = {};
-
-  // Policy can strip capabilities the flags asked for — say so up front instead
-  // of letting the agent discover missing tools mid-run.
-  const policyBlocks: string[] = [];
-  const tools = defaultAgentTools({
-    context: ctx,
-    applier,
-    includeEdits: interactive ? true : !!opts.allowEdits,
-    shell: interactive ? true : !!opts.allowShell,
-    onEdit: (e) => editLog.push(e),
-    plan: opts.plan !== false ? plan : undefined,
-    ...(traced ? { onRetrieval: ((o) => observer.fn?.(o)) as RetrievalObserver } : {}),
-    delegate: opts.delegate !== false ? {
-      ...(traced ? { observer: {
-        start: (id, task) => delegation.observer?.start(id, task),
-        event: (id, event) => delegation.observer?.event(id, event),
-        end: (id, result) => delegation.observer?.end(id, result),
-      } } : {}),
-      makeAgent: () => new ContextAgent({
-        provider, model, apiKey: opts.apiKey, baseUrl: opts.llmBaseUrl, router,
-        tools: defaultCodebaseTools(ctx),
-        maxSteps: 8, compaction: "drop",
-        systemPrompt: "You are a codebase research sub-agent. Investigate the brief thoroughly with your tools, then reply with a single, complete report (file paths + line ranges + key excerpts). Your reply goes to another agent, not a human.",
-      }),
-    } : undefined,
-    onPolicyBlock: (cap, reason) => policyBlocks.push(`${cap}: ${reason}`),
-  });
-  for (const b of policyBlocks) diag.progress(`⚠ policy: ${b}\n`);
-  permissions.registerMutatingTools(tools.filter(t => t.mutates).map(t => t.name));
 
   // Audit: explicit --audit needs the audit-log entitlement; a policy that
   // REQUIRES audit always wins (the signed policy is the org's authority).
@@ -242,81 +172,65 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
     }
   }
 
-  const baseEnv = opts.env !== false
-    ? environmentProvider(config.workspaceRoot, () => ({ chunks: ctx.getChunkCount(), searchMode: ctx.getStatus().searchMode }))
-    : undefined;
-  function baseEnvironment(): string {
-    try { return baseEnv?.() ?? ""; } catch { return ""; }
-  }
-  // Pinned context rides in the system prompt (not the transcript) so a pin
-  // outlives compaction — which is the only thing that makes pinning worth
-  // offering. environmentProvider is appended verbatim, so no header is
-  // imposed on top of the block's own.
-  const environment = baseEnv || ledger
-    ? () => [baseEnvironment(), ledger?.pinnedBlock()].filter(Boolean).join("\n\n")
-    : undefined;
-
-  const agent = new ContextAgent({
-    provider,
-    model,
-    apiKey: opts.apiKey,
-    baseUrl: opts.llmBaseUrl,
-    tools,
-    router,
-    memory,
-    memorySource: "cli-agent",
-    audit,
-    hooks: permissions.asHooks(),
-    environmentProvider: environment,
-  });
-
   // Sessions: every conversation persists; --continue / --resume restore one.
   const sessionStore = SessionStore.forWorkspace(config.workspaceRoot, config.storePath);
   let sessionId = sessionStore.newId();
+  let saved: ReturnType<SessionStore["latest"]> = null;
   if (opts.continue || opts.resume) {
-    const saved = opts.resume ? sessionStore.load(String(opts.resume)) : sessionStore.latest();
-    if (saved) {
-      try {
-        agent.importSession(saved.session);
-        sessionId = saved.id;
-        diag.progress(`Resumed session '${saved.title}' (${saved.turns} turns).\n`);
-      } catch (e: any) {
-        fatal(`Could not resume session: ${e?.message ?? e}`);
-      }
-    } else if (opts.resume) {
+    saved = opts.resume ? sessionStore.load(String(opts.resume)) : sessionStore.latest();
+    if (!saved && opts.resume) {
       fatal(`No session '${opts.resume}' — run /sessions in the REPL or check .open-context/sessions/.`);
     }
   }
 
-  let trace: TraceSession | undefined;
-  if (traced && ledger && checkpoints) {
-    const meta: Omit<SessionMeta, "turn" | "startedAt" | "mode"> = {
-      id: sessionId,
-      title: "",
-      workspace: config.workspaceRoot,
-      ...(opts.branch ? { branch: String(opts.branch) } : {}),
+  // Policy can strip capabilities the flags asked for — say so up front instead
+  // of letting the agent discover missing tools mid-run.
+  const policyBlocks: string[] = [];
+  let stack: AgentStack;
+  try {
+    stack = assembleAgentStack({
+      ctx,
+      workspaceRoot: config.workspaceRoot,
       provider,
       model,
-      windowTokens: contextWindowFor(model),
-      indexedChunks: ctx.getChunkCount(),
-      searchMode: ctx.getStatus().searchMode === "keyword-only" ? "keyword-only" : "hybrid",
-      indexFresh: true,
-      auditing: !!audit,
-    };
-    // The shell tool the agent got is the same one `!command` uses, so a
-    // policy that stripped it also disables the composer's direct shell —
-    // there is no second path around the policy.
-    const shell = tools.find(t => t.name === "run-command");
-    trace = new TraceSession({
-      id: sessionId, agent, plan, permissions, ledger, checkpoints, meta, audit, sessionStore,
-      callersOf: (p) => safeCallers(ctx, p),
-      listFiles: () => safeIndexedPaths(ctx),
-      readFile: (p) => ctx.readFile(p),
-      ...(shell ? { runCommand: (command, signal) => shell.handler({ command }, signal) } : {}),
+      apiKey: opts.apiKey,
+      baseUrl: opts.llmBaseUrl,
+      router,
+      memory,
+      memorySource: "cli-agent",
+      audit,
+      applier: new FsEditApplier(config.workspaceRoot),
+      // Approvals: interactive sessions get edits+shell BEHIND the approval
+      // flow (suggest mode asks per mutation); --print has no approver, so
+      // tools stay opt-in via the explicit flags.
+      mode: opts.fullAuto ? "full-auto" : opts.autoEdit ? "auto-edit" : interactive ? "suggest" : "full-auto",
+      includeEdits: interactive ? true : !!opts.allowEdits,
+      shell: interactive ? true : !!opts.allowShell,
+      plan: opts.plan !== false,
+      delegate: opts.delegate !== false,
+      env: opts.env !== false,
+      traced,
+      onEdit: (e) => editLog.push(e),
+      onPolicyBlock: (cap, reason) => policyBlocks.push(`${cap}: ${reason}`),
+      sessionStore,
+      sessionId: saved?.id ?? sessionId,
+      ...(saved ? { restore: saved.session } : {}),
+      meta: {
+        ...(saved ? { title: saved.title } : {}),
+        ...(opts.branch ? { branch: String(opts.branch) } : {}),
+      },
+      maxOutputLength: config.search?.maxOutputLength,
     });
-    observer.fn = trace.observeRetrieval;
-    delegation.observer = trace.delegateObserver;
+  } catch (e: any) {
+    if (!saved) throw e;
+    return fatal(`Could not resume session: ${e?.message ?? e}`);
   }
+  for (const b of policyBlocks) diag.progress(`⚠ policy: ${b}\n`);
+  if (saved) {
+    sessionId = saved.id;
+    diag.progress(`Resumed session '${saved.title}' (${saved.turns} turns).\n`);
+  }
+  const { agent, plan, permissions, tools, trace, ledger, checkpoints } = stack;
 
   let closed = false;
   const close = async (): Promise<void> => {
@@ -344,26 +258,4 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
 export function keywordOnlyWarning(status: { searchMode: string; degradedKind?: string; degradedReason?: string }): string | null {
   if (status.searchMode !== "keyword-only" || status.degradedKind === "keyword_only") return null;
   return `⚠ sqlite-vec unavailable — keyword-only (BM25) search, no semantic ranking.${status.degradedReason ? ` ${status.degradedReason}` : ""}`;
-}
-
-/** Indexed paths for `@` autocomplete. A store that cannot answer just means
- *  an empty menu, never a broken composer. */
-function safeIndexedPaths(ctx: OpenContext): string[] {
-  try {
-    return ctx.getIndexedPaths();
-  } catch {
-    return [];
-  }
-}
-
-/** Indexed references to a path, for approval blast-radius. Never throws — a
- *  missing count only costs the UI a hint. */
-function safeCallers(ctx: OpenContext, filePath: string): number {
-  try {
-    const symbol = filePath.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "";
-    if (!symbol) return 0;
-    return ctx.findSymbolReferences(symbol, undefined, 50).length;
-  } catch {
-    return 0;
-  }
 }

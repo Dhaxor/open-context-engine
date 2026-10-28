@@ -39,7 +39,7 @@ PUBLISHING.md
 dev/**
 
 # Build-time-only renderer deps: markdown-it + highlight.js are bundled INTO
-# dist/webview.js by esbuild — dist/extension.js never references them
+# dist/settings-webview.js by esbuild — dist/extension.js never references them
 # (verified by verify-vsix.mjs's runtime-require check). ~12 MB.
 node_modules/highlight.js/**
 node_modules/@types/markdown-it/**
