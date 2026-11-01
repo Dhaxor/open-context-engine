@@ -161,7 +161,12 @@ jobs:
           git commit -m "chore(site): regenerate benchmarks page from committed baselines"
           git push
       - name: Deploy to Cloudflare
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        # A step's own env is invisible to its if: — gate inside the script.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler deploy
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Deploy skipped: set the CLOUDFLARE_API_TOKEN secret to auto-deploy the site."
+            exit 0
+          fi
+          npx wrangler deploy
