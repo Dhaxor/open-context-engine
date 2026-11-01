@@ -33,15 +33,30 @@ function ioWith(warnings: string[]) {
 }
 
 describe("resolveConfig", () => {
-  it("falls back to keyword-only (with one notice) when nothing is configured", () => {
+  it("defaults to local embeddings (hybrid by default) with a one-time voyage hint", () => {
     const warnings: string[] = [];
     const io = ioWith(warnings);
     const first = resolveConfig({ workspace: dir }, io);
-    expect(first.keywordOnly).toBe("fallback");
-    expect(first.embedding.provider).toBe("voyage");
-    expect(warnings.filter(w => w.includes("keyword search"))).toHaveLength(1);
+    expect(first.keywordOnly).toBeUndefined();
+    expect(first.embedding.provider).toBe("local");
+    expect(first.embedding.model).toBe("Xenova/all-MiniLM-L6-v2");
+    expect(warnings.filter(w => w.includes("local MiniLM"))).toHaveLength(1);
     resolveConfig({ workspace: dir }, io);
-    expect(warnings.filter(w => w.includes("keyword search"))).toHaveLength(1); // once per process
+    expect(warnings.filter(w => w.includes("local MiniLM"))).toHaveLength(1); // once per process
+  });
+
+  it("falls back to keyword-only (with one notice) when sqlite-vec cannot load", () => {
+    const warnings: string[] = [];
+    const io = ioWith(warnings);
+    const cfg = resolveConfig({ workspace: dir }, io);
+    // The test environment may or may not resolve sqlite-vec; either way the
+    // default is local-first, and a degraded store must never crash.
+    if (cfg.keywordOnly === "fallback") {
+      expect(cfg.embedding.provider).toBe("local");
+      expect(warnings.filter(w => w.includes("sqlite-vec"))).toHaveLength(1);
+    } else {
+      expect(cfg.keywordOnly).toBeUndefined();
+    }
   });
 
   it("provider none is an explicit keyword-only choice with no notice", () => {

@@ -30,11 +30,13 @@ export function resolveConfig(opts: any, io: CliIo, o: { requireCreds?: boolean 
   const { config: file, warnings } = loadFileConfig(workspace);
   for (const w of warnings) io.diagnosticsFor(opts).warn(`⚠ config: ${w}`);
   // Whether anyone actually CHOSE an embedding provider, as opposed to getting
-  // the default. The difference decides between a clear error and a working
-  // keyword-only fallback below.
+  // the default. Local (in-process MiniLM) is the default: semantic search
+  // works on the first index with no key, no server, nothing sent anywhere.
+  // Voyage stays the recommended upgrade — the strongest code embedder — and
+  // the default-path notice points there once.
   const chosenProvider = opts.provider || process.env.OCE_EMBEDDING_PROVIDER || file.embedding?.provider;
-  const provider = (chosenProvider || "voyage") as OpenContextConfig["embedding"]["provider"];
-  const modelKey = opts.model || file.embedding?.model || DEFAULT_MODEL_FOR_PROVIDER[provider] || "voyage-code-3";
+  const provider = (chosenProvider || "local") as OpenContextConfig["embedding"]["provider"];
+  const modelKey = opts.model || file.embedding?.model || DEFAULT_MODEL_FOR_PROVIDER[provider] || "all-MiniLM-L6-v2";
   const modelInfo = EMBEDDING_MODELS[modelKey];
   // The registry may map a short key to a fully-qualified model id (e.g.
   // "all-MiniLM-L6-v2" → "Xenova/all-MiniLM-L6-v2"); unknown keys pass through.
@@ -60,18 +62,21 @@ export function resolveConfig(opts: any, io: CliIo, o: { requireCreds?: boolean 
   };
   if (provider === "none") {
     config.keywordOnly = "explicit";
-  } else if (!chosenProvider && !config.embedding.apiKey && SqliteStore.sqliteVecResolvable()) {
-    // Nothing chosen and no key for the default provider. This is where every
-    // new user starts — including everyone following `oce setup` with a free
-    // LLM key — and crashing here meant the product did not work at all until
-    // they paid for embeddings. Keyword-only (BM25) search works right now;
-    // semantic ranking is one `oce setup` away. The store refuses this
-    // fallback if it would cost an existing vector index (see keywordOnly).
+  } else if (!SqliteStore.sqliteVecResolvable()) {
+    // Local embeddings need sqlite-vec for vector storage; without it the
+    // engine degrades to keyword-only rather than crashing. The store refuses
+    // this fallback if it would cost an existing vector index (keywordOnly).
     config.keywordOnly = "fallback";
     if (!keywordNoticeShown) {
       keywordNoticeShown = true;
-      io.diagnosticsFor(opts).warn("ⓘ No embedding provider configured — using keyword search. Run 'oce setup' to enable semantic search (free options available).");
+      io.diagnosticsFor(opts).warn("ⓘ sqlite-vec unavailable — running keyword-only search. Local and remote embeddings both need it; see 'oce status' for the diagnosis.");
     }
+  } else if (!chosenProvider && !keywordHintShown) {
+    // First run on the built-in default: say what's running and name the one
+    // upgrade worth making. Local does the job fine — this is an offer, not a
+    // nag (shown once per process, like the keyword notice above).
+    keywordHintShown = true;
+    io.diagnosticsFor(opts).warn("ⓘ Semantic search: local MiniLM (free, on-device). For the best code retrieval, set a Voyage key — 'oce setup --embeddings voyage'. Local works fine without it.");
   }
   // requireCreds false = the command won't embed (e.g. exporting an existing
   // index) — don't demand API keys it will never use.
@@ -79,8 +84,9 @@ export function resolveConfig(opts: any, io: CliIo, o: { requireCreds?: boolean 
   return config;
 }
 
-/** The fallback notice is printed once per process, not once per resolve. */
+/** The notices are printed once per process, not once per resolve. */
 let keywordNoticeShown = false;
+let keywordHintShown = false;
 
 /** The flags every store-touching command shares. */
 export function withStoreOptions(cmd: import("commander").Command): import("commander").Command {

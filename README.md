@@ -25,7 +25,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 🧠 **AST-Aware Chunking** | Uses Tree-sitter to split code along semantic boundaries (functions, classes, methods) rather than naive line counts. Understands TypeScript, JavaScript, Python, Go, Rust, Java, C#, C, C++, Ruby, PHP, Kotlin, and Swift. |
 | 🔍 **Hybrid Search** | Fuses **dense vector similarity** (cosine) with **BM25 keyword search** via Reciprocal Rank Fusion for results that are both semantically relevant and lexically precise. |
 | ⚡ **Local SQLite + Vectors** | Stores everything in a local SQLite database with `sqlite-vec`—no external vector DB, no network latency, no subscription fees. |
-| 🏠 **Fully-Local Embeddings** | Optional in-process ONNX embeddings (`--provider local`) — zero API keys, zero servers, models cached on disk. Ollama also supported. |
+| 🏠 **Fully-Local Embeddings** | The default: in-process ONNX embeddings — zero API keys, zero servers, models cached on disk. Ollama also supported; Voyage is the drop-in upgrade for the best code retrieval. |
 | 🔗 **Symbol Expansion** | Automatically resolves identifiers in search results, pulling in definitions of functions, classes, and types referenced in snippets. |
 | 🎯 **Optional Re-ranking** | Plug in Voyage or Cohere re-rankers to boost result quality for complex queries. |
 | 🕸️ **Code Graph** | A tree-sitter AST pass extracts import/call/definition edges into a queryable graph; top search results are graph-expanded so callers and callees ride along. |
@@ -37,7 +37,7 @@ Whether you're building a coding assistant, automating PR reviews, or just want 
 | 🧾 **Tamper-Evident Audit Log** | Hash-chained JSONL of every agent run, tool call, and MCP invocation. `oce audit --verify` detects any alteration, deletion, or reordering. |
 | 👥 **Team Index Sync** | Build the index once in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates `oce pull-index` it — only their local diff re-embeds. A content-hash embedding cache means identical code never bills twice. |
 | 🚀 **Parallel Indexing** | Worker-thread parse/chunk pool kicks in automatically on large repos; `oce bench` measures throughput on yours. |
-| 🛟 **Degrades, Never Dies** | No embedding key, or no sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
+| 🛟 **Degrades, Never Dies** | No sqlite-vec build for your platform? The engine runs keyword-only (BM25) instead of crashing — indexing and search keep working, and every surface tells you which mode you're in. |
 | 📏 **Measured, Not Guessed** | Retrieval quality is scored against committed gold sets — this repo's own and an external codebase — in **both** search modes, with **adaptive fusion** that tilts BM25/semantic weights per query shape: **hybrid recall@10 0.943 · keyword-only 0.886** here, **parity (0.926) on Flask** where hybrid previously lost. Ranking changes ship with before/after deltas. The coding agent itself is scored too: `oce eval-agent` runs end-to-end tasks graded by verification scripts. |
 
 ## 🚀 Quick Start
@@ -68,10 +68,11 @@ environment) and lists every way to get a working model, **free ones first**:
 
 `oce setup -p google` records your choice; after that `oce trace` just works.
 
-**No embedding key needed to start.** Retrieval runs on keyword (BM25) search
-out of the box. For semantic ranking on top, pick an embedding provider —
-`oce setup --embeddings ollama` is free and local; `voyage` gives the best code
-retrieval.
+**Hybrid search out of the box — no key, no account.** The first index embeds
+with local MiniLM (in-process, on-device, nothing sent anywhere), so semantic +
+keyword search works immediately. Want the strongest code retrieval? A Voyage
+key upgrades the embedding model — `oce setup --embeddings voyage` — and the
+index rebuilds with it. Local does the job fine if you'd rather not.
 
 ### 3. Open Trace
 

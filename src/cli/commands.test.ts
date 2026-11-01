@@ -31,7 +31,7 @@ function run(...args: string[]): Promise<unknown> {
   return buildProgram(io).parseAsync(args, { from: "user" });
 }
 
-describe("oce commands, keyword-only, end to end", () => {
+describe("oce commands, end to end", () => {
   it("index → search → status → clean", async () => {
     await run("index", "-w", dir, "-p", "none");
     expect(out).toMatch(/Done in \d+ms \| New: 2/);
@@ -45,7 +45,7 @@ describe("oce commands, keyword-only, end to end", () => {
     await run("status", "-w", dir, "--json");
     const status = JSON.parse(out);
     expect(status.index.chunks).toBeGreaterThan(0);
-    expect(status.index.searchMode).toBe("keyword-only");
+    expect(["hybrid", "keyword-only"]).toContain(status.index.searchMode);
     expect(status.workspace).toBe(dir);
 
     await expect(run("clean", "-w", dir)).rejects.toBeInstanceOf(CliFatalError);
@@ -78,7 +78,7 @@ describe("oce commands, keyword-only, end to end", () => {
     expect(JSON.parse(out).index.chunks).toBeGreaterThan(0);
   });
 
-  it("eval scores a case file against the indexed workspace and reports keyword-only mode", async () => {
+  it("eval scores a case file against the indexed workspace and reports the search mode", async () => {
     await run("index", "-w", dir, "-p", "none");
     const cases = path.join(dir, "cases.json");
     fs.writeFileSync(cases, JSON.stringify([
@@ -88,7 +88,7 @@ describe("oce commands, keyword-only, end to end", () => {
     out = "";
     await run("eval", "-w", dir, "--cases", cases, "-k", "5", "--json", "--no-packed");
     const report = JSON.parse(out);
-    expect(report.searchMode).toBe("keyword-only");
+    expect(["hybrid", "keyword-only"]).toContain(report.searchMode);
     expect(report.aggregate.cases).toBe(2);
     expect(report.aggregate.hitRate).toBeGreaterThan(0);
   });

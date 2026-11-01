@@ -117,7 +117,10 @@ export interface OpenContextConfig {
    *  provider traffic); the CLI and extension turn it on. */
   embedCache?: boolean | string;
 }
-export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = { provider: "voyage", model: "voyage-code-3", dimension: 1024, batchSize: 32 };
+/** Local MiniLM is the product default: hybrid search on the first index
+ *  with no key, no server, nothing sent anywhere. Voyage-code-3 remains the
+ *  recommended upgrade (see the setup hint in cli/config.ts). */
+export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = { provider: "local", model: "all-MiniLM-L6-v2", dimension: 384, batchSize: 16 };
 export const DEFAULT_SEARCH_CONFIG: SearchConfig = { topK: 15, maxOutputLength: 80000, minScore: 0.0, candidateK: 60, bm25Weight: 1.0, vectorWeight: 1.0, rerank: true, expandSymbols: true };
 export const DEFAULT_CHUNK_CONFIG = { chunkSize: 80, chunkOverlap: 15 };
 export const MAX_FILE_SIZE = 1_048_576;
