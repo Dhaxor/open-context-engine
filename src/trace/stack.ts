@@ -22,6 +22,7 @@ import type { DelegateObserver } from "../agent/delegate";
 import type { EditApplier } from "../agent/edit-tools";
 import type { EditProposal, ToolDefinition } from "../agent/types";
 import { environmentProvider } from "../agent/env";
+import { readProjectInstructions } from "../agent/project-instructions";
 import { contextWindowFor } from "../agent/providers";
 import { ContextLedger } from "./ledger";
 import { CheckpointStore } from "./checkpoints";
@@ -175,6 +176,10 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     audit: input.audit,
     hooks: permissions.asHooks(),
     environmentProvider: environment,
+    // Project instruction files (AGENTS.md first, then CLAUDE.md/.cursorrules)
+    // ride in the system prompt under "## Project Guidelines" — table stakes
+    // for repos tuned on other coding agents.
+    guidelinesProvider: () => readProjectInstructions(input.workspaceRoot),
     ...input.agent,
   });
   if (input.restore) agent.importSession(input.restore);
