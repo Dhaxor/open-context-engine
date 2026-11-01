@@ -39,9 +39,6 @@ No embedding key needed for the keyword baseline (`-p none`). With a key,
 swap `-p voyage` (or `-p openai`) and compare against the matching hybrid
 baseline.
 
-Known quirk: a RELATIVE `-w` path can walk zero files on Windows
-(`workspaceRoot` is not resolved before the file walk) — use an absolute
-path. Tracked for a fix.
 
 ## What the numbers say (and don't)
 

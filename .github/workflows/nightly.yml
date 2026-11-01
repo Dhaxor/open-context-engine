@@ -79,7 +79,7 @@ jobs:
       - name: Flask gold set — keyword-only
         run: |
           curl -sL https://github.com/pallets/flask/archive/refs/tags/3.1.2.tar.gz | tar xz
-          # Absolute -w: relative workspace roots can walk zero files on Windows.
+          # Absolute -w keeps the eval independent of the runner's cwd.
           node dist/cli/index.js eval -w "$PWD/flask-3.1.2" -p none --store-path "$RUNNER_TEMP/flask-kw" \
             --cases eval/external/flask.eval.json \
             --baseline eval/external/flask.baseline.json 2>&1 | tee "$RUNNER_TEMP/flask-kw.txt"

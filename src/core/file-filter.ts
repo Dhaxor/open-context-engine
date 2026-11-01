@@ -107,6 +107,12 @@ export class FileFilter {
   }
 
   async collectStats(rootDir: string, maxExamples = 8): Promise<FilterStats> {
+    if (!fs.existsSync(rootDir)) {
+      // A silent empty walk here reads as "indexed successfully, zero files" —
+      // far worse than a loud error on a typo'd path.
+      throw new Error(`workspace root does not exist: ${rootDir}`);
+    }
+    await this.loadIgnorePatterns(rootDir);
     await this.loadIgnorePatterns(rootDir);
     const stats: FilterStats = { scannedFiles: 0, includedFiles: 0, skippedFiles: 0, skippedByReason: {}, examplesByReason: {}, unreadableFiles: [] };
     const recordSkip = (rp: string, reason = "unknown") => {
@@ -148,6 +154,12 @@ export class FileFilter {
   }
 
   async collectFiles(rootDir: string, onProgress?: (n: number) => void): Promise<File[]> {
+    if (!fs.existsSync(rootDir)) {
+      // A silent empty walk here reads as "indexed successfully, zero files" —
+      // far worse than a loud error on a typo'd path.
+      throw new Error(`workspace root does not exist: ${rootDir}`);
+    }
+    await this.loadIgnorePatterns(rootDir);
     await this.loadIgnorePatterns(rootDir);
     const files: File[] = [];
     let count = 0;
