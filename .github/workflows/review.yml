@@ -63,9 +63,13 @@ jobs:
             > "$RUNNER_TEMP/review.md"
 
       - name: Post the review comment
-        if: env.OCE_LLM_API_KEY != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/review.md"
+        run: |
+          if grep -q "Review skipped:" "$RUNNER_TEMP/review.md"; then
+            cat "$RUNNER_TEMP/review.md"
+            exit 0
+          fi
+          gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/review.md"
