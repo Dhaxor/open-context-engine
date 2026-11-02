@@ -6,6 +6,7 @@ import { compactHistory, renderTranscript, splitForCompaction, totalTokens, trun
 import { editTools, EditApplier, FsEditApplier } from "./edit-tools";
 import { shellTool, webSearchTool, ShellToolOptions, WebSearchOptions } from "./extra-tools";
 import { StepBudget } from "./step-budget";
+import { sandboxRequested } from "./sandbox";
 import { EffectivePolicy, policyAllowsEdits, policyAllowsShell, policyAllowsWebSearch, policyShellAllowlist } from "../core/policy";
 import { AuditLogger } from "../core/audit";
 import { AgentPlan, planTool } from "./plan";
@@ -228,10 +229,13 @@ export function defaultAgentTools(opts: DefaultToolsOptions): ToolDefinition[] {
       const shellOpts = opts.shell === true ? {} : { ...opts.shell };
       const allowlist = policyShellAllowlist(policy, shellOpts.allowlist ?? []);
       const maxTimeout = policy?.agent?.shell?.maxTimeoutMs;
+      // A policy mandate overrides a local opt-out; the local opt-in stands alone.
+      const sandboxForce = policy?.agent?.shell?.sandbox === true || sandboxRequested(shellOpts) === true;
       tools.push(shellTool({
         ...shellOpts,
         ...(allowlist.length || policy?.agent?.shell?.allowlist ? { allowlist } : {}),
         ...(maxTimeout ? { timeoutMs: Math.min(shellOpts.timeoutMs ?? maxTimeout, maxTimeout) } : {}),
+        ...(sandboxForce ? { sandboxForce: true } : {}),
         workspaceRoot: opts.context.getWorkspaceRoot(),
       }));
     }

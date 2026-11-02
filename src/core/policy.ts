@@ -26,8 +26,10 @@ export interface PolicyRules {
   agent?: {
     /** Allow file-editing tools (str-replace / create-file / remove-file). */
     edits?: { enabled?: boolean };
-    /** Allow the run-command shell tool; optionally pin an allowlist. */
-    shell?: { enabled?: boolean; allowlist?: string[]; maxTimeoutMs?: number };
+    /** Allow the run-command shell tool; optionally pin an allowlist.
+     *  sandbox: true FORCES OS sandboxing on shell exec (orgs can mandate it;
+     *  a local opt-in cannot unset it — merge keeps a true over anything). */
+    shell?: { enabled?: boolean; allowlist?: string[]; maxTimeoutMs?: number; sandbox?: boolean };
     /** Allow the web-search tool. */
     webSearch?: { enabled?: boolean };
   };
@@ -101,6 +103,7 @@ export function mergePolicies(base: PolicyRules, next: PolicyRules): PolicyRules
     agent.shell = {
       ...(shellEnabled !== undefined ? { enabled: shellEnabled } : {}),
       ...(shellAllow !== undefined ? { allowlist: shellAllow } : {}),
+      ...(base.agent?.shell?.sandbox || next.agent?.shell?.sandbox ? { sandbox: true } : {}),
       ...(maxTimeouts.length ? { maxTimeoutMs: Math.min(...maxTimeouts) } : {}),
     };
   }

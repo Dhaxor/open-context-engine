@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { resolveWorkspacePath } from "../core/utils";
 import { ToolDefinition } from "./types";
+import { detectSandbox, runSandboxed, sandboxRequested } from "./sandbox";
 
 export interface ShellToolOptions {
   workspaceRoot: string;
@@ -8,6 +9,10 @@ export interface ShellToolOptions {
   allowlist?: string[];
   timeoutMs?: number;
   maxOutputChars?: number;
+  /** Execute under an OS sandbox: network denied, writes limited to the
+   *  workspace + temp dirs. macOS Seatbelt / Linux bubblewrap; Windows has
+   *  no OS sandbox (scrubbed env + allowlist still apply). Default: off. */
+  sandbox?: boolean;
 }
 
 export interface WebSearchOptions {
@@ -61,6 +66,10 @@ export function shellTool(opts: ShellToolOptions): ToolDefinition {
         return `Error: cwd '${args.cwd}' is outside the workspace.`;
       }
       const to = clamp(Number(args.timeout_ms ?? timeoutMs), 1000, 300_000);
+      if (sandboxRequested(opts) || (opts as { sandboxForce?: boolean }).sandboxForce === true) {
+        const profile = detectSandbox(cwd);
+        return runSandboxed(profile, opts.workspaceRoot, cmd, cwd, to, scrubbedEnv());
+      }
       return runShell(cmd, cwd, to, maxOutput);
     },
   };
