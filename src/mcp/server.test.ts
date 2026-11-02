@@ -67,6 +67,7 @@ describe("MCP server tools", () => {
       "index-status",
       "list-files",
       "read-file",
+      "repo-map",
     ]);
   });
 
@@ -145,5 +146,25 @@ describe("MCP over Streamable HTTP", () => {
     } finally {
       httpServer.close();
     }
+  });
+});
+
+describe("repo-map tool over the MCP server", () => {
+  it("renders the seeded files as a structural map", async () => {
+    const client = await connectedClient();
+    const res: any = await client.callTool({ name: "repo-map", arguments: {} });
+    const text = res.content[0].text;
+    expect(res.isError).toBeUndefined();
+    expect(text).toContain("src/auth.ts");
+    expect(text).toContain("authenticate");
+    await client.close();
+  });
+
+  it("scopes to a path prefix", async () => {
+    const client = await connectedClient();
+    const res: any = await client.callTool({ name: "repo-map", arguments: { pathPrefix: "src/" } });
+    const text = res.content[0].text;
+    expect(text).toContain("src/");
+    await client.close();
   });
 });

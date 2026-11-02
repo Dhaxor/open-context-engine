@@ -54,6 +54,29 @@ export function registerSearchCommands(program: import("commander").Command, io:
       mr.close();
     });
 
+  withStoreOptions(program.command("map").description("Print a compact structural map of the indexed workspace: files with their declared symbols and line ranges (aider-style repo map). Feed it to any LLM to give the whole codebase's shape in a few thousand tokens."))
+    .option("-w, --workspace <path>", "Workspace", process.cwd())
+    .option("-p, --provider <provider>", "Embedding provider")
+    .option("-m, --model <model>", "Model")
+    .option("--api-key <key>", "API key")
+    .option("--chars <n>", "Character budget for the map", "4000")
+    .option("--prefix <prefix>", "Restrict the map to files under this path prefix")
+    .option("--no-index", "Print the map from the existing index without refreshing")
+    .action(async (opts: any) => {
+      const ctx = await OpenContext.create(resolveConfig(opts, io));
+      try {
+        if (opts.index !== false) {
+          await ctx.incrementalIndex((s, c, t) => t > 0 && io.progress(`[${s}] ${c}/${t}   `));
+          io.progress("\n");
+        }
+        const { buildRepoMap } = await import("../../core/repo-map");
+        const map = buildRepoMap(ctx.getStore(), { maxChars: Number(opts.chars) || 4000, pathPrefix: opts.prefix || undefined });
+        io.text(map || "Index is empty — run 'oce index' first.");
+      } finally {
+        ctx.close();
+      }
+    });
+
   withStoreOptions(program.command("eval").description("Score retrieval quality against a labeled query set (recall@k, MRR, nDCG)"))
     .requiredOption("--cases <file>", "JSON file of eval cases: [{ id, query, expectedPaths: [..] }]")
     .option("-w, --workspace <path>", "Workspace", process.cwd())

@@ -9,6 +9,7 @@ import { FileWatcher } from "../core/file-watcher";
 import { AuditLogger } from "../core/audit";
 import { renderDefinition, renderReference } from "../agent/agent";
 import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
+import { buildRepoMap } from "../core/repo-map";
 import { createLspFinder, type LspFinder } from "../core/lsp";
 import { packageVersion } from "../version";
 
@@ -152,6 +153,22 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
         ? refs.map(c => renderReference(c, symbol)).join("\n")
         : `No references to '${symbol}' found${p.path ? ` in ${p.path}` : ""} (exact, case-sensitive match).`;
       return { content: [{ type: "text" as const, text }] };
+    } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
+  });
+
+  server.registerTool("repo-map", {
+    description: "Get a compact structural map of the indexed codebase: files with their declared symbols (classes, functions, types) and line ranges, ranked by structure density. Use this FIRST for broad questions (architecture, overview, 'how is this organized') — it costs a few thousand tokens instead of dozens of retrieval calls, and tells you exactly which files and symbols to read or search next. Supports an optional path prefix to scope the map to a subtree.",
+    inputSchema: {
+      pathPrefix: z.string().optional().describe("Optional: restrict the map to files under this path prefix (e.g. 'src/core/')."),
+      maxChars: z.number().optional().describe("Optional character budget for the map (default 4000)."),
+    },
+  } as any, async (p: any) => {
+    try {
+      const prefix = p.pathPrefix ? String(p.pathPrefix) : undefined;
+      const maxChars = p.maxChars ? Math.max(200, Math.min(20000, Number(p.maxChars))) : undefined;
+      audit("repo-map", { pathPrefix: prefix, maxChars });
+      const map = buildRepoMap(context.getStore(), { pathPrefix: prefix, maxChars });
+      return { content: [{ type: "text" as const, text: map || "The index is empty — run an index first." }] };
     } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
   });
 
