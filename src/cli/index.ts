@@ -9,6 +9,7 @@ import { registerMcpCommand } from "./commands/mcp";
 import { registerTeamCommands } from "./commands/team";
 import { registerMiscCommands } from "./commands/license";
 import { registerEvalAgentCommand } from "./commands/eval-agent";
+import { registerReviewCommand } from "./commands/review";
 
 /** The full `oce` command tree around one io, so tests can run commands
  *  in-process against captured output instead of spawning the binary. */
@@ -22,6 +23,7 @@ export function buildProgram(io: CliIo = createCliIo()): import("commander").Com
   registerTeamCommands(program, io);
   registerMiscCommands(program, io);
   registerEvalAgentCommand(program, io);
+registerReviewCommand(program, io);
   return program;
 }
 

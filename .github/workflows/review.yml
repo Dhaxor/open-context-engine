@@ -1,0 +1,71 @@
+# OCE reviews its own PRs with the OCE agent — the demo of the review action
+# and a real quality gate: every PR gets grounded, index-backed review
+# comments without any external service.
+#
+# Runs the review agent from the PR's own checkout (npm ci + build), so the
+# reviewer always exercises the exact code under review.
+
+name: OCE Review
+
+on:
+  pull_request:
+    # Skip PRs that only touch CI/docs metadata.
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+
+      - name: Build the reviewer from this checkout
+        run: |
+          npm ci
+          npm run build
+
+      - name: Index the workspace
+        run: node dist/cli/index.js index -p local
+
+      - name: Pull the PR diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr diff "$NUMBER" > "$RUNNER_TEMP/pr.diff"
+
+      - name: Review the diff
+        env:
+          OCE_LLM_PROVIDER: ${{ vars.OCE_REVIEW_LLM_PROVIDER }}
+          OCE_LLM_API_KEY: ${{ secrets.OCE_REVIEW_LLM_KEY }}
+        run: |
+          if [ -z "$OCE_LLM_API_KEY" ]; then
+            echo "Review skipped: set the OCE_REVIEW_LLM_KEY secret (and OCE_REVIEW_LLM_PROVIDER variable) to enable the PR reviewer."
+            exit 0
+          fi
+          node dist/cli/index.js review --diff "$RUNNER_TEMP/pr.diff" \
+            -p "$OCE_LLM_PROVIDER" --api-key "$OCE_LLM_API_KEY" \
+            > "$RUNNER_TEMP/review.md"
+
+      - name: Post the review comment
+        if: env.OCE_LLM_API_KEY != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/review.md"

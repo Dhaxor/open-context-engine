@@ -1,0 +1,89 @@
+# OCE Review — a reusable GitHub Action that reviews a pull request with the
+# OCE agent, grounded in the repository's indexed code.
+#
+# Usage in another repo's workflow:
+#
+#   - uses: Dhaxor/open-context-engine@v0
+#     with:
+#       github-token: ${{ secrets.GITHUB_TOKEN }}
+#       llm-provider: openai
+#       llm-api-key: ${{ secrets.OPENAI_API_KEY }}
+#
+# The action installs the OCE CLI, indexes the checkout (local MiniLM by
+# default — no key needed), pulls the PR diff, runs `oce review`, and posts
+# the markdown output as a PR comment.
+name: 'OCE Review'
+description: 'Review a pull request with the OCE agent, grounded in an indexed codebase.'
+branding:
+  icon: 'eye'
+  color: 'purple'
+
+inputs:
+  github-token:
+    description: 'Token for gh CLI (diff + PR comment).'
+    required: true
+  llm-provider:
+    description: 'LLM provider for the review agent (openai, anthropic, google, groq, ...).'
+    required: false
+    default: 'openai'
+  llm-api-key:
+    description: 'API key for the LLM provider.'
+    required: true
+  embedding-provider:
+    description: 'Embedding provider for the index (local by default — no key).'
+    required: false
+    default: 'local'
+  max-files:
+    description: 'Cap on reviewed files per PR.'
+    required: false
+    default: '20'
+  oce-version:
+    description: 'OCE CLI version to install.'
+    required: false
+    default: 'latest'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0 # the diff needs base history
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '22.22.0'
+
+    - name: Install OCE CLI
+      shell: bash
+      run: npm install -g "@dhaxor/open-context@${{ inputs.oce-version }}"
+
+    - name: Index the workspace
+      shell: bash
+      run: oce index -p "${{ inputs.embedding-provider }}"
+
+    - name: Pull the PR diff
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        NUMBER: ${{ github.event.pull_request.number }}
+      run: gh pr diff "$NUMBER" > "$RUNNER_TEMP/pr.diff"
+
+    - name: Review the diff
+      shell: bash
+      env:
+        OCE_LLM_PROVIDER: ${{ inputs.llm-provider }}
+        OCE_LLM_API_KEY: ${{ inputs.llm-api-key }}
+      run: |
+        oce review --diff "$RUNNER_TEMP/pr.diff" \
+          -p "$OCE_LLM_PROVIDER" --api-key "$OCE_LLM_API_KEY" \
+          --max-files "${{ inputs.max-files }}" \
+          > "$RUNNER_TEMP/review.md"
+
+    - name: Post the review comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        NUMBER: ${{ github.event.pull_request.number }}
+      run: gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/review.md"
