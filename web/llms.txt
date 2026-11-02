@@ -1,0 +1,22 @@
+# Open Context Engine
+
+> Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search, an evidence rail that shows what the agent knew, MCP-native, MIT core. One command: `npm install -g @dhaxor/open-context`.
+
+Open Context Engine (OCE) indexes a codebase into a local SQLite store with AST-aware chunking (13 languages), hybrid retrieval (dense vectors fused with BM25), and serves it to any AI agent over the Model Context Protocol — with a fully local mode (in-process MiniLM embeddings, zero API keys) and an audit log that makes every agent run verifiable.
+
+## Pages
+
+- [Home](https://opencontextengine.com/): product overview — hybrid retrieval, evidence rail, local mode, team index sync.
+- [Agentic workflows](https://opencontextengine.com/agentic-workflow): what an agentic workflow is, why code retrieval is the bottleneck, and how OCE grounds agents like Claude Code and Cursor.
+- [Docs](https://opencontextengine.com/docs): task-based guides — MCP setup for Claude Code and Cursor, search modes, team index sync, license activation, troubleshooting.
+- [Benchmarks](https://opencontextengine.com/benchmarks): measured recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0) in keyword-only and hybrid modes, generated from the eval harness's own reports.
+- [Pricing](https://opencontextengine.com/pricing): MIT core free forever; Team $25/seat/month for shared indexes and policy locks; offline-verifiable Ed25519 licenses.
+
+## Key facts
+
+- Install: `npm install -g @dhaxor/open-context` (Node 22+).
+- MCP: `claude mcp add oce -- oce mcp`, or `oce mcp --http --port 8940 --auth-token <token>` for HTTP clients.
+- Works offline: local MiniLM embeddings in-process; keyword-only BM25 as the degradation path.
+- Quality is measured, not claimed: committed gold sets and CI baselines; benchmarks page is generated from the eval harness's reports.
+- License: MIT core; Team/Enterprise features gate on offline-verifiable license tokens.
+- Source: https://github.com/Dhaxor/open-context-engine

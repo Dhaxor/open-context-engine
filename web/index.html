@@ -3,10 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Open Context Engine — your codebase, indexed. Nothing leaves the machine.</title>
-<meta name="description" content="Local-first code retrieval and coding agent. Hybrid semantic + keyword search over your codebase, served to any AI via MCP — with a fully offline mode. MIT core.">
-<meta property="og:title" content="Open Context Engine">
-<meta property="og:description" content="Local-first code retrieval for AI. recall@10 0.977 · 13 languages · fully offline mode. MIT core.">
+<title>Open Context Engine — code retrieval for agentic workflows</title>
+<meta name="description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
+<link rel="canonical" href="https://opencontextengine.com/">
+<meta property="og:title" content="Open Context Engine — code retrieval for agentic workflows">
+<meta property="og:description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
+<meta property="og:url" content="https://opencontextengine.com/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open Context Engine — code retrieval for agentic workflows">
+<meta name="twitter:description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -25,6 +34,7 @@
       <a href="#team">Team</a>
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" class="optional">Docs</a>
+      <a href="agentic-workflow.html" class="optional">Agentic workflow</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -44,7 +54,7 @@
           <a class="btn btn-ghost" href="pricing.html">Team pricing</a>
         </div>
         <div class="hero-stats num" aria-label="Measured retrieval quality">
-          <span class="stat"><span class="k">recall@10</span><span class="v">0.977</span></span>
+          <span class="stat"><span class="k">recall@10</span><span class="v">0.943</span></span>
           <span class="stat"><span class="k">nDCG@10</span><span class="v">0.812</span></span>
           <span class="stat"><span class="k">mean latency</span><span class="v">251<em>ms</em></span></span>
           <span class="stat"><span class="k">languages</span><span class="v">13</span></span>
@@ -84,7 +94,7 @@ route before any parsing:
       <h2 class="reveal">Retrieval that ranks like it means it</h2>
       <p class="lede reveal">One query fans out across dense vectors and BM25, fuses with reciprocal-rank fusion, reranks, then expands along the code graph — so callers and callees ride along with every hit.</p>
       <div class="results">
-        <div class="result reveal"><span class="rank num">01</span><h3>Hybrid search</h3><p>Vector similarity and porter-stemmed keyword search run together and fuse — semantically relevant and lexically precise, in one ranking.</p><span class="score num">0.977</span></div>
+        <div class="result reveal"><span class="rank num">01</span><h3>Hybrid search</h3><p>Vector similarity and porter-stemmed keyword search run together and fuse — semantically relevant and lexically precise, in one ranking.</p><span class="score num">0.963 ext.</span></div>
         <div class="result reveal"><span class="rank num">02</span><h3>AST-aware chunking</h3><p>Tree-sitter splits code along real boundaries — functions, classes, methods — across TypeScript, Python, Go, Rust, Java, C#, C, C++, Ruby, PHP, Kotlin, and Swift.</p><span class="score num">13 langs</span></div>
         <div class="result reveal"><span class="rank num">03</span><h3>Code graph expansion</h3><p>Import, call, and inheritance edges are extracted at index time. Top results pull in their callers and definitions automatically.</p><span class="score num">3 edge kinds</span></div>
         <div class="result reveal"><span class="rank num">04</span><h3>Streaming stages</h3><p>Keyword hits stream back before the query embedding round-trip even starts. UIs paint first results in milliseconds and refine as stages land.</p><span class="score num">&lt;5ms first</span></div>
@@ -230,6 +240,15 @@ bearer auth · /health · watching</span></pre></div>
       </div>
     </div>
   </section>
+  <section class="wrap reveal" id="faq" style="padding-top: 24px;">
+    <h2 class="reveal" style="font-size: var(--t-h2, 28px);">Agentic workflow FAQ</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 18px;">
+      <div class="result reveal"><h3>What is an agentic workflow?</h3><p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. <a href="agentic-workflow.html">Read the full guide</a>.</p></div>
+      <div class="result reveal"><h3>Why is code retrieval the bottleneck?</h3><p>The agent's context window is smaller than your codebase. Hybrid retrieval over an AST-aware index decides what the model actually sees — and acts on.</p></div>
+      <div class="result reveal"><h3>How do I ground Claude Code or Cursor?</h3><p>Run the OCE MCP server over an indexed codebase: <code>claude mcp add oce -- oce mcp</code>. Steps in the <a href="docs.html">docs</a>.</p></div>
+      <div class="result reveal"><h3>Does it work offline?</h3><p>Yes — local MiniLM embeddings in-process, local SQLite storage, keyword-only fallback. Nothing is sent anywhere.</p></div>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -251,6 +270,7 @@ bearer auth · /health · watching</span></pre></div>
         <a href="benchmarks.html">Benchmarks</a>
         <a href="https://github.com/Dhaxor/open-context-engine#-quick-start">Quick start</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="agentic-workflow.html">Agentic workflow</a>
       </div>
       <div><span class="col-h">contact</span>
         <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
@@ -260,5 +280,36 @@ bearer auth · /health · watching</span></pre></div>
 </footer>
 
 <script src="site.js" defer></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Open Context Engine",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, Windows",
+  "description": "Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP.",
+  "url": "https://opencontextengine.com/",
+  "downloadUrl": "https://www.npmjs.com/package/@dhaxor/open-context",
+  "codeRepository": "https://github.com/Dhaxor/open-context-engine",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": [
+    { "@type": "Offer", "name": "Community", "price": "0", "priceCurrency": "USD" },
+    { "@type": "Offer", "name": "Team", "price": "25", "priceCurrency": "USD" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What is an agentic workflow?", "acceptedAnswer": { "@type": "Answer", "text": "Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. Coding agents apply the loop to code: retrieve, edit, test, fix." } },
+    { "@type": "Question", "name": "Why is code retrieval the bottleneck in agentic workflows?", "acceptedAnswer": { "@type": "Answer", "text": "The agent's context window is smaller than your codebase, so retrieval decides what the model sees. Hybrid retrieval over an AST-aware index is the reliable way to fill that window." } },
+    { "@type": "Question", "name": "How do I ground Claude Code or Cursor in my codebase?", "acceptedAnswer": { "@type": "Answer", "text": "Run the Open Context Engine MCP server over an indexed codebase: npm install -g @dhaxor/open-context, oce index, then claude mcp add oce -- oce mcp." } },
+    { "@type": "Question", "name": "Does Open Context Engine work offline?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Local MiniLM embeddings run in-process with no API key, the index is local SQLite, and a keyword-only mode kicks in if vector search is unavailable." } }
+  ]
+}
+</script>
 </body>
 </html>

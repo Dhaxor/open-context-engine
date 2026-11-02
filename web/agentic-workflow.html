@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Is an Agentic Workflow? Code Retrieval for AI Agents — Open Context Engine</title>
+<meta name="description" content="An agentic workflow is software where an LLM plans, uses tools, and acts in loops. Learn how code retrieval grounds coding agents — and how to give any agent your codebase via MCP.">
+<link rel="canonical" href="https://opencontextengine.com/agentic-workflow">
+<meta property="og:title" content="What Is an Agentic Workflow? Code Retrieval for AI Agents">
+<meta property="og:description" content="An agentic workflow is software where an LLM plans, uses tools, and acts in loops. Learn how code retrieval grounds coding agents — and how to give any agent your codebase via MCP.">
+<meta property="og:url" content="https://opencontextengine.com/agentic-workflow">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What Is an Agentic Workflow? Code Retrieval for AI Agents">
+<meta name="twitter:description" content="How agentic workflows work, why code retrieval is the bottleneck, and how to ground any coding agent in your real codebase — locally.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "What Is an Agentic Workflow? Code Retrieval for AI Agents",
+  "description": "How agentic workflows work, why code retrieval is the bottleneck, and how to ground coding agents in your real codebase.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/agentic-workflow",
+  "about": [
+    { "@type": "Thing", "name": "agentic workflow" },
+    { "@type": "Thing", "name": "Model Context Protocol" },
+    { "@type": "Thing", "name": "code retrieval" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is an agentic workflow?",
+      "acceptedAnswer": { "@type": "Answer", "text": "An agentic workflow is software where a large language model doesn't just answer once — it plans, calls tools (search, file reads, shell commands, code edits), observes the results, and loops until a goal is met. Coding agents like Claude Code, Cursor, and Open Context Engine's Trace are agentic workflows: they retrieve code, edit files, run tests, and react to what they see." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why is code retrieval the bottleneck in agentic workflows?",
+      "acceptedAnswer": { "@type": "Answer", "text": "An agent can only act on what fits in its context window. A real codebase is far larger than that window, so the agent's plan is only as good as the code its retrieval puts in front of it. Weak retrieval means hallucinated APIs, edits to the wrong file, and fixes that break callers. Hybrid retrieval — dense vectors fused with keyword search over an AST-aware index — is what makes the grounding precise." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I give a coding agent my whole codebase?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Run an MCP server that exposes retrieval over the indexed codebase. With Open Context Engine: npm install -g @dhaxor/open-context, then claude mcp add oce -- oce mcp. Claude Code, Cursor, and any MCP client then get search, symbol-definition, symbol-references, and file tools grounded in your real code — locally, with no code leaving the machine." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do agentic workflows work offline?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes, if the stack is local-first. Open Context Engine embeds with an in-process MiniLM model by default (no API key) and stores everything in local SQLite, so indexing and semantic search run fully offline. Remote embedding providers like Voyage are an optional upgrade for higher retrieval quality." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the Model Context Protocol (MCP)?",
+      "acceptedAnswer": { "@type": "Answer", "text": "MCP is an open protocol that lets LLM applications call external tools and data sources through a standard interface. An MCP server exposes tools like code search or file reading; agents like Claude Code and Cursor connect to it as clients. Open Context Engine ships an MCP server (stdio or HTTP) that exposes retrieval and symbol tools over your indexed codebase." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/agentic-workflow <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">What is an agentic workflow?</h1>
+    <p class="sub">How LLM agents plan, act, and loop — why code retrieval is the bottleneck that decides whether they help or hallucinate — and how to ground any coding agent in your real codebase, locally.</p>
+  </section>
+
+  <section class="doc">
+    <h2>What is an agentic workflow?</h2>
+    <p>An <strong>agentic workflow</strong> is software where a large language model doesn't just answer a prompt and stop. The model <em>plans</em>, calls <em>tools</em> — search, file reads, shell commands, code edits — observes the results, and loops until the goal is met. The loop is the difference between a chatbot and an agent: a chatbot tells you what <em>might</em> work; an agent tries it, reads the test output, and fixes what broke.</p>
+    <p>Coding agents like <strong>Claude Code</strong>, <strong>Cursor</strong>, and Open Context Engine's <strong>Trace</strong> workspace are agentic workflows. A typical loop for "fix the failing test": retrieve the failing test and the code under it, read the implementation, form a hypothesis, edit the file, run the test, read the new failure, edit again. Every step feeds the next — which is why the quality of each step's <em>inputs</em> compounds.</p>
+
+    <h2>Why code retrieval is the bottleneck</h2>
+    <p>An agent can only act on what fits in its context window, and a real codebase is orders of magnitude larger than that window. So every agentic workflow over code is secretly a <strong>retrieval</strong> problem: what the agent's search puts in front of it determines the plan it forms. Weak retrieval produces the classic failure modes — hallucinated APIs, edits to the wrong file, "fixes" that break callers the agent never saw.</p>
+    <p>Naive approaches don't hold up. Pasting whole files burns the context budget on code that doesn't matter. Plain vector search misses exact identifiers ("find <code>AbortWithStatusJSON</code>" is a lexical query, not a semantic one). Plain keyword search misses paraphrases ("how does auth middleware work" never names the function). <strong>Hybrid retrieval</strong> — dense vectors fused with BM25 keyword scoring over an AST-aware index — is what makes the grounding precise enough to trust, and it's measurable: recall@k, MRR, and nDCG against committed gold sets, not vibes.</p>
+
+    <h2>MCP: the standard that connects agents to your code</h2>
+    <p>The <strong>Model Context Protocol (MCP)</strong> is the open standard that lets LLM applications call tools — search, file reads, symbol lookups — through one interface. An MCP server exposes the tools; agents like Claude Code and Cursor connect as clients. That turns "give the agent my whole codebase" from a prompt-hacking exercise into an integration:</p>
+    <pre>npm install -g @dhaxor/open-context
+claude mcp add oce -- oce mcp        # Claude Code, stdio
+oce mcp --http --port 8940 --auth-token $TOKEN   # Cursor / HTTP clients</pre>
+    <p>Once connected, the agent gets <code>codebase-retrieval</code> (hybrid search), <code>repo-map</code> (the codebase's structure in a few thousand tokens), <code>find-symbol-definition</code> / <code>find-symbol-references</code> (compiler-grade with a language server, AST-grade without), and <code>read-file</code> — all served from a local index that updates as files change.</p>
+
+    <h2>Grounding beats guessing</h2>
+    <p>The difference between an agent that helps and one that hallucinates is rarely the model — it's whether the model saw the real code. Three properties make grounding trustworthy:</p>
+    <ul>
+      <li><strong>Measured retrieval.</strong> Ranking quality should be scored against gold sets in CI — recall, MRR, nDCG — the way tests are. <a href="benchmarks.html">OCE publishes its numbers</a> and ships the harness to score your own repo.</li>
+      <li><strong>Visible context.</strong> You should be able to see <em>what the agent knew</em> — which chunks were retrieved, what was pinned or evicted — not just what it did. That's OCE's evidence rail.</li>
+      <li><strong>Local by default.</strong> Indexing your codebase with a cloud service means sending your source somewhere. Local-first embedding (in-process MiniLM) and local SQLite keep the loop on your machine; remote providers are an upgrade, not a requirement.</li>
+    </ul>
+
+    <h2>An agentic workflow you can run today</h2>
+    <p>OCE is both a retrieval engine <em>for</em> your existing agent and a coding agent <em>of</em> its own:</p>
+    <pre># ground Claude Code / Cursor in your codebase (MCP)
+npm install -g @dhaxor/open-context
+oce index && claude mcp add oce -- oce mcp
+
+# or use the built-in agent with the evidence rail
+oce trace</pre>
+    <p>The core is MIT and runs fully offline. <a href="docs.html">The docs</a> walk through Claude Code, Cursor, search modes, and team index sync; <a href="benchmarks.html">the benchmarks</a> show what the retrieval actually scores.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>What is an agentic workflow?</h3>
+      <p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. Coding agents apply the loop to code: retrieve, edit, test, fix.</p>
+      <h3>Why is code retrieval the bottleneck?</h3>
+      <p>The agent's context window is smaller than your codebase. Retrieval decides what the model sees, and the model's plan is only as good as what it sees. Hybrid (semantic + keyword) retrieval over an AST-aware index is the reliable way to fill that window.</p>
+      <h3>How do I give Claude Code or Cursor my codebase?</h3>
+      <p>Run an MCP server over an indexed codebase. With OCE: <code>npm install -g @dhaxor/open-context</code>, then <code>claude mcp add oce -- oce mcp</code>. Full steps are in the <a href="docs.html">docs</a>.</p>
+      <h3>Does it work offline / can my code stay local?</h3>
+      <p>Yes. Local embeddings run in-process with no API key, the index is local SQLite, and a keyword-only mode kicks in if vector search is unavailable. Nothing is sent anywhere unless you opt into a remote provider.</p>
+      <h3>What is MCP?</h3>
+      <p>The Model Context Protocol — an open standard for connecting LLM applications to external tools and data. OCE ships an MCP server exposing retrieval and symbol tools over your indexed code.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>
