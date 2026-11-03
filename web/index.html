@@ -35,6 +35,7 @@
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" class="optional">Docs</a>
       <a href="agentic-workflow.html" class="optional">Agentic workflow</a>
+      <a href="mcp-server.html" class="optional">MCP server</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -243,7 +244,7 @@ bearer auth · /health · watching</span></pre></div>
   <section class="wrap reveal" id="faq" style="padding-top: 24px;">
     <h2 class="reveal" style="font-size: var(--t-h2, 28px);">Agentic workflow FAQ</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 18px;">
-      <div class="result reveal"><h3>What is an agentic workflow?</h3><p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. <a href="agentic-workflow.html">Read the full guide</a>.</p></div>
+      <div class="result reveal"><h3>What is an agentic workflow?</h3><p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. <a href="agentic-workflow.html">Read the full guide</a>. For connecting agents to your code over MCP, see <a href="mcp-server.html">the MCP server guide</a>.</p></div>
       <div class="result reveal"><h3>Why is code retrieval the bottleneck?</h3><p>The agent's context window is smaller than your codebase. Hybrid retrieval over an AST-aware index decides what the model actually sees — and acts on.</p></div>
       <div class="result reveal"><h3>How do I ground Claude Code or Cursor?</h3><p>Run the OCE MCP server over an indexed codebase: <code>claude mcp add oce -- oce mcp</code>. Steps in the <a href="docs.html">docs</a>.</p></div>
       <div class="result reveal"><h3>Does it work offline?</h3><p>Yes — local MiniLM embeddings in-process, local SQLite storage, keyword-only fallback. Nothing is sent anywhere.</p></div>
@@ -271,6 +272,7 @@ bearer auth · /health · watching</span></pre></div>
         <a href="https://github.com/Dhaxor/open-context-engine#-quick-start">Quick start</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
         <a href="agentic-workflow.html">Agentic workflow</a>
+        <a href="mcp-server.html">MCP server</a>
       </div>
       <div><span class="col-h">contact</span>
         <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>

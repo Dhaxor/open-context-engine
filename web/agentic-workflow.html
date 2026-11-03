@@ -118,7 +118,7 @@
     <p>Naive approaches don't hold up. Pasting whole files burns the context budget on code that doesn't matter. Plain vector search misses exact identifiers ("find <code>AbortWithStatusJSON</code>" is a lexical query, not a semantic one). Plain keyword search misses paraphrases ("how does auth middleware work" never names the function). <strong>Hybrid retrieval</strong> — dense vectors fused with BM25 keyword scoring over an AST-aware index — is what makes the grounding precise enough to trust, and it's measurable: recall@k, MRR, and nDCG against committed gold sets, not vibes.</p>
 
     <h2>MCP: the standard that connects agents to your code</h2>
-    <p>The <strong>Model Context Protocol (MCP)</strong> is the open standard that lets LLM applications call tools — search, file reads, symbol lookups — through one interface. An MCP server exposes the tools; agents like Claude Code and Cursor connect as clients. That turns "give the agent my whole codebase" from a prompt-hacking exercise into an integration:</p>
+    <p>The <strong>Model Context Protocol (MCP)</strong> is the open standard that lets LLM applications call tools — search, file reads, symbol lookups — through one interface. An MCP server exposes the tools; agents like Claude Code and Cursor connect as clients. That turns "give the agent my whole codebase" from a prompt-hacking exercise into an integration — the <a href="mcp-server">MCP server guide</a> walks through Claude Code and Cursor setup in detail:</p>
     <pre>npm install -g @dhaxor/open-context
 claude mcp add oce -- oce mcp        # Claude Code, stdio
 oce mcp --http --port 8940 --auth-token $TOKEN   # Cursor / HTTP clients</pre>
