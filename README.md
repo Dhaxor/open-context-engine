@@ -18,6 +18,8 @@ Open Context Engine (OCE) is a **local-first, high-performance retrieval engine*
 
 Whether you're building a coding assistant, automating PR reviews, or just want to ask natural-language questions about your own code—OCE gives your AI **ground truth**.
 
+> 📘 **Docs, benchmarks & guides:** [opencontextengine.com](https://opencontextengine.com) — MCP setup for Claude Code & Cursor, the agentic-workflow guide, and measured retrieval benchmarks.
+
 ## ✨ What Makes It Special
 
 | Feature | Description |
