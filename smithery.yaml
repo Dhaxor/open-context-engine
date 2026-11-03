@@ -1,0 +1,24 @@
+# Smithery configuration — https://smithery.ai/docs/config
+# Starts the Open Context Engine MCP server (stdio) over an indexed workspace.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      workspace:
+        type: string
+        description: Absolute path to the codebase to index and serve.
+      http:
+        type: boolean
+        description: Expose Streamable HTTP instead of stdio (default false).
+        default: false
+    required: []
+  commandFunction:
+    |-
+    (config) => ({
+      "command": "npx",
+      "args": ["-y", "@dhaxor/open-context", "mcp"].concat(
+        config.workspace ? ["--workspace", config.workspace] : [],
+        config.http ? ["--http"] : []
+      )
+    })
