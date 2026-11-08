@@ -122,6 +122,9 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
   // Same indirection as retrieval: the tools capture these before the session
   // that fulfils them exists.
   const delegation: { observer?: DelegateObserver } = {};
+  // And the same for remembered context: the agent fires onMemoryInjected
+  // before the ledger exists to receive it.
+  const memoryObserver: { fn?: (entries: { id: string; kind: string; content: string }[]) => void } = {};
 
   const tools = defaultAgentTools({
     context: ctx,
@@ -173,6 +176,7 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     router: input.router,
     memory: input.memory,
     memorySource: input.memorySource,
+    ...(traced ? { onMemoryInjected: (entries: { id: string; kind: string; content: string }[]) => memoryObserver.fn?.(entries) } : {}),
     audit: input.audit,
     hooks: permissions.asHooks(),
     environmentProvider: environment,
@@ -214,6 +218,7 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     });
     observer.fn = trace.observeRetrieval;
     delegation.observer = trace.delegateObserver;
+    memoryObserver.fn = entries => ledger.noteMemory(entries);
   }
 
   return { agent, plan, permissions, tools, trace, ledger, checkpoints };

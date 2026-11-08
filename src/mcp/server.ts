@@ -12,10 +12,20 @@ import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
 import { buildRepoMap } from "../core/repo-map";
 import { createLspFinder, type LspFinder } from "../core/lsp";
 import { packageVersion } from "../version";
+import { SessionMemory, looksLikeSecret, type MemoryKind } from "../agent/session-memory";
+
+/** Cheap tag extraction shared with the memory store's own tagging. */
+function extractTagsPublic(content: string): string[] {
+  const words = content.match(/[A-Z][a-z]+[A-Z]\w+|[a-z_]{4,}/g) ?? [];
+  return [...new Set(words.map(w => w.toLowerCase()))].slice(0, 5);
+}
 
 export interface CreateMCPServerOptions {
   /** When set, every MCP tool invocation is appended to the audit log. */
   audit?: AuditLogger;
+  /** Durable session memory backing the memory_* tools. When absent, one is
+   *  created beside the index store (lexical recall only — no embedder). */
+  memory?: SessionMemory;
 }
 
 /** LSP symbol lookup, best-effort. Returns null whenever no language server
@@ -53,6 +63,7 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
   const server = new McpServer({ name: "open-context-engine", version: packageVersion() });
   const audit = (tool: string, args: Record<string, unknown>) =>
     opts.audit?.log("mcp", { tool, arguments: JSON.stringify(args) });
+  const memory = opts.memory ?? new SessionMemory({ storePath: context.getStorePath() });
 
   server.registerTool("codebase-retrieval", {
     description: "Search the codebase using natural language. Returns code snippets with file paths and line numbers.",
@@ -183,6 +194,81 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
     } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
   });
 
+  // ─── session memory ────────────────────────────────────────────────────────
+  // Durable cross-session memory, stored locally beside the index. These tools
+  // make the memory layer available to ANY MCP client — Claude Code, Cursor,
+  // CI bots — not just the built-in agent.
+
+  server.registerTool("memory_remember", {
+    description: "Persist a durable memory for future sessions (e.g. 'auth middleware lives in src/auth/jwt.ts', 'the team prefers pnpm'). Kind: codebase_insight (default for learned facts), preference (user-stated), fact, conversation_summary. Pass supersedes (a memory id) when this memory REPLACES an older one — the old memory stops being recalled.",
+    inputSchema: {
+      content: z.string().describe("The memory, one self-contained sentence."),
+      kind: z.enum(["fact", "preference", "codebase_insight", "conversation_summary"]).optional().describe("Memory kind (default: codebase_insight)"),
+      tags: z.array(z.string()).optional().describe("Optional lookup tags"),
+      supersedes: z.string().optional().describe("Id (or exact content) of an older memory this one replaces"),
+    },
+  } as any, async (p: any) => {
+    try {
+      const content = String(p.content ?? "").trim();
+      if (!memory) return { content: [{ type: "text" as const, text: "Error: memory store unavailable." }], isError: true };
+      if (content.length < 5 || content.length > 500) {
+        return { content: [{ type: "text" as const, text: "Error: memory must be one sentence between 5 and 500 characters." }], isError: true };
+      }
+      if (looksLikeSecret(content)) {
+        return { content: [{ type: "text" as const, text: "Error: this looks like a secret (API key, token, credential) — memories never store secrets." }], isError: true };
+      }
+      const kind = (p.kind ?? "codebase_insight") as MemoryKind;
+      audit("memory_remember", { kind, supersedes: p.supersedes ?? undefined });
+      const entry = memory.add({
+        kind,
+        content,
+        source: "mcp",
+        tags: Array.isArray(p.tags) ? p.tags.slice(0, 5).map(String) : extractTagsPublic(content),
+        ...(p.supersedes ? { supersedes: String(p.supersedes) } : {}),
+      });
+      const replaced = entry.supersedes ? ` (supersedes ${entry.supersedes})` : "";
+      return { content: [{ type: "text" as const, text: `Remembered ${entry.id}${replaced}: [${entry.kind}] ${entry.content}` }] };
+    } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
+  });
+
+  server.registerTool("memory_recall", {
+    description: "Recall durable memories relevant to a query — hybrid lexical + semantic retrieval over what was remembered in prior sessions. Memories may be stale: verify against the current code before relying on them.",
+    inputSchema: {
+      query: z.string().describe("What to recall, e.g. 'how is auth done'"),
+      top_k: z.number().optional().describe("Max memories to return (default 5)"),
+    },
+  } as any, async (p: any) => {
+    try {
+      if (!memory) return { content: [{ type: "text" as const, text: "Error: memory store unavailable." }], isError: true };
+      const query = String(p.query ?? "").trim();
+      if (!query) return { content: [{ type: "text" as const, text: "No query given." }], isError: true };
+      audit("memory_recall", { query });
+      const topK = Math.max(1, Math.min(20, Number(p.top_k) || 5));
+      const hits = await memory.recall(query, topK);
+      if (!hits.length) return { content: [{ type: "text" as const, text: "No relevant memories." }] };
+      const lines = hits.map(e => {
+        const date = new Date(e.createdAt).toISOString().slice(0, 10);
+        return `- [${e.kind}] ${e.content} (remembered ${date}, id ${e.id})`;
+      });
+      return { content: [{ type: "text" as const, text: `## Remembered (may be stale — verify against current code)\n${lines.join("\n")}` }] };
+    } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
+  });
+
+  server.registerTool("memory_forget", {
+    description: "Delete a durable memory by id (ids come from memory_recall or memory_remember). Use when a memory is wrong or no longer relevant.",
+    inputSchema: {
+      id: z.string().describe("Memory id, e.g. 'mem_abc123_x9'"),
+    },
+  } as any, async (p: any) => {
+    try {
+      if (!memory) return { content: [{ type: "text" as const, text: "Error: memory store unavailable." }], isError: true };
+      const id = String(p.id ?? "").trim();
+      audit("memory_forget", { id });
+      const ok = memory.forget(id);
+      return { content: [{ type: "text" as const, text: ok ? `Forgot ${id}.` : `No memory with id ${id}.` }], ...(ok ? {} : { isError: true }) };
+    } catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true }; }
+  });
+
   return server;
 }
 
@@ -263,13 +349,20 @@ export async function runMCPServer(config: OpenContextConfig, opts: RunMCPServer
   const ctx = await OpenContext.create(config);
   const diagnostics = createMcpStderrDiagnostics();
 
+  // One memory store for the whole server lifecycle — shared across HTTP's
+  // stateless per-request servers, so remembered facts survive requests.
+  const memory = new SessionMemory({
+    storePath: ctx.getStorePath(),
+    embedder: ctx.getEmbedder(),
+  });
+
   // Connect before indexing so the MCP initialize handshake isn't blocked by a
   // potentially slow first index. stdout is the protocol channel — all logs go to stderr.
   let httpServer: http.Server | null = null;
   if (opts.http) {
-    httpServer = await startHttpServer(() => createMCPServer(ctx, { audit: opts.audit }), opts.http, diagnostics);
+    httpServer = await startHttpServer(() => createMCPServer(ctx, { audit: opts.audit, memory }), opts.http, diagnostics);
   } else {
-    const server = await createMCPServer(ctx, { audit: opts.audit });
+    const server = await createMCPServer(ctx, { audit: opts.audit, memory });
     await server.connect(new StdioServerTransport());
   }
 

@@ -211,3 +211,43 @@ describe("ContextLedger pinning", () => {
     expect(l.pinnedBlock()).toBeNull();
   });
 });
+
+describe("ContextLedger memory bucket", () => {
+  it("accounts remembered context separately and keeps it addressable", () => {
+    const l = ledger();
+    l.noteRetrieval(trace({ chunks: [chunk("src/a.ts", "a1", { tokens: 300 })] }), [result("src/a.ts", "a1")]);
+    l.noteMemory([
+      { id: "mem_1", kind: "codebase_insight", content: "auth middleware lives in src/auth/guard.ts" },
+      { id: "mem_2", kind: "preference", content: "the team prefers pnpm" },
+    ]);
+
+    const snap = l.snapshot([]);
+    expect(snap.buckets.memory).toBeGreaterThan(0);
+    const rows = snap.entries.filter(e => e.bucket === "memory");
+    expect(rows.length).toBe(2);
+    expect(rows[0].id.startsWith("m:mem_")).toBe(true);
+    expect(rows[0].label.startsWith("[codebase_insight]")).toBe(true);
+    // Memory tokens are real window occupancy — the total includes the bucket.
+    expect(snap.usedTokens).toBe(
+      snap.buckets.retrieval + snap.buckets.files + snap.buckets.system +
+      snap.buckets.tools + snap.buckets.history + snap.buckets.memory,
+    );
+  });
+
+  it("preserves evict state across re-injection of the same memory", () => {
+    const l = ledger();
+    l.noteMemory([{ id: "mem_1", kind: "fact", content: "deploys go through infra/" }]);
+    const id = "m:mem_1";
+    expect(l.evict(id)).toBe(true);
+    l.noteMemory([{ id: "mem_1", kind: "fact", content: "deploys go through infra/" }]);
+    const row = l.getEntry(id);
+    expect(row?.evicted).toBe(true);
+    // Evicted memories leave the occupancy…
+    const snap = l.snapshot([]);
+    const live = snap.entries.filter(e => e.id === id && !e.evicted);
+    expect(live.length).toBe(0);
+    // …and memory entries never participate in tool-result rewriting.
+    const messages: AgentMessage[] = [{ role: "user", content: "hi" }];
+    expect(l.rewrite(messages)).toEqual(messages);
+  });
+});

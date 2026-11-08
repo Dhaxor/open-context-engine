@@ -81,6 +81,10 @@ export interface EditProposal {
 export interface AgentRunOptions {
   onStream?: (event: StreamEvent) => void;
   signal?: AbortSignal;
+  /** Fired once per turn when remembered context was injected into the system
+   *  prompt. The Trace evidence rail consumes this — memories belong in the
+   *  window's ledger like every other input the model saw. */
+  onMemoryInjected?: (entries: import("./session-memory").MemoryEntry[]) => void;
 }
 
 /** Decision returned by a preToolCall hook. */

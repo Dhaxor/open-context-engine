@@ -119,9 +119,9 @@ export interface RetrievalTrace {
 
 // ─── the context window as an object ─────────────────────────────────────────
 
-export type ContextBucket = "retrieval" | "files" | "history" | "system" | "tools";
+export type ContextBucket = "retrieval" | "files" | "history" | "system" | "tools" | "memory";
 
-export const CONTEXT_BUCKETS: readonly ContextBucket[] = ["retrieval", "files", "history", "system", "tools"];
+export const CONTEXT_BUCKETS: readonly ContextBucket[] = ["retrieval", "files", "history", "system", "tools", "memory"];
 
 /** One addressable thing occupying the window. */
 export interface ContextEntry {
@@ -153,7 +153,7 @@ export interface ContextSnapshot {
 }
 
 export function emptyBuckets(): Record<ContextBucket, number> {
-  return { retrieval: 0, files: 0, history: 0, system: 0, tools: 0 };
+  return { retrieval: 0, files: 0, history: 0, system: 0, tools: 0, memory: 0 };
 }
 
 // ─── checkpoints (the spine) ─────────────────────────────────────────────────

@@ -45,6 +45,7 @@ export class OpenContext {
   private codeGraph!: CodeGraph;
   private graphExpander!: GraphExpander;
   private workspaceRoot: string = "";
+  private storePath: string = "";
   private policy: EffectivePolicy | null = null;
   private chunkPool: ChunkWorkerPool | null = null;
   private embedCache: EmbedCache | null = null;
@@ -77,6 +78,7 @@ export class OpenContext {
     ctx.embedCache = config.embedCache ? new EmbedCache(typeof config.embedCache === "string" ? config.embedCache : undefined) : null;
     ctx.fileFilter = new FileFilter(config.maxFileSize, ctx.policy?.ignore);
     const storePath = config.storePath || defaultStorePath(config.workspaceRoot);
+    ctx.storePath = storePath;
     // Provider "none" IS a keyword-only choice, even from a library caller that
     // did not also set keywordOnly.
     const keywordOnly = config.keywordOnly ?? (config.embedding.provider === "none" ? "explicit" : undefined);
@@ -501,6 +503,14 @@ export class OpenContext {
   }
 
   getWorkspaceRoot(): string { return this.workspaceRoot; }
+
+  /** Resolved on-disk path of the SQLite index store. Session memory lives
+   *  alongside it (memories.json / memories.md in the same directory). */
+  getStorePath(): string { return this.storePath; }
+
+  /** The embedding provider backing the index. Session memory borrows it for
+   *  hybrid recall — policy compliance was already settled at creation. */
+  getEmbedder(): EmbeddingProvider { return this.embedder; }
 
   /** Store access for capability modules (LSP symbol lookup) that need the
    *  anchor data but not the retrieval pipeline. Not for mutation. */
