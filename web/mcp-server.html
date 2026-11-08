@@ -143,7 +143,7 @@ claude mcp add oce -- oce mcp          # register the MCP server</pre>
     <p>Everything runs on your machine: in-process MiniLM embeddings need no API key, the index is local SQLite, and degradation is graceful — if vector search is unavailable, keyword-only BM25 keeps the server useful. Over stdio, not a single byte leaves the loop. Over HTTP, the server binds to localhost behind a bearer token. There is no telemetry; a policy system can lock local-only mode org-wide with signatures that can't be loosened locally.</p>
 
     <h2>An agentic workflow needs grounding — MCP is the wire</h2>
-    <p>The MCP server is how any agent in an <a href="agentic-workflow">agentic workflow</a> sees your code. Read the <a href="agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="docs">docs</a>; pricing is on <a href="pricing">pricing</a> (MIT core — free forever).</p>
+    <p>The MCP server is how any agent in an <a href="agentic-workflow">agentic workflow</a> sees your code — and the retrieval underneath it is code RAG: <a href="code-rag">how it works</a>. Read the <a href="agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="docs">docs</a>; pricing is on <a href="pricing">pricing</a> (MIT core — free forever).</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">

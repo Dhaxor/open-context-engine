@@ -9,6 +9,7 @@ Open Context Engine (OCE) indexes a codebase into a local SQLite store with AST-
 - [Home](https://opencontextengine.com/): product overview — hybrid retrieval, evidence rail, local mode, team index sync.
 - [Agentic workflows](https://opencontextengine.com/agentic-workflow): what an agentic workflow is, why code retrieval is the bottleneck, and how OCE grounds agents like Claude Code and Cursor.
 - [MCP server for code search](https://opencontextengine.com/mcp-server): connect Claude Code (`claude mcp add oce -- oce mcp`) or Cursor (`oce mcp --http`) to hybrid code search, symbol lookups, repo maps, and file tools over the Model Context Protocol.
+- [Code RAG](https://opencontextengine.com/code-rag): what retrieval-augmented generation over source code is, why naive line-chunked vector search fails on real repos, and how to run AST-aware, measured code RAG locally.
 - [Docs](https://opencontextengine.com/docs): task-based guides — MCP setup for Claude Code and Cursor, search modes, team index sync, license activation, troubleshooting.
 - [Benchmarks](https://opencontextengine.com/benchmarks): measured recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0) in keyword-only and hybrid modes, generated from the eval harness's own reports.
 - [Pricing](https://opencontextengine.com/pricing): MIT core free forever; Team $25/seat/month for shared indexes and policy locks; offline-verifiable Ed25519 licenses.
