@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Semantic Code Search — Find Code by Meaning, Not Just Keywords | Open Context Engine</title>
+<meta name="description" content="Semantic code search finds code by what it means, not just what it says. How it works, where plain grep and plain vector search each fail, and how hybrid search covers both — locally.">
+<link rel="canonical" href="https://opencontextengine.com/semantic-code-search">
+<meta property="og:title" content="Semantic Code Search — Find Code by Meaning, Not Just Keywords">
+<meta property="og:description" content="How semantic code search works, why grep and pure vector search each miss half the queries, and how hybrid retrieval finds code by meaning and by exact identifier — locally.">
+<meta property="og:url" content="https://opencontextengine.com/semantic-code-search">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Semantic Code Search — Open Context Engine">
+<meta name="twitter:description" content="Find code by what it means, not just what it says — hybrid semantic + keyword search over an AST-aware local index.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Semantic Code Search — Find Code by Meaning, Not Just Keywords",
+  "description": "How semantic code search works, where grep and pure vector search each fail, and how hybrid retrieval covers both.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/semantic-code-search",
+  "about": [
+    { "@type": "Thing", "name": "semantic search" },
+    { "@type": "Thing", "name": "code search" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is semantic code search?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Semantic code search retrieves code by meaning rather than exact text: queries like 'how does auth middleware work' return the middleware functions even though the query never names them. It works by embedding AST-aware code chunks into vectors and ranking by similarity — best combined with keyword search, which handles exact identifiers." }
+    },
+    {
+      "@type": "Question",
+      "name": "How is semantic code search different from grep?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Grep matches literal characters: searching 'auth' finds every line containing the substring 'auth', but 'how does login validation work' finds nothing unless that text appears verbatim. Semantic search ranks by meaning, so paraphrases and concept queries work — but it can miss exact identifier lookups, which is why production systems fuse both signals (hybrid search)." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why doesn't plain vector search work well on code?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Embeddings capture semantics but not exact tokens: a query for 'AbortWithStatusJSON' is a lexical lookup, and nearest-neighbor vectors may rank lookalike functions above the true match. Chunking matters too — fixed line-count chunks sever functions mid-body, so embeddings describe fragments. AST-aware chunking plus hybrid fusion fixes both failure modes." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can semantic code search run offline and locally?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open Context Engine embeds with an in-process MiniLM model (no API key), stores vectors and keyword indexes in local SQLite, and serves search fully offline. Remote embedding providers like Voyage remain an optional upgrade, and a keyword-only mode covers environments without vector support." }
+    },
+    {
+      "@type": "Question",
+      "name": "How is semantic code search quality measured?",
+      "acceptedAnswer": { "@type": "Answer", "text": "With committed gold sets scored on recall@k, MRR, and nDCG in CI. Open Context Engine publishes its numbers: hybrid recall@10 of 0.943 on its own codebase and 0.886 keyword-only, with adaptive fusion that tilts weights per query shape." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "Semantic Code Search", "item": "https://opencontextengine.com/semantic-code-search" }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/semantic-code-search <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Semantic code search</h1>
+    <p class="sub">Find code by what it means, not just what it says — how semantic search works over source code, where each pure approach fails, and what measured hybrid retrieval looks like.</p>
+  </section>
+
+  <section class="doc">
+    <h2>What is semantic code search?</h2>
+    <p><strong>Semantic code search</strong> retrieves code by meaning rather than literal text. Ask <em>"how does auth middleware work?"</em> and it returns the middleware functions — even though the query never contains the word <code>authMiddleware</code>. Under the hood it embeds code chunks into vectors and ranks by similarity, so concept queries, paraphrases, and cross-language questions ("where do we hash passwords?") finally work.</p>
+    <p>It's the technology behind "ask your codebase questions" features, AI coding assistants' codebase grounding, and codebase-wide Q&A. But semantic search alone is not the finish line — it's half of the signal.</p>
+
+    <h2>Where each pure approach fails</h2>
+    <p>Three tools, three blind spots:</p>
+    <ul>
+      <li><strong>Grep / ripgrep</strong> — matches literal characters. <code>grep -r "auth"</code> floods you with every substring hit but can't answer <em>"how does login validation work"</em> at all. Perfect for exact strings, useless for concepts.</li>
+      <li><strong>Pure vector search</strong> — matches meaning but not exact tokens. Searching for <code>AbortWithStatusJSON</code> is a lexical lookup: nearest-neighbor vectors may rank visually similar functions above the true match. It also inherits the chunking problem — fixed line-count chunks cut functions mid-body, so the embedding describes a fragment.</li>
+      <li><strong>Pure keyword search (BM25)</strong> — excellent at identifiers and exact terms, blind to paraphrase. <em>"How does auth middleware work?"</em> never names <code>authMiddleware</code>, so the best-ranked result is unreachable.</li>
+    </ul>
+    <p>Concept queries and identifier queries split the real-world query space roughly in half. Any single-signal search engine misses half of it.</p>
+
+    <h2>Hybrid: the approach that covers both</h2>
+    <p>Production-grade semantic code search fuses signals:</p>
+    <ul>
+      <li><strong>AST-aware chunking</strong> — chunk along tree-sitter parse boundaries (functions, classes, methods), so every embedded chunk is a complete semantic unit. Class-level header chunks let methods defined far from their class still surface for class-shaped questions.</li>
+      <li><strong>Dense + BM25 fusion</strong> — rank vectors and keyword scores together via Reciprocal Rank Fusion. Paraphrases ride the vector channel; exact identifiers ride the keyword channel; one merged ranking benefits from both.</li>
+      <li><strong>Adaptive weighting</strong> — query shape decides the tilt: a <code>camelCase</code> identifier query leans lexical; a natural-language question leans semantic.</li>
+      <li><strong>Symbol expansion</strong> — a hit on <code>validateToken()</code> pulls in <code>validateToken</code>'s definition, so results arrive complete instead of as dangling references.</li>
+    </ul>
+
+    <h2>Run it locally in two commands</h2>
+    <pre>npm install -g @dhaxor/open-context
+oce index && oce search "how does login validation work?"</pre>
+    <p>OCE embeds with an in-process MiniLM model by default — no API key, no network — and keeps vectors plus keyword indexes in local SQLite. Remote providers like Voyage are a drop-in upgrade for higher ceiling; keyword-only mode covers environments where vector search is unavailable, and every surface tells you which mode you're in.</p>
+
+    <h2>Don't trust it unmeasured</h2>
+    <p>The uncomfortable question for any search tool: <em>what's your recall@10?</em> OCE scores committed gold sets in CI — <strong>hybrid recall@10 0.943, keyword-only 0.886</strong> on its own codebase, with per-query-shape adaptive fusion — and publishes the method and numbers on the <a href="benchmarks">benchmarks page</a>. The <a href="code-rag">code RAG guide</a> covers the full retrieval pipeline, and <a href="mcp-server">the MCP server guide</a> shows how to serve the same search to Claude Code or Cursor.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>What is semantic code search?</h3>
+      <p>Retrieval of code by meaning rather than literal text — concept and paraphrase queries return the right functions even when the query doesn't name them. Built on embeddings over AST-aware chunks, and best fused with keyword search for exact identifiers.</p>
+      <h3>How is it different from grep?</h3>
+      <p>Grep matches literal characters — perfect for exact strings, useless for paraphrase. Semantic search matches meaning — great for concepts, weaker on exact tokens. Hybrid search does both.</p>
+      <h3>Why doesn't plain vector search work well on code?</h3>
+      <p>Two reasons: embeddings miss exact identifiers (lexical lookups), and naive line-count chunking embeds severed fragments. AST-aware chunking plus hybrid fusion fixes both.</p>
+      <h3>Does it need the cloud?</h3>
+      <p>No. OCE runs embeddings in-process and stores everything in local SQLite — fully offline. Cloud embedding providers are an optional upgrade, not a requirement.</p>
+      <h3>How do I evaluate a semantic code search tool?</h3>
+      <p>Gold sets plus recall@k / MRR / nDCG in CI — see OCE's <a href="benchmarks">published numbers</a>, and run the same harness on your own repo with <code>oce eval</code>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

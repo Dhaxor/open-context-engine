@@ -83,6 +83,17 @@
   .faq h3 { font-size: 16px; margin: 20px 0 6px; }
   .faq p { margin: 0 0 12px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "The MCP Server for Code Search", "item": "https://opencontextengine.com/mcp-server" }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -94,6 +105,7 @@
       <a href="benchmarks.html" class="optional">Benchmarks</a>
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -143,7 +155,7 @@ claude mcp add oce -- oce mcp          # register the MCP server</pre>
     <p>Everything runs on your machine: in-process MiniLM embeddings need no API key, the index is local SQLite, and degradation is graceful — if vector search is unavailable, keyword-only BM25 keeps the server useful. Over stdio, not a single byte leaves the loop. Over HTTP, the server binds to localhost behind a bearer token. There is no telemetry; a policy system can lock local-only mode org-wide with signatures that can't be loosened locally.</p>
 
     <h2>An agentic workflow needs grounding — MCP is the wire</h2>
-    <p>The MCP server is how any agent in an <a href="agentic-workflow">agentic workflow</a> sees your code — and the retrieval underneath it is code RAG: <a href="code-rag">how it works</a>. Read the <a href="agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="docs">docs</a>; pricing is on <a href="pricing">pricing</a> (MIT core — free forever).</p>
+    <p>The MCP server is how any agent in an <a href="agentic-workflow">agentic workflow</a> sees your code — and the retrieval underneath it is code RAG: <a href="code-rag">how it works</a>. Read the <a href="agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="docs">docs</a>; the rest of the field guides are on <a href="guides">guides</a>; pricing is on <a href="pricing">pricing</a> (MIT core — free forever).</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
@@ -172,6 +184,7 @@ claude mcp add oce -- oce mcp          # register the MCP server</pre>
         <a href="/#retrieval">Retrieval</a>
         <a href="/#agent">Agent</a>
         <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
       </div>
       <div><span class="col-h">develop</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guides — Agentic Workflows, Code RAG, MCP & Context Engineering | Open Context Engine</title>
+<meta name="description" content="Field guides for grounding AI coding agents in real codebases: agentic workflows, code RAG, semantic code search, MCP servers, RAG vs fine-tuning, and context engineering.">
+<link rel="canonical" href="https://opencontextengine.com/guides">
+<meta property="og:title" content="Guides — Agentic Workflows, Code RAG, MCP & Context Engineering">
+<meta property="og:description" content="Field guides for grounding AI coding agents in real codebases — all built around one engine you can run locally.">
+<meta property="og:url" content="https://opencontextengine.com/guides">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open Context Engine — Guides">
+<meta name="twitter:description" content="Agentic workflows, code RAG, semantic code search, MCP servers, RAG vs fine-tuning, context engineering.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "name": "Open Context Engine Guides",
+  "description": "Field guides for grounding AI coding agents in real codebases.",
+  "url": "https://opencontextengine.com/guides",
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "hasPart": [
+    { "@type": "Article", "headline": "What Is an Agentic Workflow?", "url": "https://opencontextengine.com/agentic-workflow" },
+    { "@type": "Article", "headline": "The MCP Server for Code Search", "url": "https://opencontextengine.com/mcp-server" },
+    { "@type": "Article", "headline": "Code RAG: Retrieval-Augmented Generation for Your Codebase", "url": "https://opencontextengine.com/code-rag" },
+    { "@type": "Article", "headline": "Semantic Code Search", "url": "https://opencontextengine.com/semantic-code-search" },
+    { "@type": "Article", "headline": "RAG vs Fine-Tuning for Code", "url": "https://opencontextengine.com/rag-vs-fine-tuning" },
+    { "@type": "Article", "headline": "Context Engineering for Coding Agents", "url": "https://opencontextengine.com/context-engineering" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" }
+  ]
+}
+</script>
+<style>
+  section.guides { max-width: 860px; margin: 0 auto; padding: 26px 20px 60px; }
+  a.card { display: block; border: 1px solid var(--line, #1d2430); border-radius: 12px; padding: 20px 22px; margin: 14px 0; text-decoration: none; color: inherit; transition: border-color .15s ease; }
+  a.card:hover { border-color: #45C4E9; }
+  a.card h2 { font-size: 17px; margin: 0 0 6px; }
+  a.card p { font-size: 14px; line-height: 1.6; margin: 0; opacity: .82; }
+  a.card .tag { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #45C4E9; display: block; margin-bottom: 8px; }
+  .lede { font-size: 15px; line-height: 1.7; opacity: .85; max-width: 640px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html">Docs</a>
+      <a href="guides.html" style="color: var(--ink);">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/index <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Guides</h1>
+    <p class="sub">Field guides for grounding AI coding agents in real codebases — the concepts, the tradeoffs, and the commands. All built around one engine you can run locally.</p>
+  </section>
+
+  <section class="guides">
+    <p class="lede">Every guide is grounded in the same engine — hybrid, AST-aware, measured retrieval you can run on your own machine in three commands. Start wherever your question lives.</p>
+
+    <a class="card" href="agentic-workflow">
+      <span class="tag">agents</span>
+      <h2>What is an agentic workflow?</h2>
+      <p>How LLM agents plan, act, and loop — why code retrieval is the bottleneck that decides whether they help or hallucinate, and how to ground any agent in your real codebase.</p>
+    </a>
+
+    <a class="card" href="mcp-server">
+      <span class="tag">integration</span>
+      <h2>The MCP server for code search</h2>
+      <p>Connect Claude Code, Cursor, or any MCP client to your codebase: hybrid search, symbol lookups, repo maps, and file tools — one command each, all local.</p>
+    </a>
+
+    <a class="card" href="code-rag">
+      <span class="tag">retrieval</span>
+      <h2>Code RAG: RAG for your codebase</h2>
+      <p>What retrieval-augmented generation over source code is, why naive line-chunked vector search fails on real repos, and how to run measured code RAG locally.</p>
+    </a>
+
+    <a class="card" href="semantic-code-search">
+      <span class="tag">retrieval</span>
+      <h2>Semantic code search</h2>
+      <p>Find code by meaning, not keywords — where grep and pure vector search each fail, and how hybrid fusion covers the queries both miss.</p>
+    </a>
+
+    <a class="card" href="rag-vs-fine-tuning">
+      <span class="tag">decisions</span>
+      <h2>RAG vs fine-tuning for code</h2>
+      <p>Retrieve from your codebase or train on it? What each approach actually does, where each fails, and why code questions almost always want RAG.</p>
+    </a>
+
+    <a class="card" href="context-engineering">
+      <span class="tag">practice</span>
+      <h2>Context engineering for coding agents</h2>
+      <p>The context window is the agent's entire world. The four levers — retrieval, structure, budget, verification — and the evidence rail that makes them visible.</p>
+    </a>
+
+    <p class="lede" style="margin-top: 28px;">Task-based setup lives in the <a href="docs">docs</a>; retrieval quality is published on the <a href="benchmarks">benchmarks page</a>; licensing on <a href="pricing">pricing</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

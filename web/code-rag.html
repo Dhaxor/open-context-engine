@@ -80,6 +80,17 @@
   .faq h3 { font-size: 16px; margin: 20px 0 6px; }
   .faq p { margin: 0 0 12px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "Code RAG", "item": "https://opencontextengine.com/code-rag" }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -91,6 +102,7 @@
       <a href="benchmarks.html" class="optional">Benchmarks</a>
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -141,6 +153,9 @@ oce search "where do we validate JWTs?"</pre>
     <h2>Measure before you trust</h2>
     <p>The uncomfortable question for any code-RAG tool: <em>what's your recall@10?</em> If a vendor can't answer with a methodology — gold sets, scoring metrics, before/after for ranking changes — its accuracy claims are marketing. OCE treats retrieval quality like tests: committed gold sets (this repo, Flask 3.1.2, gin v1.10.0), CI baselines, and a public <a href="benchmarks">benchmarks page</a> generated from the eval harness's own reports. The harness ships with the product, so you can score it on your own codebase too.</p>
 
+    <h2>Why not just fine-tune on the codebase?</h2>
+    <p>A common alternative — training a model on your source — answers a different question. Fine-tuning shapes <em>how</em> a model writes; retrieval supplies <em>what</em> it knows, freshly, with citations. Code changes every commit, so frozen weights go stale where a re-indexed answer doesn't. The full comparison is in <a href="rag-vs-fine-tuning">RAG vs fine-tuning for code</a>.</p>
+
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
       <h3>What is code RAG?</h3>
@@ -168,6 +183,7 @@ oce search "where do we validate JWTs?"</pre>
         <a href="/#retrieval">Retrieval</a>
         <a href="/#agent">Agent</a>
         <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
       </div>
       <div><span class="col-h">develop</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>

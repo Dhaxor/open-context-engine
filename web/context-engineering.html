@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Engineering for Coding Agents — What Goes in the Window | Open Context Engine</title>
+<meta name="description" content="Context engineering is the discipline of deciding what an LLM sees: retrieval, structure, budget, and verification. How it applies to coding agents — and how to see exactly what's in the context.">
+<link rel="canonical" href="https://opencontextengine.com/context-engineering">
+<meta property="og:title" content="Context Engineering for Coding Agents — What Goes in the Window">
+<meta property="og:description" content="The context window is the agent's entire world. Context engineering is deciding what fills it: retrieval, structure, budget, and verification — applied to coding agents.">
+<meta property="og:url" content="https://opencontextengine.com/context-engineering">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Context Engineering for Coding Agents — Open Context Engine">
+<meta name="twitter:description" content="Retrieval, structure, budget, verification: the four levers of context engineering, applied to coding agents.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Context Engineering for Coding Agents — What Goes in the Window",
+  "description": "The context window is the agent's entire world. Context engineering is deciding what fills it: retrieval, structure, budget, and verification.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/context-engineering",
+  "about": [
+    { "@type": "Thing", "name": "context engineering" },
+    { "@type": "Thing", "name": "large language model" },
+    { "@type": "Thing", "name": "software engineering" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is context engineering?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Context engineering is the discipline of deciding what goes into an LLM's context window — which retrieved code, which instructions, which conversation history, in what structure, within what budget — so the model can complete the task. It extends prompt engineering: the words matter, but so does everything else the model sees." }
+    },
+    {
+      "@type": "Question",
+      "name": "How is context engineering different from prompt engineering?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Prompt engineering optimizes the instructions. Context engineering designs the whole window: what retrieval fetches, how results are ordered and compressed, what gets pinned or evicted as the conversation grows, and how the system proves what the model knew. In agentic systems, retrieval and context management usually matter more than the wording of the prompt." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why does context engineering matter for coding agents?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A codebase is orders of magnitude larger than the context window, so a coding agent's plan is only as good as the code its context contains. Weak context engineering shows up as hallucinated APIs, edits to the wrong file, and fixes that break unseen callers. The four levers — retrieval, structure, budget, verification — are what separate agents that help from agents that guess." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is an evidence rail?",
+      "acceptedAnswer": { "@type": "Answer", "text": "An evidence rail makes visible exactly what the model knew: which chunks were retrieved for each step, at what scores, what was pinned or evicted as the context filled. Open Context Engine's Trace workspace shows the rail live — you can inspect, pin, or evict pieces of context instead of trusting an invisible process." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I give a coding agent well-engineered context?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Back it with measured retrieval and make the context inspectable. With Open Context Engine: oce index builds a hybrid, AST-aware index; claude mcp add oce -- oce mcp serves it to Claude Code over MCP; and oce trace exposes the evidence rail so you can see — and manage — exactly what the agent's context contains." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "Context Engineering for Coding Agents", "item": "https://opencontextengine.com/context-engineering" }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/context-engineering <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Context engineering for coding agents</h1>
+    <p class="sub">The context window is the agent's entire world. Context engineering is the discipline of deciding what fills it — retrieval, structure, budget, and verification — applied to code.</p>
+  </section>
+
+  <section class="doc">
+    <h2>From prompt engineering to context engineering</h2>
+    <p><strong>Prompt engineering</strong> optimizes the words you ask with. <strong>Context engineering</strong> designs everything the model sees: which retrieved code lands in the window, how results are ordered and compressed, what survives as the conversation grows, and how you verify what the model actually knew. For one-shot questions the prompt matters most. For <a href="agentic-workflow">agentic workflows</a> — retrieve, edit, test, repeat — the context pipeline matters more, because every step's inputs compound into the next step's decisions.</p>
+
+    <h2>The budget problem</h2>
+    <p>A real codebase is orders of magnitude larger than any context window. A 100k-token repo — a small one — already dwarfs what you can spend per turn once system prompts, tool schemas, and history take their share. Every agent run is an exercise in scarcity economics: each token of context spent on irrelevant code is a token not spent on the code that mattered. That's why "just paste the files" stops scaling immediately, and why the window's contents should be <em>chosen</em>, not accumulated.</p>
+
+    <h2>The four levers</h2>
+    <ul>
+      <li><strong>Retrieval</strong> — what gets in. Hybrid semantic + keyword search over an AST-aware index is the reliable way to select the few chunks that matter from the thousands that don't. Measured retrieval (<a href="semantic-code-search">recall you can publish</a>) is the difference between grounding and guessing.</li>
+      <li><strong>Structure</strong> — how it's arranged. Complete semantic units over severed fragments; symbol definitions pulled alongside references; a <code>repo-map</code> sketch ahead of deep dives, so the model orients before it reads.</li>
+      <li><strong>Budget</strong> — what stays. As conversations grow, context must be pinned (the function under active edit) and evicted (the file read ten steps ago). Unmanaged windows fill with stale, contradictory material — the classic cause of agents "forgetting" decisions made earlier in the same session.</li>
+      <li><strong>Verification</strong> — what you can prove. An <em>evidence rail</em> that shows which chunks were retrieved at which scores, what was pinned or evicted, turns the agent's knowledge from an assumption into an inspection point — and makes regressions debuggable instead of mysterious.</li>
+    </ul>
+
+    <h2>What this looks like in practice</h2>
+    <p>OCE is built as a context engineering tool, not just a search box:</p>
+    <pre>npm install -g @dhaxor/open-context
+oce index                       # hybrid, AST-aware index — the supply side
+claude mcp add oce -- oce mcp   # serve measured context to Claude Code
+oce trace                       # the evidence rail: see the agent's context live</pre>
+    <p>Trace shows the ranked chunks in the model's context, lets you pin what matters and evict what doesn't, and records the run in a tamper-evident audit log afterward. The retrieval underneath is the same engine described in the <a href="code-rag">code RAG guide</a>, served over MCP per the <a href="mcp-server">MCP server guide</a> — and scored on the <a href="benchmarks">benchmarks page</a> before you have to trust it.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>What is context engineering?</h3>
+      <p>The discipline of deciding what goes into an LLM's context window — retrieved code, instructions, history, structure, budget — so the model can complete the task. It extends prompt engineering to the whole window.</p>
+      <h3>How is it different from prompt engineering?</h3>
+      <p>Prompt engineering optimizes the instructions; context engineering designs everything the model sees. In agentic systems, retrieval and context management usually dominate outcomes.</p>
+      <h3>Why does it matter especially for code?</h3>
+      <p>Because the artifact is bigger than the window. An agent's plan is only as good as the code its context contains — weak selection shows up as hallucinated APIs and edits that break unseen callers.</p>
+      <h3>What is an evidence rail?</h3>
+      <p>A live view of exactly what the model knew: retrieved chunks, scores, pins, evictions. OCE's Trace workspace provides it, plus a hash-chained audit log of every run.</p>
+      <h3>Where do I start?</h3>
+      <p>Give your agent measured retrieval and an inspectable window: <code>oce index</code>, <code>claude mcp add oce -- oce mcp</code>, <code>oce trace</code>. Setup details are in the <a href="docs">docs</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

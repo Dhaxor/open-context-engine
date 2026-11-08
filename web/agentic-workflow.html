@@ -9,11 +9,10 @@
 <meta property="og:title" content="What Is an Agentic Workflow? Code Retrieval for AI Agents">
 <meta property="og:description" content="An agentic workflow is software where an LLM plans, uses tools, and acts in loops. Learn how code retrieval grounds coding agents — and how to give any agent your codebase via MCP.">
 <meta property="og:url" content="https://opencontextengine.com/agentic-workflow">
-<meta property="og:type" content="website">
 <meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="What Is an Agentic Workflow? Code Retrieval for AI Agents">
 <meta name="twitter:description" content="How agentic workflows work, why code retrieval is the bottleneck, and how to ground any coding agent in your real codebase — locally.">
@@ -82,6 +81,17 @@
   .faq h3 { font-size: 16px; margin: 20px 0 6px; }
   .faq p { margin: 0 0 12px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "What Is an Agentic Workflow?", "item": "https://opencontextengine.com/agentic-workflow" }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -93,6 +103,7 @@
       <a href="benchmarks.html" class="optional">Benchmarks</a>
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -115,7 +126,7 @@
 
     <h2>Why code retrieval is the bottleneck</h2>
     <p>An agent can only act on what fits in its context window, and a real codebase is orders of magnitude larger than that window. So every agentic workflow over code is secretly a <strong>retrieval</strong> problem: what the agent's search puts in front of it determines the plan it forms. Weak retrieval produces the classic failure modes — hallucinated APIs, edits to the wrong file, "fixes" that break callers the agent never saw.</p>
-    <p>Naive approaches don't hold up. Pasting whole files burns the context budget on code that doesn't matter. Plain vector search misses exact identifiers ("find <code>AbortWithStatusJSON</code>" is a lexical query, not a semantic one). Plain keyword search misses paraphrases ("how does auth middleware work" never names the function). <strong>Hybrid retrieval</strong> — dense vectors fused with BM25 keyword scoring over an AST-aware index — is what makes the grounding precise enough to trust, and it's measurable: recall@k, MRR, and nDCG against committed gold sets, not vibes. The full recipe is in the <a href="code-rag">code RAG guide</a>.</p>
+    <p>Naive approaches don't hold up. Pasting whole files burns the context budget on code that doesn't matter. Plain vector search misses exact identifiers ("find <code>AbortWithStatusJSON</code>" is a lexical query, not a semantic one). Plain keyword search misses paraphrases ("how does auth middleware work" never names the function). <strong>Hybrid retrieval</strong> — dense vectors fused with BM25 keyword scoring over an AST-aware index — is what makes the grounding precise enough to trust, and it's measurable: recall@k, MRR, and nDCG against committed gold sets, not vibes. The full recipe is in the <a href="code-rag">code RAG guide</a>, and the retrieval mechanics are unpacked in <a href="semantic-code-search">semantic code search</a>.</p>
 
     <h2>MCP: the standard that connects agents to your code</h2>
     <p>The <strong>Model Context Protocol (MCP)</strong> is the open standard that lets LLM applications call tools — search, file reads, symbol lookups — through one interface. An MCP server exposes the tools; agents like Claude Code and Cursor connect as clients. That turns "give the agent my whole codebase" from a prompt-hacking exercise into an integration — the <a href="mcp-server">MCP server guide</a> walks through Claude Code and Cursor setup in detail:</p>
@@ -128,7 +139,7 @@ oce mcp --http --port 8940 --auth-token $TOKEN   # Cursor / HTTP clients</pre>
     <p>The difference between an agent that helps and one that hallucinates is rarely the model — it's whether the model saw the real code. Three properties make grounding trustworthy:</p>
     <ul>
       <li><strong>Measured retrieval.</strong> Ranking quality should be scored against gold sets in CI — recall, MRR, nDCG — the way tests are. <a href="benchmarks.html">OCE publishes its numbers</a> and ships the harness to score your own repo.</li>
-      <li><strong>Visible context.</strong> You should be able to see <em>what the agent knew</em> — which chunks were retrieved, what was pinned or evicted — not just what it did. That's OCE's evidence rail.</li>
+      <li><strong>Visible context.</strong> You should be able to see <em>what the agent knew</em> — which chunks were retrieved, what was pinned or evicted — not just what it did. That's OCE's evidence rail; the discipline behind it is <a href="context-engineering">context engineering</a>.</li>
       <li><strong>Local by default.</strong> Indexing your codebase with a cloud service means sending your source somewhere. Local-first embedding (in-process MiniLM) and local SQLite keep the loop on your machine; remote providers are an upgrade, not a requirement.</li>
     </ul>
 
@@ -169,6 +180,7 @@ oce trace</pre>
         <a href="/#retrieval">Retrieval</a>
         <a href="/#agent">Agent</a>
         <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
       </div>
       <div><span class="col-h">develop</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>

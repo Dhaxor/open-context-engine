@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG vs Fine-Tuning for Code — Which Grounds Your LLM in Your Codebase? | Open Context Engine</title>
+<meta name="description" content="RAG vs fine-tuning for code: retrieval keeps answers current, grounded, and verifiable; fine-tuning shapes style and format. What each does for codebase questions — and why RAG usually wins.">
+<link rel="canonical" href="https://opencontextengine.com/rag-vs-fine-tuning">
+<meta property="og:title" content="RAG vs Fine-Tuning for Code — Which Grounds Your LLM in Your Codebase?">
+<meta property="og:description" content="Should you fine-tune an LLM on your codebase or retrieve from it? What each approach actually does, where each fails, and why code questions usually want RAG.">
+<meta property="og:url" content="https://opencontextengine.com/rag-vs-fine-tuning">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RAG vs Fine-Tuning for Code — Open Context Engine">
+<meta name="twitter:description" content="Retrieval keeps answers current, grounded, and verifiable; fine-tuning shapes style. For codebase questions, RAG usually wins — here's why.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "RAG vs Fine-Tuning for Code — Which Grounds Your LLM in Your Codebase?",
+  "description": "What retrieval and fine-tuning each do for codebase questions, where each fails, and why code questions usually want RAG.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/rag-vs-fine-tuning",
+  "about": [
+    { "@type": "Thing", "name": "retrieval-augmented generation" },
+    { "@type": "Thing", "name": "fine-tuning" },
+    { "@type": "Thing", "name": "large language model" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is RAG better than fine-tuning for code?",
+      "acceptedAnswer": { "@type": "Answer", "text": "For questions about a specific codebase, usually yes. Code changes daily — retrieval re-indexes in seconds and always answers from current source, while a fine-tuned model freezes knowledge at training time and goes stale after the first merge. RAG also shows exactly which files an answer came from, so claims are verifiable; fine-tuning bakes knowledge into weights where it can't be cited or audited." }
+    },
+    {
+      "@type": "Question",
+      "name": "When does fine-tuning make sense for code?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Fine-tuning helps when you want to change how a model writes or behaves, not what it knows: matching house style, emitting a proprietary DSL or internal API shape reliably, or cutting prompt overhead for a narrow, stable task. It is the wrong tool for 'answer questions about our repository' — the knowledge changes every commit." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I combine RAG and fine-tuning?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes, and it is the standard setup for serious systems: fine-tune (if needed) for style, format, and tool-use reliability; retrieve for facts, current code, and citations. The two solve different problems and compose — retrieval supplies the code, the tuned model supplies the manner." }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does RAG cost compared to fine-tuning?",
+      "acceptedAnswer": { "@type": "Answer", "text": "RAG costs an index build (minutes for most repos) plus a small amount of context per query; with local embeddings and SQLite like Open Context Engine, it is free and offline. Fine-tuning costs a curated training set, training runs, evaluation, and re-training whenever your code or the target model changes — a recurring engineering tax." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I run RAG over my own codebase?",
+      "acceptedAnswer": { "@type": "Answer", "text": "With Open Context Engine: npm install -g @dhaxor/open-context, then oce index builds a local AST-aware hybrid index (semantic + keyword), and oce search queries it — or serve it to Claude Code and Cursor over MCP with claude mcp add oce -- oce mcp. Fully local by default; no code leaves the machine." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  table.compare { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  table.compare th, table.compare td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line, #1d2430); vertical-align: top; }
+  table.compare th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "RAG vs Fine-Tuning for Code", "item": "https://opencontextengine.com/rag-vs-fine-tuning" }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/rag-vs-fine-tuning <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">RAG vs fine-tuning for code</h1>
+    <p class="sub">Should you retrieve from your codebase or train on it? What each approach actually does, where each fails — and why for code questions the answer is almost always RAG.</p>
+  </section>
+
+  <section class="doc">
+    <h2>Two different questions</h2>
+    <p>The confusion starts because both approaches get described as "teaching the model your codebase." They teach it different things:</p>
+    <ul>
+      <li><strong>RAG (retrieval-augmented generation)</strong> fetches the relevant code at question time and puts it in the model's context. The model reads your actual source and answers from it.</li>
+      <li><strong>Fine-tuning</strong> adjusts the model's weights on training examples. The model internalizes patterns from your data — style, formats, and (imperfectly) facts — and reproduces them without seeing the source.</li>
+    </ul>
+    <p>One supplies <em>facts on demand</em>; the other shapes <em>behavior everywhere</em>. Most "should we fine-tune on our repo?" questions are really asking for the first thing, which is what RAG does.</p>
+
+    <h2>The case for RAG on code</h2>
+    <ul>
+      <li><strong>Freshness.</strong> Code changes every commit. A retrieval index re-embeds the diff in seconds and always answers from current source. A fine-tuned model freezes knowledge at training time and starts going stale immediately — re-training on every merge is not a workflow.</li>
+      <li><strong>Citations and trust.</strong> RAG answers come with the exact chunks the model saw: you can open the file, check the claim, review the edit. Fine-tuned knowledge lives in weights — unverifiable, unauditable, and confidently wrong on stale facts.</li>
+      <li><strong>Hallucination resistance.</strong> Ask about a function invented last week: retrieval finds it or the system visibly says so. A fine-tuned model will happily generate a plausible API that doesn't exist.</li>
+      <li><strong>Privacy.</strong> Local RAG (local embeddings, local SQLite) means nothing ever leaves the machine. Fine-tuning means shipping a curated corpus of your source to a training pipeline.</li>
+      <li><strong>Cost.</strong> An index build takes minutes and querying adds modest context per call. Fine-tuning needs a curated dataset, training runs, evaluation, and a re-train cadence.</li>
+    </ul>
+
+    <h2>The case for fine-tuning</h2>
+    <p>Fine-tuning is not useless — it's pointed at a different target. It's the right tool when you want to change <em>how</em> a model writes, not <em>what</em> it knows:</p>
+    <ul>
+      <li>Consistent house style and conventions across generated code.</li>
+      <li>Reliably emitting a proprietary DSL, internal framework idioms, or a strict output format.</li>
+      <li>Cutting prompt overhead for a narrow, stable task done at volume.</li>
+    </ul>
+    <p>Notice none of those are "answer questions about our repository." The moment the task is <em>knowledge about code that changes</em>, fine-tuning is fighting the wrong battle.</p>
+
+    <h2>Side by side</h2>
+    <table class="compare">
+      <tr><th></th><th>RAG</th><th>Fine-tuning</th></tr>
+      <tr><td><strong>Knowledge freshness</strong></td><td>Re-indexes on every save</td><td>Frozen at training time</td></tr>
+      <tr><td><strong>Verifiability</strong></td><td>Shows the exact source chunks</td><td>Weights only — no citations</td></tr>
+      <tr><td><strong>Hallucination on unknowns</strong></td><td>Visibly misses or admits gaps</td><td>Plausible fabrication</td></tr>
+      <tr><td><strong>Data privacy</strong></td><td>Can be fully local</td><td>Corpus shipped to training</td></tr>
+      <tr><td><strong>Setup cost</strong></td><td>Minutes (<code>oce index</code>)</td><td>Dataset + runs + eval loop</td></tr>
+      <tr><td><strong>Best at</strong></td><td>Questions about changing code</td><td>Style, format, narrow tasks</td></tr>
+    </table>
+
+    <h2>The standard answer: both, with retrieval first</h2>
+    <p>Mature teams compose them: retrieval supplies facts and current code; fine-tuning (when justified) supplies manner and format. If you only do one for codebase work, do retrieval — it's where the correctness lives. See the <a href="code-rag">code RAG guide</a> for what a good retrieval pipeline needs (AST-aware chunking, hybrid fusion, measurement), or go straight to running it:</p>
+    <pre>npm install -g @dhaxor/open-context
+oce index                    # local hybrid index, minutes
+claude mcp add oce -- oce mcp  # ground Claude Code in the real source</pre>
+    <p>The <a href="mcp-server">MCP server guide</a> covers Cursor and HTTP clients too; the <a href="benchmarks">benchmarks page</a> shows what the retrieval actually scores before you trust it.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>Is RAG better than fine-tuning for code?</h3>
+      <p>For questions about a specific, changing codebase — yes. Retrieval always answers from current source with citations; a fine-tuned model goes stale after the first merge and can't show its work.</p>
+      <h3>When does fine-tuning make sense?</h3>
+      <p>When the goal is behavior, not knowledge: house style, proprietary formats and DSLs, or a narrow stable task where trimmed prompts save real cost.</p>
+      <h3>Can I combine both?</h3>
+      <p>Yes — fine-tune for style and format, retrieve for facts and citations. They solve different problems and compose cleanly.</p>
+      <h3>What does local RAG cost?</h3>
+      <p>An index build in minutes plus modest context per query. With in-process embeddings and SQLite it's free and offline — nothing leaves the machine.</p>
+      <h3>How do I start?</h3>
+      <p><code>npm install -g @dhaxor/open-context</code>, <code>oce index</code>, then <code>oce search</code> — or serve it over MCP. Setup guides are in the <a href="docs">docs</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

@@ -7,9 +7,13 @@ Open Context Engine (OCE) indexes a codebase into a local SQLite store with AST-
 ## Pages
 
 - [Home](https://opencontextengine.com/): product overview — hybrid retrieval, evidence rail, local mode, team index sync.
+- [Guides](https://opencontextengine.com/guides): index of all field guides — agentic workflows, code RAG, MCP, semantic search, fine-tuning tradeoffs, context engineering.
 - [Agentic workflows](https://opencontextengine.com/agentic-workflow): what an agentic workflow is, why code retrieval is the bottleneck, and how OCE grounds agents like Claude Code and Cursor.
 - [MCP server for code search](https://opencontextengine.com/mcp-server): connect Claude Code (`claude mcp add oce -- oce mcp`) or Cursor (`oce mcp --http`) to hybrid code search, symbol lookups, repo maps, and file tools over the Model Context Protocol.
 - [Code RAG](https://opencontextengine.com/code-rag): what retrieval-augmented generation over source code is, why naive line-chunked vector search fails on real repos, and how to run AST-aware, measured code RAG locally.
+- [Semantic code search](https://opencontextengine.com/semantic-code-search): finding code by meaning — where grep and pure vector search each fail, and how hybrid retrieval covers both, measured with recall@k.
+- [RAG vs fine-tuning for code](https://opencontextengine.com/rag-vs-fine-tuning): retrieval keeps codebase answers current, grounded, and citable; fine-tuning shapes style. Why code questions usually want RAG.
+- [Context engineering](https://opencontextengine.com/context-engineering): the four levers of what an agent sees — retrieval, structure, budget, verification — and OCE's evidence rail.
 - [Docs](https://opencontextengine.com/docs): task-based guides — MCP setup for Claude Code and Cursor, search modes, team index sync, license activation, troubleshooting.
 - [Benchmarks](https://opencontextengine.com/benchmarks): measured recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0) in keyword-only and hybrid modes, generated from the eval harness's own reports.
 - [Pricing](https://opencontextengine.com/pricing): MIT core free forever; Team $25/seat/month for shared indexes and policy locks; offline-verifiable Ed25519 licenses.
