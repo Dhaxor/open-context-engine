@@ -1,7 +1,8 @@
 {
   "name": "@dhaxor/open-context",
-  "version": "0.7.0",
-  "description": "Local-first code retrieval and coding agent — hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
+  "mcpName": "io.github.Dhaxor/open-context-engine",
+  "version": "0.7.1",
+  "description": "Local-first code retrieval and coding agent \u2014 hybrid semantic + keyword search over your codebase, served to any AI over MCP. Runs fully offline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
