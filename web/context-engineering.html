@@ -141,6 +141,9 @@ claude mcp add oce -- oce mcp   # serve measured context to Claude Code
 oce trace                       # the evidence rail: see the agent's context live</pre>
     <p>Trace shows the ranked chunks in the model's context, lets you pin what matters and evict what doesn't, and records the run in a tamper-evident audit log afterward. The retrieval underneath is the same engine described in the <a href="code-rag">code RAG guide</a>, served over MCP per the <a href="mcp-server">MCP server guide</a> — and scored on the <a href="benchmarks">benchmarks page</a> before you have to trust it.</p>
 
+    <h2>Memory: the fifth lever</h2>
+    <p>Everything above governs <em>this</em> session. <a href="agent-memory">Agent memory</a> governs the first input of the <em>next</em> one — remembered facts and preferences injected before retrieval ever runs. The same discipline applies: measured recall, visible injections, explicit supersession. OCE ships it as part of the stack, not a separate product.</p>
+
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
       <h3>What is context engineering?</h3>
