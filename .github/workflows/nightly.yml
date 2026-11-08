@@ -170,3 +170,6 @@ jobs:
             exit 0
           fi
           npx wrangler deploy
+      - name: Ping IndexNow with the sitemap URLs
+        if: success()
+        run: node scripts/indexnow-ping.mjs

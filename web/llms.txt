@@ -14,6 +14,9 @@ Open Context Engine (OCE) indexes a codebase into a local SQLite store with AST-
 - [Semantic code search](https://opencontextengine.com/semantic-code-search): finding code by meaning — where grep and pure vector search each fail, and how hybrid retrieval covers both, measured with recall@k.
 - [RAG vs fine-tuning for code](https://opencontextengine.com/rag-vs-fine-tuning): retrieval keeps codebase answers current, grounded, and citable; fine-tuning shapes style. Why code questions usually want RAG.
 - [Context engineering](https://opencontextengine.com/context-engineering): the four levers of what an agent sees — retrieval, structure, budget, verification — and OCE's evidence rail.
+- [Claude Code setup](https://opencontextengine.com/claude-code): three commands to ground Claude Code in your codebase — `npm i -g @dhaxor/open-context`, `oce index`, `claude mcp add oce -- oce mcp` — with the tools Claude gets and privacy notes.
+- [Comparison](https://opencontextengine.com/comparison): OCE vs Cursor vs Copilot vs grep — what each indexes, retrieval tradeoffs, and when a dedicated engine earns its keep.
+- [Changelog](https://opencontextengine.com/changelog): every release and what shipped.
 - [Docs](https://opencontextengine.com/docs): task-based guides — MCP setup for Claude Code and Cursor, search modes, team index sync, license activation, troubleshooting.
 - [Benchmarks](https://opencontextengine.com/benchmarks): measured recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0) in keyword-only and hybrid modes, generated from the eval harness's own reports.
 - [Pricing](https://opencontextengine.com/pricing): MIT core free forever; Team $25/seat/month for shared indexes and policy locks; offline-verifiable Ed25519 licenses.

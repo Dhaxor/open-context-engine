@@ -106,6 +106,7 @@
       <a href="pricing.html">Pricing</a>
       <a href="docs.html" style="color: var(--ink);">Docs</a>
       <a href="guides.html">Guides</a>
+        <a href="changelog.html">Changelog</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -127,7 +128,7 @@
     <p>Most code-search MCP servers wrap grep or plain vector search. OCE's server is backed by a measured retrieval engine: tree-sitter AST-aware chunking across 13 languages, dense vectors fused with BM25 keyword scoring (Reciprocal Rank Fusion), a code graph that rides callers and callees along with results, and an optional language server for compiler-grade symbol lookups. Recall@10 is <strong>0.943 hybrid / 0.886 keyword-only</strong> on committed gold sets — <a href="benchmarks.html">published, not claimed</a>.</p>
 
     <h2>Connect Claude Code (stdio)</h2>
-    <p>Claude Code speaks MCP over stdio. Three commands and it's grounded:</p>
+    <p>Claude Code speaks MCP over stdio. Three commands and it's grounded — the <a href="claude-code">Claude Code setup guide</a> walks through each step with verification:</p>
     <pre>npm install -g @dhaxor/open-context
 oce index                              # build the local index once (auto-updates on save)
 claude mcp add oce -- oce mcp          # register the MCP server</pre>

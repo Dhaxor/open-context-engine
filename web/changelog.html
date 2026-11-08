@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog — Open Context Engine Releases</title>
+<meta name="description" content="What shipped in each Open Context Engine release: MCP registry listing, repo-map, sandboxed shell, agentic sidebar, adaptive fusion, LSP-backed symbol tools, and more.">
+<link rel="canonical" href="https://opencontextengine.com/changelog">
+<meta property="og:title" content="Open Context Engine — Changelog">
+<meta property="og:description" content="What shipped in each release: registry listing, repo-map, sandboxed shell, agentic sidebar, adaptive fusion, compiler-grade symbol tools.">
+<meta property="og:url" content="https://opencontextengine.com/changelog">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open Context Engine — Changelog">
+<meta name="twitter:description" content="What shipped in each Open Context Engine release.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px 60px; }
+  section.doc h2 { font-size: 20px; margin: 42px 0 6px; font-family: var(--mono, 'IBM Plex Mono', monospace); }
+  section.doc h2 .date { font-size: 12px; opacity: .55; font-family: var(--sans, 'IBM Plex Sans', sans-serif); margin-left: 10px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc ul { margin: 8px 0 0; padding-left: 22px; }
+  section.doc code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .verhead { display: flex; align-items: baseline; gap: 10px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">releases/index <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Changelog</h1>
+    <p class="sub">Every release, what shipped, and why. Install the latest with <code>npm install -g @dhaxor/open-context</code>.</p>
+  </section>
+
+  <section class="doc">
+    <h2>0.7.1 <span class="date">2026-11-08</span></h2>
+    <ul>
+      <li><strong>Listed in the official MCP Registry</strong> as <code>io.github.Dhaxor/open-context-engine</code> — the package now carries the registry-required <code>mcpName</code> field, so clients can discover and install it straight from the canonical registry.</li>
+      <li><strong>repo-map</strong> — a budgeted symbol outline of the whole codebase, exposed as an MCP tool and via <code>oce map</code>, so agents can orient before diving in.</li>
+      <li><strong>OS-sandboxed shell execution</strong> — the agent's shell tool runs under Seatbelt on macOS and bubblewrap on Linux.</li>
+      <li><strong>OCE review agent</strong> — a GitHub Action that reviews PRs grounded in the indexed codebase.</li>
+      <li><strong>AGENTS.md support</strong> — agent guidelines read from AGENTS.md / CLAUDE.md / .cursorrules into the system prompt.</li>
+      <li><strong>Guides hub</strong> — opencontextengine.com/guides plus field guides on agentic workflows, code RAG, MCP, semantic code search, RAG vs fine-tuning, and context engineering.</li>
+    </ul>
+
+    <h2>0.7.0 <span class="date">2026-11-01</span></h2>
+    <ul>
+      <li><strong>The agentic sidebar ships</strong> — the extension's chat is rebuilt on the Trace stack: an evidence rail in the editor, agent edits with per-file diffs and undo, and a live index underneath.</li>
+    </ul>
+
+    <h2>0.6.0 <span class="date">2026-10-27</span></h2>
+    <ul>
+      <li><strong>Class declarations indexed; exact symbol declarations promoted</strong> in ranking — retrieval now surfaces the declaration chunk for class-shaped questions and exact-match symbol queries.</li>
+      <li><strong>Symbol-tool capability indicator</strong> in the extension, backed by a real language-server validation pass (tsserver files opened before querying).</li>
+      <li><strong>Third external gold set</strong> — gin v1.10.0 (Go), 26 cases — with nightly CI running all gold sets plus the agent eval suite, and the benchmarks page auto-refreshing from committed baselines.</li>
+      <li><strong>License hardening</strong> — rate-limited activation endpoint and Polar seat enforcement.</li>
+    </ul>
+
+    <h2>0.5.0 <span class="date">2026-10-27</span></h2>
+    <ul>
+      <li><strong>npm publishes with zero secrets</strong> — Trusted Publishing (OIDC): the registry trusts the repository's workflow directly; no token to rotate or leak.</li>
+      <li><strong>Adaptive fusion</strong> — queries classified by shape tilt BM25/semantic weights: hybrid recall@10 on the Flask gold set 0.852 → 0.926. A/B with <code>oce eval --no-adaptive-fusion</code>.</li>
+      <li><strong>LSP-backed symbol tools</strong> — find-symbol-definition / references use tsserver, pyright, gopls or rust-analyzer when installed, falling back to the AST index; results tagged [LSP-verified].</li>
+      <li><strong>Self-serve Team licenses</strong> — <code>oce activate polar_lk_…</code> completes checkout without support.</li>
+      <li><strong>Local embeddings work out of the box</strong> — ungated all-MiniLM-L6-v2 default, no API key.</li>
+      <li><strong>Docs + generated benchmarks</strong> on the Worker-served site.</li>
+    </ul>
+
+    <h2>0.4.x <span class="date">2026-10-25 → 26</span></h2>
+    <ul>
+      <li><strong>0.4.5</strong> — tokenless npm publishing (first landing), <code>oce eval-agent</code> end-to-end agent grading, dual-mode retrieval baselines committed fresh, pricing checkout.</li>
+      <li><strong>0.4.6</strong> — cross-platform path-validation fix (a Windows-only <code>path.isAbsolute</code> escape-check bug caught by CI).</li>
+      <li><strong>0.4.7</strong> — re-release of 0.4.6 content: the two prior versions never reached the registry (CI publish failure, then a Trusted-Publishing E404) — the release train now ships through both gates cleanly.</li>
+    </ul>
+
+    <p style="margin-top: 30px; opacity: .75;">Full technical detail lives in the repo's <a href="https://github.com/Dhaxor/open-context-engine/blob/main/CHANGELOG.md">CHANGELOG.md</a>. Retrieval numbers behind these releases are on the <a href="benchmarks">benchmarks page</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>
