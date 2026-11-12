@@ -38,6 +38,9 @@ CHANGELOG.md
 PUBLISHING.md
 dev/**
 
+# README screenshots: the Marketplace page loads them from GitHub.
+media/screenshots/**
+
 # Tests and the VS Code builds the end-to-end suite downloads.
 test/**
 .vscode-test/**

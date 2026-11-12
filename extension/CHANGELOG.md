@@ -1,6 +1,37 @@
 # Change Log
 
-## Unreleased
+## Unreleased — the agent checks its own work
+
+- **Fixed: agent edits are saved to disk.** Since the first release the edit
+  path checked whether the document was dirty *after* applying the edit — it
+  always is — so it never saved: new files reached disk empty and edits to
+  open files stayed in unsaved buffers, invisible to tests, builds and git.
+  Edits are saved now, except into a buffer you already had unsaved changes
+  in. A save that fails is reported to the agent.
+- **Fixed: edits show in the sidebar and rewind restores them.** Edits never
+  reached the session's transcript or checkpoints, so the changes tray stayed
+  empty and Rewind had no files to restore.
+- **The agent can run your tests.** The shell is on by default and runs under
+  the OS sandbox (`openContext.agent.shell.sandbox`): Seatbelt on macOS,
+  bubblewrap on Linux. Commands ask first in Ask first and Auto-edit; in Full
+  auto they run unasked only inside Seatbelt, which also limits writes — the
+  approval card says whether a command is sandboxed.
+- **Review changes.** A turn's changes tray, a parallel session's review
+  sheet, and `/review-changes` (or `/review` in the main checkout) have the
+  agent review the diff against the surrounding code — a normal turn you can
+  follow up on ("fix the first one").
+- **Repo map.** The agent maps the codebase's structure before answering
+  broad questions instead of spending a dozen searches.
+- **Memory in the context window.** Remembered notes show in the context
+  meter and sheet.
+- Fixed: a session could subscribe twice while the agent was starting, leaking
+  one session's events into another after a switch; `/reset` in a parallel
+  session replayed the old conversation; changing
+  `openContext.agent.approvalMode` in settings did not reach open sessions.
+- An end-to-end suite runs the extension in a real VS Code (1.103 and stable)
+  against a scripted model on every change.
+
+## 0.7.0
 
 - **A rebuilt, agentic sidebar.** The chat panel is now the Agent view, running
   the same Trace session as `oce trace` (Studio and the TUI fold the same

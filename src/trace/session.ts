@@ -199,6 +199,22 @@ export class TraceSession {
     this.emit({ type: "context", snapshot: this.opts.ledger.snapshot(this.opts.agent.getMessages()) });
   }
 
+  // ─── edits ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Wired as the edit tools' `onEdit` when the stack is built.
+   *
+   * The agent's stream carries the tool CALL, not the EditProposal it
+   * produced (nothing emits `edit_proposed` for a real agent), so this is the
+   * path every edit actually takes. Without it the transcript showed no edits
+   * and checkpoints recorded no files — rewind could not restore anything.
+   */
+  readonly observeEdit = (edit: EditProposal): void => {
+    this.edits.push(edit);
+    this.opts.checkpoints.noteEdit(edit);
+    this.emit({ type: "edit", edit });
+  };
+
   // ─── sub-agents ────────────────────────────────────────────────────────────
 
   /**
@@ -331,11 +347,7 @@ export class TraceSession {
         break;
       }
       case "edit_proposed":
-        if (ev.edit) {
-          this.edits.push(ev.edit);
-          this.opts.checkpoints.noteEdit(ev.edit);
-          this.emit({ type: "edit", edit: ev.edit });
-        }
+        if (ev.edit) this.observeEdit(ev.edit);
         break;
       case "model_selected":
         if (ev.tier) this.emit({ type: "model", tier: ev.tier });

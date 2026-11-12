@@ -35,8 +35,16 @@ export const workspace: any = {
     stat: async (uri: Uri) => { if (!workspace._stats.has(uri.fsPath) && !workspace._files.has(uri.fsPath)) throw new Error("ENOENT"); return {}; },
     createDirectory: async () => {},
   },
-  openTextDocument: async (uri: Uri) => ({ uri, isDirty: false, save: async () => true, getText: () => workspace._files.get(uri.fsPath) ?? "", lineCount: 1, lineAt: () => ({ range: { end: new Position(0, (workspace._files.get(uri.fsPath) ?? "").length) } }) }),
-  applyEdit: async (edit: WorkspaceEdit) => { workspace._lastEdit = edit; for (const op of edit.ops) { if (op.type === "deleteFile") { workspace._files.delete(op.uri.fsPath); workspace._stats.delete(op.uri.fsPath); } if (op.type === "insert" || op.type === "replace") workspace._files.set(op.uri.fsPath, op.text); if (op.type === "createFile") workspace._stats.add(op.uri.fsPath); } return workspace._applyEditResult ?? true; },
+  // Like VS Code, an applied text edit leaves the document dirty until saved;
+  // `_saves` records which paths a save actually reached.
+  _dirty: new Set<string>(), _saves: [] as string[],
+  openTextDocument: async (uri: Uri) => ({
+    uri,
+    get isDirty() { return workspace._dirty.has(uri.fsPath); },
+    save: async () => { workspace._dirty.delete(uri.fsPath); workspace._saves.push(uri.fsPath); return workspace._saveResult ?? true; },
+    getText: () => workspace._files.get(uri.fsPath) ?? "", lineCount: 1, lineAt: () => ({ range: { end: new Position(0, (workspace._files.get(uri.fsPath) ?? "").length) } }),
+  }),
+  applyEdit: async (edit: WorkspaceEdit) => { workspace._lastEdit = edit; for (const op of edit.ops) { if (op.type === "deleteFile") { workspace._files.delete(op.uri.fsPath); workspace._stats.delete(op.uri.fsPath); } if (op.type === "insert" || op.type === "replace") { workspace._files.set(op.uri.fsPath, op.text); workspace._dirty.add(op.uri.fsPath); } if (op.type === "createFile") workspace._stats.add(op.uri.fsPath); } return workspace._applyEditResult ?? true; },
 };
 export const window: any = {
   activeTextEditor: undefined, visibleTextEditors: [], showWarningMessage: async () => undefined,

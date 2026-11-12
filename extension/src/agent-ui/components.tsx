@@ -762,11 +762,16 @@ export function ContextSheet({ context, entries, onAction, onCite, onCompact, on
       {entries.length === 0 && <p className="muted">Retrieved code shows up here, ranked, with why it was pulled in. Pin what matters; evict what doesn't.</p>}
       <ul className="entries">
         {entries.map(e => (
-          <li key={e.id} data-evicted={e.evicted} data-pinned={e.pinned}>
+          <li key={e.id} data-evicted={e.evicted} data-pinned={e.pinned} data-bucket={e.bucket}>
             <span className="score mono">{typeof e.score === "number" ? score(e.score) : "—"}</span>
-            <button type="button" className="mono link truncate" title={`${e.label}${e.lines ? `:${e.lines}` : ""} · ${tokens(e.tokens)} tokens${e.via ? ` · via ${e.via}` : ""}`} onClick={() => onCite(e.label, Number(e.lines?.split("-")[0] ?? 0))}>
-              {basename(e.label)}{e.lines && <span className="muted">:{e.lines}</span>}
-            </button>
+            {e.bucket === "memory"
+              // A remembered note, not a file: nothing to open, so it reads as text.
+              ? <span className="truncate memory-note" title={`${e.label} · ${tokens(e.tokens)} tokens`}>{e.label}</span>
+              : (
+                <button type="button" className="mono link truncate" title={`${e.label}${e.lines ? `:${e.lines}` : ""} · ${tokens(e.tokens)} tokens${e.via ? ` · via ${e.via}` : ""}`} onClick={() => onCite(e.label, Number(e.lines?.split("-")[0] ?? 0))}>
+                  {basename(e.label)}{e.lines && <span className="muted">:{e.lines}</span>}
+                </button>
+              )}
             <span className="muted small nowrap">{e.edges?.length ? edgeLabel(e.edges[0]) : e.via ?? e.bucket}</span>
             <span className="spacer" />
             <button type="button" className="icon-btn small" data-active={e.pinned} title={e.pinned ? "Unpin" : "Pin: survives compaction"} aria-label={e.pinned ? "Unpin" : "Pin"} onClick={() => onAction(e.pinned ? "unpin" : "pin", e.id)}><Icon name="pin" /></button>

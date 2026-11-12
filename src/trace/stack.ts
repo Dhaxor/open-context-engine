@@ -127,6 +127,12 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
   // And the same for remembered context: the agent fires onMemoryInjected
   // before the ledger exists to receive it.
   const memoryObserver: { fn?: (entries: { id: string; kind: string; content: string }[]) => void } = {};
+  // And for edits: the edit tools report each EditProposal through onEdit,
+  // and the session that records it (transcript + checkpoint) comes later.
+  const editObserver: { fn?: (edit: EditProposal) => void } = {};
+  const onEdit = input.onEdit || traced
+    ? (edit: EditProposal) => { input.onEdit?.(edit); editObserver.fn?.(edit); }
+    : undefined;
 
   const tools = defaultAgentTools({
     context: ctx,
@@ -135,7 +141,7 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     shell: input.shell,
     ...(input.webSearch !== undefined ? { webSearch: input.webSearch } : {}),
     ...(input.retrieveOptions ? { retrieveOptions: input.retrieveOptions } : {}),
-    ...(input.onEdit ? { onEdit: input.onEdit } : {}),
+    ...(onEdit ? { onEdit } : {}),
     plan: input.plan ? plan : undefined,
     ...(traced ? { onRetrieval: ((o) => observer.fn?.(o)) as RetrievalObserver } : {}),
     delegate: input.delegate ? {
@@ -221,6 +227,7 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     observer.fn = trace.observeRetrieval;
     delegation.observer = trace.delegateObserver;
     memoryObserver.fn = entries => ledger.noteMemory(entries);
+    editObserver.fn = trace.observeEdit;
   }
 
   return { agent, plan, permissions, tools, trace, ledger, checkpoints };
