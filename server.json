@@ -7,12 +7,12 @@
     "source": "github",
     "id": "1221695016"
   },
-  "version": "0.7.1",
+  "version": "0.8.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@dhaxor/open-context",
-      "version": "0.7.1",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       }

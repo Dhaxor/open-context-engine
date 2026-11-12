@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — the agent checks its own work
+## 0.8.0 — the agent checks its own work
 
 - **Edits reach the trace.** The edit tools reported each change only to
   their `onEdit` callback; `TraceSession` waited for an `edit_proposed`

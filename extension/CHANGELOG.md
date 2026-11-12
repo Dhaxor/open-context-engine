@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased — the agent checks its own work
+## 0.8.0 — the agent checks its own work
 
 - **Fixed: agent edits are saved to disk.** Since the first release the edit
   path checked whether the document was dirty *after* applying the edit — it
