@@ -145,10 +145,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Two ways to publish to the Marketplace, switched by the repository variable
+  # MARKETPLACE_AUTH. vsce only accepts Azure DevOps PATs scoped to "All
+  # accessible organizations" — global PATs, which stop working on 2026-12-01
+  # — so the VSCE_PAT path has an end date. Set MARKETPLACE_AUTH=entra once the
+  # Entra ID identity exists (extension/PUBLISHING.md, "Marketplace secrets")
+  # and the next tag publishes through publish-entra instead; nothing else
+  # changes. Two jobs rather than one because `environment:` (what the
+  # federated credential trusts) cannot be conditional on a secret.
   publish:
     name: Publish to Marketplace
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
+    if: (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish == true)) && vars.MARKETPLACE_AUTH != 'entra'
     # Pinned to ubuntu so the publish loop is a single bash glob. Windows
     # runners can't glob on PowerShell/cmd reliably.
     runs-on: ubuntu-latest
@@ -183,6 +191,73 @@ jobs:
           for vsix in artifacts/*.vsix; do
             echo "::group::Publishing $vsix"
             vsce publish --packagePath "$vsix" --pat "$VSCE_PAT"
+            echo "::endgroup::"
+          done
+
+  publish-entra:
+    name: Publish to Marketplace (Entra ID)
+    needs: build
+    if: (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish == true)) && vars.MARKETPLACE_AUTH == 'entra'
+    runs-on: ubuntu-latest
+    # The managed identity's federated credential trusts this environment's
+    # OIDC subject, repo:Dhaxor/open-context-engine:environment:marketplace;
+    # restrict the environment to v*.*.* tags so only releases get a token.
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write # GitHub's OIDC token for azure/login
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+
+      - name: Install vsce
+        # --azure-credential needs vsce >= 2.26.1.
+        run: npm install -g @vscode/vsce@^3.6.0
+
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: vsix-*
+          path: artifacts
+          merge-multiple: true
+
+      # Sign in last, right before vsce: the Azure CLI trades GitHub's
+      # short-lived OIDC token for the Marketplace token on first use, and
+      # fails with AADSTS700024 once that OIDC token has expired.
+      - name: Sign in to Microsoft Entra ID
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          # The identity holds no Azure role; it only needs a Marketplace token.
+          allow-no-subscriptions: true
+
+      - name: Check the identity is a publisher member
+        # Prints the ID the one-time setup adds under the publisher's Members,
+        # and stops before any upload if it isn't there yet.
+        run: |
+          set -euo pipefail
+          id=$(az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv)
+          publisher=$(node -p "require('./extension/package.json').publisher")
+          echo "Marketplace member ID of this identity: $id"
+          if ! vsce verify-pat --azure-credential "$publisher"; then
+            echo "::error::Add $id to the $publisher publisher's Members with the Contributor role, then re-run this job. See extension/PUBLISHING.md."
+            exit 1
+          fi
+
+      - name: Publish each VSIX explicitly
+        # --azure-credential takes its token from the Azure CLI sign-in above.
+        run: |
+          set -euo pipefail
+          ls -la artifacts/
+          shopt -s nullglob
+          for vsix in artifacts/*.vsix; do
+            echo "::group::Publishing $vsix"
+            vsce publish --packagePath "$vsix" --azure-credential
             echo "::endgroup::"
           done
 

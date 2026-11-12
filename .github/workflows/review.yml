@@ -55,7 +55,9 @@ jobs:
           OCE_LLM_API_KEY: ${{ secrets.OCE_REVIEW_LLM_KEY }}
         run: |
           if [ -z "$OCE_LLM_API_KEY" ]; then
-            echo "Review skipped: set the OCE_REVIEW_LLM_KEY secret (and OCE_REVIEW_LLM_PROVIDER variable) to enable the PR reviewer."
+            # Into review.md too: the next step decides from that file, and a
+            # missing one failed every PR while no key was configured.
+            echo "Review skipped: set the OCE_REVIEW_LLM_KEY secret (and OCE_REVIEW_LLM_PROVIDER variable) to enable the PR reviewer." | tee "$RUNNER_TEMP/review.md"
             exit 0
           fi
           node dist/cli/index.js review --diff "$RUNNER_TEMP/pr.diff" \
@@ -68,8 +70,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if grep -q "Review skipped:" "$RUNNER_TEMP/review.md"; then
-            cat "$RUNNER_TEMP/review.md"
+          if [ ! -s "$RUNNER_TEMP/review.md" ] || grep -q "Review skipped:" "$RUNNER_TEMP/review.md"; then
+            cat "$RUNNER_TEMP/review.md" 2>/dev/null || echo "No review was produced."
             exit 0
           fi
           gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/review.md"
