@@ -106,6 +106,17 @@ describe("TraceSession streaming", () => {
     expect(late.some(e => (e.event as any).text === "already said")).toBe(true);
   });
 
+  it("shows a composed prompt by its label and treats its @ tokens as code", async () => {
+    // A review prompt carries a whole diff; the transcript should read as the
+    // action, and `@Component` in that diff is not a file to pin.
+    const { session, agent, events } = build();
+    await session.prompt("Review this:\n+ @Component()\n+ class A {}", { label: "Review 1 changed file" });
+    expect(events.find(e => e.type === "turn_start")).toMatchObject({ prompt: "Review 1 changed file" });
+    expect(agent.messages[0].content).toContain("@Component()");
+    expect(events.some(e => e.type === "notice")).toBe(false);
+    expect(session.checkpoints().at(-1)?.label).toBe("Review 1 changed file");
+  });
+
   it("numbers the opening snapshot 0 so it cannot skip buffered events", () => {
     const { session, envelopes } = build();
     expect(envelopes[0].seq).toBe(0);

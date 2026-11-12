@@ -91,6 +91,9 @@ jobs:
         working-directory: extension
       - run: npx tsc --noEmit
         working-directory: extension
+      # The agent webviews (React, browser target) are their own project.
+      - run: npx tsc -p tsconfig.webview.json
+        working-directory: extension
 
   extension-tests:
     name: Extension vitest
@@ -108,3 +111,30 @@ jobs:
         working-directory: extension
       - run: npx vitest run
         working-directory: extension
+
+  # The real extension in a real VS Code: activation with the native binding
+  # under Electron, the sidebar webview booting under its CSP, and full agent
+  # turns (edit, approval, review, rewind) against a scripted local model —
+  # no API key. Runs on the engines floor and on current stable.
+  extension-e2e:
+    name: Extension end-to-end (VS Code ${{ matrix.vscode }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode: ["1.103.0", "stable"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+      - run: npm ci
+      - run: npm ci --ignore-scripts
+        working-directory: extension
+      - run: node build.js
+        working-directory: extension
+      # VS Code needs a display; the runner image ships Xvfb.
+      - run: xvfb-run -a npm run test:e2e
+        working-directory: extension
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode }}

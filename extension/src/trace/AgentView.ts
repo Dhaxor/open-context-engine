@@ -13,6 +13,9 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
     private view?: vscode.WebviewView;
     private bridge?: TraceBridge;
     private pending: { text: string; send: boolean } | null = null;
+    private markLoaded: () => void = () => {};
+    /** Settles once a sidebar webview has loaded and spoken to the host. */
+    readonly whenLoaded = new Promise<void>(resolve => { this.markLoaded = resolve; });
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -25,6 +28,7 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
         view.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] };
         this.bridge?.dispose();
         this.bridge = new TraceBridge(this.host, this.review, view.webview, "sidebar");
+        void this.bridge.whenLoaded.then(() => this.markLoaded());
         view.webview.html = webviewHtml(view.webview, this.extensionUri, "agent", "Open Context");
         if (this.pending) { this.bridge.compose(this.pending.text, this.pending.send); this.pending = null; }
         view.onDidDispose(() => {

@@ -316,6 +316,8 @@ kbd {
 .approval header > .ic { color: var(--warn); }
 .approval-title { font-weight: 600; }
 .approval-target { margin: 0; color: var(--muted); }
+.approval .pill[data-sandbox="seatbelt"] { color: var(--ok); border-color: var(--ok); }
+.approval .pill[data-sandbox="none"] { color: var(--warn); border-color: var(--warn); }
 .approval .pill[data-risk="high"] { color: var(--err); border-color: var(--err); }
 .approval .pill[data-risk="medium"] { color: var(--warn); border-color: var(--warn); }
 .approval footer { display: flex; gap: 6px; flex-wrap: wrap; }

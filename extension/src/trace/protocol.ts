@@ -51,6 +51,9 @@ export interface HostState {
   /** Git worktree-isolated parallel sessions are available. */
   parallel: boolean;
   shellEnabled: boolean;
+  /** What agent shell commands run under: an OS sandbox kind, "none", or
+   *  "off" when the shell tool is disabled. */
+  shellSandbox: "seatbelt" | "bwrap" | "none" | "off";
 }
 
 export interface SearchHit {

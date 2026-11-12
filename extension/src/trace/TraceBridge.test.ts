@@ -32,19 +32,22 @@ function fakeSession(id: string) {
     return s;
 }
 
-function harness() {
+function harness(opts: { deferredStart?: boolean } = {}) {
     const sessions = new Map([["s1", fakeSession("s1")]]);
     let active = "s1";
     const resets = new EventEmitter<{ from: string; to: string }>();
+    const starts = new EventEmitter<void>();
+    let resolveReady: (v: unknown) => void = () => {};
+    const readyPromise = opts.deferredStart ? new Promise(r => { resolveReady = r; }) : Promise.resolve({});
     const host = {
-        ready: async () => ({}),
+        ready: () => readyPromise,
         session: (id: string | null) => sessions.get(id ?? active),
         sessionForTurn: async (id: string | null) => sessions.get(id ?? active)!,
         sessions: () => ({ sessions: [...sessions.keys()].map(id => ({ id, active: id === active })), parallel: false }),
         state: async () => ({ setup: null }),
         onDidChangeSessions: new EventEmitter<void>().event,
         onDidChangeState: new EventEmitter<void>().event,
-        onDidStart: new EventEmitter<void>().event,
+        onDidStart: starts.event,
         onDidReset: resets.event,
     };
     const posted: any[] = [];
@@ -57,6 +60,10 @@ function harness() {
     const send = async (m: any) => { await receive(m); await new Promise(r => setTimeout(r, 0)); };
     return {
         bridge, posted, send, sessions, resets,
+        receive: (m: any) => receive(m),
+        // The real host fires its start event from inside ready()'s resolution,
+        // while callers that awaited ready() have not resumed yet.
+        start: () => { starts.fire(); resolveReady({}); },
         setActive: (id: string) => { active = id; },
         rpc: async (method: string, params: any = {}) => {
             const id = Math.floor(Math.random() * 1e9);
@@ -78,6 +85,18 @@ describe("TraceBridge", () => {
 
         h.sessions.get("s1")!.emit({ seq: 2, ts: "", sessionId: "s1", event: { type: "text", text: "yo" } });
         expect(h.posted.at(-1)).toMatchObject({ kind: "trace", envelope: { seq: 2 } });
+    });
+
+    it("subscribes once when the host starts during the first attach", async () => {
+        const d = harness({ deferredStart: true });
+        await d.send({ kind: "ready", surface: "sidebar" });
+        const subscribing = d.receive({ kind: "subscribe", sessionId: null, since: 0 });
+        d.start();
+        await subscribing;
+        await new Promise(r => setTimeout(r, 0));
+        // Two live subscriptions would leak this session's events into the
+        // next one after a switch.
+        expect(d.sessions.get("s1")!.listeners.size).toBe(1);
     });
 
     it("resumes after a cursor instead of replaying what the webview has", async () => {

@@ -227,3 +227,24 @@ jobs:
             echo "::error::no VSIX artifacts found"
             exit 1
           fi
+
+      # `ovsx publish` succeeding means the upload was ACCEPTED, not that it is
+      # listed: 0.7.0 reported "Published" for all five targets and never became
+      # visible (an unverified namespace's uploads can be held for review). Ask
+      # the public API until the release shows, and fail loudly if it doesn't.
+      - name: Confirm the release is publicly listed
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./extension/package.json').version")
+          url="https://open-vsx.org/api/open-context/open-context-engine/linux-x64/$version"
+          for attempt in $(seq 1 20); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            if [ "$status" = "200" ]; then
+              echo "Open VSX lists open-context.open-context-engine $version."
+              exit 0
+            fi
+            echo "attempt $attempt: $url -> $status"
+            sleep 30
+          done
+          echo "::error::Open VSX accepted the upload but does not list $version after 10 minutes. Sign in at https://open-vsx.org (Settings > Extensions) to see why it is held — e.g. a pending review or an unverified namespace."
+          exit 1

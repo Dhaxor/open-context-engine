@@ -39,4 +39,23 @@ describe("EditReviewService", () => {
     expect(index.added[0]).toEqual({ path: "old.ts", contents: "y" });
     expect(index.removed[0]).toBe("new.ts");
   });
+  it("combinedDiff folds a file's edits into one git-style diff and skips undone ones", async () => {
+    const svc = new EditReviewService(rootOf);
+    svc.record({ id: "e1", kind: "str-replace", path: "a.ts", oldContents: "one\n", newContents: "two\n", diff: "" } as any);
+    svc.record({ id: "e2", kind: "str-replace", path: "a.ts", oldContents: "two\n", newContents: "three\n", diff: "" } as any);
+    svc.record({ id: "e3", kind: "create", path: "b.ts", newContents: "new\n", diff: "" } as any);
+    svc.record({ id: "e4", kind: "remove", path: "c.ts", oldContents: "gone\n", diff: "" } as any);
+    svc.record({ id: "e5", kind: "create", path: "d.ts", newContents: "undone\n", diff: "" } as any);
+    await svc.undo("e5");
+
+    const { diff, deletedFiles } = svc.combinedDiff(["e1", "e2", "e3", "e4", "e5"]);
+    // Earliest "before" against latest "after": the intermediate "two" never shows.
+    expect(diff).toContain("+++ b/a.ts");
+    expect(diff).toContain("-one");
+    expect(diff).toContain("+three");
+    expect(diff).not.toContain("two");
+    expect(diff).toContain("+++ b/b.ts");
+    expect(diff).not.toContain("d.ts");
+    expect(deletedFiles).toEqual(["c.ts"]);
+  });
 });

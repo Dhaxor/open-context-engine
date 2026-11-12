@@ -14,10 +14,14 @@ export class WorkspaceEdit {
 }
 export class EventEmitter<T> { listeners: ((v: T) => void)[] = []; event = (fn: (v: T) => void) => { this.listeners.push(fn); return { dispose() {} }; }; fire(v: T) { this.listeners.forEach(fn => fn(v)); } }
 export class CancellationError extends Error {}
-export enum ConfigurationTarget { Global = 1 }
+export enum ConfigurationTarget { Global = 1, Workspace = 2 }
 export const workspace: any = {
   workspaceFolders: [], textDocuments: [], visibleTextEditors: [],
   _config: new Map<string, any>(), _providers: new Map<string, any>(), _files: new Map<string, string>(), _stats: new Set<string>(),
+  _configListeners: [] as ((e: any) => void)[],
+  onDidChangeConfiguration: (fn: (e: any) => void) => { workspace._configListeners.push(fn); return { dispose() {} }; },
+  /** Test helper: fire a configuration change for the given keys. */
+  _fireConfig: (...keys: string[]) => { for (const fn of workspace._configListeners) fn({ affectsConfiguration: (s: string) => keys.some(k => k === s || k.startsWith(s + ".")) }); },
   getConfiguration: () => ({
     get: (k: string, d?: any) => workspace._config.has(k) ? workspace._config.get(k) : d,
     has: (k: string) => workspace._config.has(k),
@@ -34,6 +38,10 @@ export const workspace: any = {
   openTextDocument: async (uri: Uri) => ({ uri, isDirty: false, save: async () => true, getText: () => workspace._files.get(uri.fsPath) ?? "", lineCount: 1, lineAt: () => ({ range: { end: new Position(0, (workspace._files.get(uri.fsPath) ?? "").length) } }) }),
   applyEdit: async (edit: WorkspaceEdit) => { workspace._lastEdit = edit; for (const op of edit.ops) { if (op.type === "deleteFile") { workspace._files.delete(op.uri.fsPath); workspace._stats.delete(op.uri.fsPath); } if (op.type === "insert" || op.type === "replace") workspace._files.set(op.uri.fsPath, op.text); if (op.type === "createFile") workspace._stats.add(op.uri.fsPath); } return workspace._applyEditResult ?? true; },
 };
-export const window: any = { activeTextEditor: undefined, visibleTextEditors: [], showWarningMessage: async () => undefined };
+export const window: any = {
+  activeTextEditor: undefined, visibleTextEditors: [], showWarningMessage: async () => undefined,
+  onDidChangeActiveTextEditor: () => ({ dispose() {} }),
+  onDidChangeTextEditorSelection: () => ({ dispose() {} }),
+};
 export const commands: any = { _calls: [] as any[], executeCommand: async (...args: any[]) => { commands._calls.push(args); } };
 export interface Disposable { dispose(): any }

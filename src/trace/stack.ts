@@ -46,6 +46,8 @@ export interface AgentStackInput {
   /** How edits reach disk: the filesystem for the CLI, a WorkspaceEdit in VS Code. */
   applier: EditApplier;
   mode: ApprovalMode;
+  /** Tools that ask in every mode, full-auto included (PermissionManager.alwaysAsk). */
+  alwaysAsk?: string[];
   includeEdits: boolean;
   shell: ToolOptions["shell"];
   webSearch?: ToolOptions["webSearch"];
@@ -87,7 +89,7 @@ export interface AgentStack {
 export function assembleAgentStack(input: AgentStackInput): AgentStack {
   const { ctx, provider, model, traced } = input;
 
-  const permissions = new PermissionManager({ mode: input.mode });
+  const permissions = new PermissionManager({ mode: input.mode, ...(input.alwaysAsk ? { alwaysAsk: input.alwaysAsk } : {}) });
   const plan = new AgentPlan();
 
   // The traced surfaces need the ledger before the agent exists (tools capture

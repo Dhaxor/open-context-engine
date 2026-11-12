@@ -147,6 +147,8 @@ export class VsCodeTransport implements TraceTransport {
   resume(id: string) { return this.call("resume", { id }); }
   deleteHistory(id: string) { return this.call("deleteHistory", { id }); }
   search(query: string) { return this.call<SearchHit[]>("search", { query }); }
+  /** A review turn over a turn's edits (`ids`) or, without them, everything uncommitted. */
+  reviewChanges(ids?: string[]) { return this.call<{ files: number }>("reviewChanges", ids ? { ids } : {}); }
   command(name: "settings" | "index" | "studio" | "llmKey" | "health" | "folder") { return this.call("command", { name }).catch(() => {}); }
 
   private quiet<T>(method: string, params: Record<string, unknown>, fallback: T): Promise<T> {

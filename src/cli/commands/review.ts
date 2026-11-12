@@ -13,57 +13,11 @@ import * as fs from "fs";
 import { CliIo } from "../io";
 import { resolveConfig } from "../config";
 import { buildSession } from "../session";
+import { buildReviewQuery, parseUnifiedDiff } from "../../agent/review";
 
-export interface DiffFile {
-  path: string;
-  /** Added/modified lines with their new-file line numbers, grouped by hunk. */
-  hunks: { newStart: number; lines: string[] }[];
-}
-
-/** Minimal unified-diff parser: enough for `git diff` / `gh pr diff` output.
- *  Returns one entry per changed file with its added/modified lines grouped
- *  by hunk start. Deleted-file-only hunks yield no reviewable lines. */
-export function parseUnifiedDiff(diff: string): DiffFile[] {
-  const files: DiffFile[] = [];
-  let current: DiffFile | null = null;
-  let newLine = 0;
-  for (const line of diff.split("\n")) {
-    const fileMatch = /^\+\+\+ b\/(.+)$/.exec(line);
-    if (fileMatch) {
-      current = { path: fileMatch[1], hunks: [] };
-      files.push(current);
-      continue;
-    }
-    if (/^--- /.test(line)) continue;
-    const hunkMatch = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(line);
-    if (hunkMatch && current) {
-      newLine = Number(hunkMatch[1]);
-      current.hunks.push({ newStart: newLine, lines: [] });
-      continue;
-    }
-    if (!current || !current.hunks.length) continue;
-    const hunk = current.hunks[current.hunks.length - 1];
-    if (line.startsWith("+")) { hunk.lines.push(`L${newLine}: ${line.slice(1)}`); newLine++; }
-    else if (line.startsWith("-")) { /* deleted line — no new-file number */ }
-    else { newLine++; } // context line or empty
-  }
-  return files.filter(f => f.hunks.some(h => h.lines.length));
-}
-
-/** Compose the review query: diff hunks + grounding instructions. */
-export function buildReviewQuery(files: DiffFile[], maxCharsPerFile = 6000): string {
-  const parts = files.map(f => {
-    const hunks = f.hunks.map(h => `  @@ +${h.newStart}\n${h.lines.slice(0, 40).join("\n")}`).join("\n");
-    return `File: ${f.path}\n${hunks}`.slice(0, maxCharsPerFile);
-  });
-  return [
-    "Review these pull-request changes like a senior engineer. For each file check correctness, edge cases, security (secrets, injection, path escapes), and missing test coverage. Ground every claim in the surrounding code you retrieved. Reply with markdown review comments — one section per file that has findings, most important first. If a file looks good, say so in one line. Do not restate the diff back.",
-    "",
-    "The repo map and retrieval tool give you the codebase around these changes; retrieve any surrounding code a hunk depends on before judging it.",
-    "",
-    ...parts,
-  ].join("\n");
-}
+// The diff parser and the review prompt live in the agent core so the editor
+// asks for a review exactly the way CI does; re-exported for existing callers.
+export { buildReviewQuery, parseUnifiedDiff, type DiffFile } from "../../agent/review";
 
 export function registerReviewCommand(program: Command, io: CliIo): void {
   program

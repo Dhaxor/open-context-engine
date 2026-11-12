@@ -33,6 +33,13 @@ export interface PermissionManagerOptions {
   alwaysAllow?: string[];
   /** Which tools count as "edit" tools for auto-edit mode. */
   editToolNames?: string[];
+  /**
+   * Mutating tools that ask in EVERY mode, full-auto included, until the user
+   * answers "always". For a capability whose blast radius full-auto was not
+   * chosen for — e.g. an unsandboxed shell in an editor where the shell is on
+   * by default.
+   */
+  alwaysAsk?: string[];
 }
 
 const DEFAULT_EDIT_TOOLS = ["str-replace", "create-file", "remove-file"];
@@ -42,6 +49,7 @@ export class PermissionManager {
   private ask?: PermissionManagerOptions["ask"];
   private alwaysAllowed: Set<string>;
   private editTools: Set<string>;
+  private alwaysAsk: Set<string>;
   private mutatingTools = new Set<string>();
 
   constructor(opts: PermissionManagerOptions = {}) {
@@ -49,6 +57,7 @@ export class PermissionManager {
     this.ask = opts.ask;
     this.alwaysAllowed = new Set(opts.alwaysAllow ?? []);
     this.editTools = new Set(opts.editToolNames ?? DEFAULT_EDIT_TOOLS);
+    this.alwaysAsk = new Set(opts.alwaysAsk ?? []);
   }
 
   getMode(): ApprovalMode { return this.mode; }
@@ -66,6 +75,7 @@ export class PermissionManager {
   needsApproval(toolName: string): boolean {
     if (!this.mutatingTools.has(toolName)) return false;
     if (this.alwaysAllowed.has(toolName)) return false;
+    if (this.alwaysAsk.has(toolName)) return true;
     if (this.mode === "full-auto") return false;
     if (this.mode === "auto-edit" && this.editTools.has(toolName)) return false;
     return true;

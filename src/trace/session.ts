@@ -242,23 +242,31 @@ export class TraceSession {
 
   // ─── running a turn ────────────────────────────────────────────────────────
 
-  async prompt(text: string): Promise<void> {
+  /**
+   * Run one turn. `label` is what the transcript shows instead of `text` — for
+   * prompts a surface composes rather than the user typing them (a review
+   * carrying a whole diff reads as "Review 3 changed files"). A labelled prompt
+   * is machine-written, so its `@` tokens are code (decorators, emails), not
+   * file mentions.
+   */
+  async prompt(text: string, opts: { label?: string } = {}): Promise<void> {
     if (this.running) throw new Error("A turn is already running — interrupt it first.");
     const query = text.trim();
     if (!query) return;
+    const shown = opts.label?.trim() || query;
 
     this.turn++;
-    if (!this.title) this.title = query;
+    if (!this.title) this.title = shown;
     this.opts.ledger.setTurn(this.turn);
 
     // Mentions resolve BEFORE the turn starts, so the files are already pinned
     // in the window the model is about to be given rather than arriving a turn
     // late. The `@path` text stays in the prompt: the model needs to know which
     // file the sentence is about, not just that one was attached.
-    const mentions = extractMentions(query);
+    const mentions = opts.label ? [] : extractMentions(query);
     if (mentions.length) await this.mention(mentions);
     this.running = new AbortController();
-    this.emit({ type: "turn_start", turn: this.turn, prompt: query });
+    this.emit({ type: "turn_start", turn: this.turn, prompt: shown });
     this.setPhase("thinking");
 
     try {
@@ -276,7 +284,7 @@ export class TraceSession {
       }
     } finally {
       this.running = null;
-      this.closeTurn(query);
+      this.closeTurn(shown);
       this.setPhase("idle");
     }
   }

@@ -31,7 +31,7 @@ export interface AgentSettings {
     apiKey: string;
     webSearchKey?: string;
     includeEdits: boolean;
-    shell: false | { enabled: true; allowlist: string[]; timeoutMs: number };
+    shell: false | { enabled: true; allowlist: string[]; timeoutMs: number; sandbox: boolean };
     webSearch: boolean;
     routing: { enabled: boolean; fastModel: string; reasoningModel: string };
     memory: boolean;
@@ -61,7 +61,8 @@ export async function readAgentSettings(): Promise<AgentSettings> {
     const apiKey = (await svc.getLLMApiKey(provider)) || envKey(provider) || (provider === "ollama" ? "ollama" : "");
     if (!apiKey) throw new SetupError({ kind: "llm-key", message: missingKeyMessage(provider) });
 
-    const shellEnabled = cfg.get<boolean>("agent.shell.enabled", false);
+    const shellEnabled = cfg.get<boolean>("agent.shell.enabled", true);
+    const shellSandbox = cfg.get<boolean>("agent.shell.sandbox", true);
     const shellAllowlist = cfg.get<string[]>("agent.shell.allowlist", []) ?? [];
     const shellTimeoutMs = cfg.get<number>("agent.shell.timeoutMs", 60000);
     const webSearch = cfg.get<boolean>("agent.webSearch.enabled", true);
@@ -81,12 +82,11 @@ export async function readAgentSettings(): Promise<AgentSettings> {
     const includeEdits = cfg.get<boolean>("agent.allowEdits", true);
     const memory = cfg.get<boolean>("agent.memory.enabled", true);
     const audit = cfg.get<boolean>("agent.audit.enabled", false);
-    const configuredMode = cfg.get<string>("agent.approvalMode", "auto-edit");
-    const mode = MODES.includes(configuredMode as ApprovalMode) ? configuredMode as ApprovalMode : "auto-edit";
+    const mode = configuredApprovalMode();
 
     const fingerprint = [
         provider, model, baseUrl ?? "", `edits=${includeEdits}`,
-        `sh=${shellEnabled}:${shellAllowlist.join("\u0000")}:${shellTimeoutMs}`,
+        `sh=${shellEnabled}:${shellSandbox}:${shellAllowlist.join("\u0000")}:${shellTimeoutMs}`,
         `web=${webSearch && !!webSearchKey}`, `route=${routing.enabled}:${routing.fastModel}:${routing.reasoningModel}`,
         `mem=${memory}`, `audit=${audit}`,
         `lim=${limits.maxSteps}:${limits.maxTokens}:${limits.historyTokenBudget}:${limits.maxToolResultChars}:${limits.maxRetries}`,
@@ -94,15 +94,30 @@ export async function readAgentSettings(): Promise<AgentSettings> {
 
     return {
         provider, model, baseUrl, apiKey, webSearchKey, includeEdits,
-        shell: shellEnabled ? { enabled: true, allowlist: shellAllowlist, timeoutMs: shellTimeoutMs } : false,
+        shell: shellEnabled ? { enabled: true, allowlist: shellAllowlist, timeoutMs: shellTimeoutMs, sandbox: shellSandbox } : false,
         webSearch: webSearch && !!webSearchKey,
         routing, memory, audit, limits, mode, fingerprint,
     };
 }
 
-/** Remember an approval mode picked in the UI for the next session and window. */
+/** The approval mode the settings ask for, falling back to auto-edit. */
+export function configuredApprovalMode(): ApprovalMode {
+    const configured = vscode.workspace.getConfiguration("openContext").get<string>("agent.approvalMode", "auto-edit");
+    return MODES.includes(configured as ApprovalMode) ? configured as ApprovalMode : "auto-edit";
+}
+
+/**
+ * Remember an approval mode picked in the UI. Written where the setting is
+ * already defined: a workspace value would otherwise outrank a global write,
+ * and the next configuration event would put every session back.
+ */
 export async function saveApprovalMode(mode: ApprovalMode): Promise<void> {
-    await vscode.workspace.getConfiguration("openContext").update("agent.approvalMode", mode, vscode.ConfigurationTarget.Global);
+    const cfg = vscode.workspace.getConfiguration("openContext");
+    const where = cfg.inspect?.<string>("agent.approvalMode");
+    const target = where?.workspaceValue !== undefined || where?.workspaceFolderValue !== undefined
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+    await cfg.update("agent.approvalMode", mode, target);
 }
 
 function envKey(provider: LLMProvider): string {
