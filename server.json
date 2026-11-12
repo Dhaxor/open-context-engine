@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Dhaxor/open-context-engine",
+  "description": "Local-first code retrieval: hybrid search over an AST-aware index of your codebase. Fully offline.",
+  "repository": {
+    "url": "https://github.com/Dhaxor/open-context-engine",
+    "source": "github",
+    "id": "1221695016"
+  },
+  "version": "0.7.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@dhaxor/open-context",
+      "version": "0.7.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

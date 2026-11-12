@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code RAG — Retrieval-Augmented Generation for Your Codebase | Open Context Engine</title>
+<meta name="description" content="Code RAG retrieves the right source code into an LLM's context before it answers. How it works, why naive code RAG fails, and how to run it locally over your own repo — measured, not vibes.">
+<link rel="canonical" href="https://opencontextengine.com/code-rag">
+<meta property="og:title" content="Code RAG — Retrieval-Augmented Generation for Your Codebase">
+<meta property="og:description" content="How code RAG works, why line-chunked vector search fails on real repositories, and how to run measured, AST-aware RAG locally over your own codebase.">
+<meta property="og:url" content="https://opencontextengine.com/code-rag">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Code RAG — Retrieval-Augmented Generation for Your Codebase">
+<meta name="twitter:description" content="Why naive code RAG fails on real repos, and what AST-aware chunking + hybrid retrieval + symbol expansion does differently.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Code RAG — Retrieval-Augmented Generation for Your Codebase",
+  "description": "How code RAG works, why naive implementations fail on real repositories, and how to run measured, AST-aware RAG locally.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/code-rag",
+  "about": [
+    { "@type": "Thing", "name": "retrieval-augmented generation" },
+    { "@type": "Thing", "name": "code search" },
+    { "@type": "Thing", "name": "software engineering" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is code RAG?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Code RAG (retrieval-augmented generation over source code) indexes a codebase into searchable units, retrieves the most relevant snippets for a query or task, and puts them into the LLM's context before it answers or edits. It is how AI coding assistants answer questions about repos that are far larger than the model's context window." }
+    },
+    {
+      "@type": "Question",
+      "name": "How is code RAG different from general RAG?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Code has structure that prose does not: functions, classes, imports, and call graphs. Good code RAG chunks along AST boundaries (not fixed line counts), fuses dense embeddings with exact keyword matching (identifiers like AbortWithStatusJSON are lexical queries, not semantic ones), expands results along the code graph (callers and callees), and resolves symbol definitions. General-purpose RAG pipelines skip all of this and it shows in accuracy." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why does chunking matter for code RAG?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A chunk that cuts a function in half embeds as neither half's meaning. AST-aware chunking keeps each chunk a complete semantic unit — a function, a class, a method — so embeddings describe real code, and class-level header chunks give the indexer a handle for methods defined far from their class. It is the single biggest accuracy lever in code RAG." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I run RAG on my own codebase locally?",
+      "acceptedAnswer": { "@type": "Answer", "text": "With Open Context Engine: npm install -g @dhaxor/open-context, then oce index (builds a local SQLite index with AST-aware chunks, hybrid retrieval, and a code graph), then oce search \"your question\" to query it, or claude mcp add oce -- oce mcp to serve it to Claude Code over MCP. Embeddings run in-process by default, so nothing leaves your machine." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do you measure code RAG quality?",
+      "acceptedAnswer": { "@type": "Answer", "text": "With committed gold sets — query/expected-chunk pairs scored with recall@k, MRR, and nDCG in CI, the way tests are. Open Context Engine publishes its numbers on its benchmarks page: hybrid recall@10 of 0.943 on its own repo and parity (0.926) on Flask 3.1.2 where pure vector search previously lost. If a tool doesn't publish retrieval metrics, its accuracy claims are vibes." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
+    { "@type": "ListItem", "position": 3, "name": "Code RAG", "item": "https://opencontextengine.com/code-rag" }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+        <a href="changelog.html">Changelog</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/code-rag <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Code RAG: retrieval-augmented generation for your codebase</h1>
+    <p class="sub">How RAG over source code works, why the naive recipe fails on real repositories, and how to run it locally — with retrieval quality you can measure.</p>
+  </section>
+
+  <section class="doc">
+    <h2>What is code RAG?</h2>
+    <p><strong>Code RAG</strong> is retrieval-augmented generation applied to source code: index a codebase into searchable units, retrieve the ones relevant to the current task, and put them into the model's context before it answers or edits. It exists because a real repository is orders of magnitude larger than any model's context window — so an AI assistant's grounding is only as good as its retrieval.</p>
+    <p>Every AI coding tool you use is doing code RAG under some other name. When Claude Code answers "where do we validate JWTs?", when Cursor suggests a fix in the file you haven't opened, when a PR-review bot flags a broken caller — a retriever chose what code the model saw. Weak retrievers produce the classic failures: hallucinated APIs, edits to the wrong file, "fixes" that break code the model never saw.</p>
+
+    <h2>Why naive code RAG fails</h2>
+    <p>The default recipe — split files every N lines, embed the chunks, cosine-search them — falls over on real codebases in three distinct ways:</p>
+    <ul>
+      <li><strong>Line-count chunking severs meaning.</strong> A chunk that cuts a function in half embeds as neither half's meaning. Retrieval then ranks garbage confidently.</li>
+      <li><strong>Plain vector search misses exact identifiers.</strong> "Find <code>AbortWithStatusJSON</code>" is a lexical query — the answer is the chunk containing that exact token, not its nearest neighbors in embedding space. Semantic similarity alone won't rank it first.</li>
+      <li><strong>Plain keyword search misses paraphrases.</strong> "How does auth middleware work" never names <code>authMiddleware</code>. Lexical matching alone won't find it.</li>
+    </ul>
+    <p>Each failure mode rules out half the query space. That's why production code RAG needs both retrieval signals — and the structure code uniquely provides.</p>
+
+    <h2>What good code RAG looks like</h2>
+    <p>The pieces that separate measured retrieval from a demo:</p>
+    <ul>
+      <li><strong>AST-aware chunking.</strong> Chunk along tree-sitter parse boundaries — functions, classes, methods — across languages, so every chunk is a complete semantic unit. Add class-level header chunks so methods defined far from their class still surface for class questions.</li>
+      <li><strong>Hybrid retrieval.</strong> Dense embeddings fused with BM25 keyword scoring via Reciprocal Rank Fusion — semantics for paraphrases, exact match for identifiers, one ranking that benefits from both.</li>
+      <li><strong>Symbol expansion.</strong> When a retrieved snippet calls <code>validateToken()</code>, pull in <code>validateToken</code>'s definition alongside — the model sees the callee without a second round-trip.</li>
+      <li><strong>A code graph.</strong> Import/call/definition edges extracted from the AST, so results ride with their callers and callees.</li>
+      <li><strong>Compiler-grade symbol lookup.</strong> A language server turns "where is this defined / who references it" from fuzzy guessing into exact answers.</li>
+      <li><strong>Measurement.</strong> Committed gold sets scored with recall@k, MRR, and nDCG in CI — <a href="benchmarks">published numbers</a>, not vibes.</li>
+    </ul>
+
+    <h2>Run code RAG locally in three commands</h2>
+    <p>Open Context Engine is a code-RAG engine you can run over your own repository — local, private, and free (MIT core):</p>
+    <pre>npm install -g @dhaxor/open-context
+oce index                        # AST-aware chunks + hybrid index + code graph, in local SQLite
+oce search "where do we validate JWTs?"</pre>
+    <p>Embeddings run in-process (MiniLM by default — no API key), everything lives in local SQLite, and if the vector extension is unavailable the engine degrades to keyword-only BM25 instead of dying. To give an <a href="agentic-workflow">agentic workflow</a> this grounding, serve it over MCP — the <a href="mcp-server">MCP server guide</a> covers Claude Code and Cursor in one command each.</p>
+
+    <h2>Measure before you trust</h2>
+    <p>The uncomfortable question for any code-RAG tool: <em>what's your recall@10?</em> If a vendor can't answer with a methodology — gold sets, scoring metrics, before/after for ranking changes — its accuracy claims are marketing. OCE treats retrieval quality like tests: committed gold sets (this repo, Flask 3.1.2, gin v1.10.0), CI baselines, and a public <a href="benchmarks">benchmarks page</a> generated from the eval harness's own reports. The harness ships with the product, so you can score it on your own codebase too.</p>
+
+    <h2>Why not just fine-tune on the codebase?</h2>
+    <p>A common alternative — training a model on your source — answers a different question. Fine-tuning shapes <em>how</em> a model writes; retrieval supplies <em>what</em> it knows, freshly, with citations. Code changes every commit, so frozen weights go stale where a re-indexed answer doesn't. The full comparison is in <a href="rag-vs-fine-tuning">RAG vs fine-tuning for code</a>.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>What is code RAG?</h3>
+      <p>Retrieval-augmented generation over source code: index a repo into searchable units, retrieve what's relevant to the task, and put it in the model's context before it answers or edits. It's how AI assistants handle codebases bigger than the context window.</p>
+      <h3>How is code RAG different from general RAG?</h3>
+      <p>Code has machine-checkable structure: ASTs, imports, call graphs, symbol tables. Good code RAG chunks on AST boundaries, fuses semantic + keyword retrieval, expands along the code graph, and resolves symbol definitions — none of which general text RAG needs.</p>
+      <h3>Why does chunking matter so much?</h3>
+      <p>Because a chunk that halves a function embeds as neither half's meaning. AST-aware chunking keeps chunks semantically complete, which is the biggest single accuracy lever in the pipeline.</p>
+      <h3>Can code RAG run fully offline?</h3>
+      <p>Yes. With OCE, embeddings run in-process with no API key and the index is local SQLite; keyword-only mode covers environments where vector search is unavailable. Nothing is uploaded.</p>
+      <h3>How do I evaluate a code RAG system?</h3>
+      <p>Build or use committed gold sets and score recall@k, MRR, and nDCG — OCE's <a href="benchmarks">benchmarks page</a> shows the method and the numbers, and <code>oce eval</code> reproduces the harness on your own repo.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

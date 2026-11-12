@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Memory for Coding Agents — What Harnesses Remember, and How | Open Context Engine</title>
+<meta name="description" content="Coding agents now remember across sessions — Claude Code auto-memory, Cursor, Mem0, Zep. How agent memory works, the tradeoffs, and how to run it locally over MCP.">
+<link rel="canonical" href="https://opencontextengine.com/agent-memory">
+<meta property="og:title" content="Agent Memory for Coding Agents — What Harnesses Remember, and How">
+<meta property="og:description" content="Auto-memory, memory layers, MCP memory tools: how coding agents remember across sessions, the tradeoffs of each approach, and a local-first way to do it.">
+<meta property="og:url" content="https://opencontextengine.com/agent-memory">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Agent Memory for Coding Agents — Open Context Engine">
+<meta name="twitter:description" content="How coding agents remember across sessions — and why memory should be local, measured, and visible.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Agent Memory for Coding Agents — What Harnesses Remember, and How",
+  "description": "How coding agents remember across sessions: harness-native memory, dedicated memory layers, and the local-first approach.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/agent-memory",
+  "about": [
+    { "@type": "Thing", "name": "agent memory" },
+    { "@type": "Thing", "name": "Model Context Protocol" },
+    { "@type": "Thing", "name": "coding agent" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is agent memory?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Agent memory is durable context that survives across sessions: learned facts about the codebase, user preferences, decisions and their rationale. Modern coding agents (Claude Code, Cursor) maintain it natively — Claude Code writes a per-project MEMORY.md injected into every session — and dedicated memory layers (Mem0, Zep, Letta) expose it over MCP so any agent can read and write it." }
+    },
+    {
+      "@type": "Question",
+      "name": "How does Claude Code memory work?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Claude Code layers two mechanisms: static instructions (CLAUDE.md / AGENTS.md, maintained by humans) and auto memory — a per-project memory directory with a MEMORY.md file the agent itself creates and updates, injected into the system prompt every session. Auto memory records preferences and project context without user input." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the difference between harness memory and a memory layer?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Harness memory is scoped to one tool — Claude Code's MEMORY.md doesn't help Cursor, and Cursor's index doesn't help a CLI agent. A memory layer exposed over the Model Context Protocol is portable: one store any MCP client reads and writes. The tradeoff is trust — an external memory layer must earn it with visibility, scoping, and provenance for every remembered fact." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I run agent memory locally?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Open Context Engine ships a memory store beside the code index: the agent harvests preferences and codebase insights as it works, and MCP clients get memory_remember, memory_recall, and memory_forget tools. Recall is hybrid (lexical + embeddings), memories render as a Markdown twin you can read and edit, and every injection is visible in the evidence rail. Nothing leaves the machine." }
+    },
+    {
+      "@type": "Question",
+      "name": "How should stale memories be handled?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Memories expire or get superseded: when a fact changes (auth moved from webpack to vite), the new memory should explicitly supersede the old one so it stops being recalled but stays auditable. Prompt framing matters too — remembered context should read as possibly-stale and verify-against-current-code, so a wrong memory can't outrank fresh tool results." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">guides/agent-memory <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Agent memory for coding agents</h1>
+    <p class="sub">Agents now remember across sessions — what harnesses store, how memory layers work over MCP, and why memory should be local, measured, and visible like every other retrieval.</p>
+  </section>
+
+  <section class="doc">
+    <h2>What agent memory is</h2>
+    <p><strong>Agent memory</strong> is durable context that survives a session: the fact that auth lives in <code>src/auth/guard.ts</code>, that this team prefers pnpm, that a migration replaced webpack with vite last month. Without it, every session re-discovers the same facts — slowly, and sometimes wrongly. With it, an agent starts already knowing the shape of your project and your preferences.</p>
+    <p>The harnesses converged on this fast. Claude Code layers <a href="https://code.claude.com/docs/en/memory" rel="noopener">static instructions (CLAUDE.md / AGENTS.md) with auto-memory</a> — a per-project <code>MEMORY.md</code> the agent itself writes and reads every session. Cursor's index carries workspace context across chats. Devin checkpoints task state; Antigravity treats artifacts as memory.</p>
+
+    <h2>The three places memory lives</h2>
+    <ul>
+      <li><strong>Harness-native.</strong> Best integration, zero portability: Claude Code's memory doesn't help Cursor, and vice versa. Summaries go stale when code moves, and you can't measure what the agent "remembers."</li>
+      <li><strong>Dedicated memory layers over MCP.</strong> Mem0, Zep, Letta expose memory as tools any MCP client can call — one store across Claude Code, Cursor, and CLI agents. Portability is the win; trust is the question: what got remembered, by whom, and can you see it?</li>
+      <li><strong>Local-first memory beside the index.</strong> Memory as just another retrieval problem — harvested as the agent works, recalled with the same hybrid engine as code, stored where you can read it.</li>
+    </ul>
+
+    <h2>The trust problem, and three properties that fix it</h2>
+    <p>A memory that's wrong is worse than no memory — it poisons every session that trusts it. Three properties make memory trustworthy:</p>
+    <ul>
+      <li><strong>Measured recall.</strong> If memory claims to be retrieval, it should be scored like retrieval — hybrid lexical + semantic fusion, not a keyword grep over a JSON file.</li>
+      <li><strong>Visible injections.</strong> When remembered context enters the prompt, it should appear in the evidence rail — which memories, at what recency — so a session that acted on a stale fact is debuggable like one that acted on a bad search.</li>
+      <li><strong>Explicit supersession.</strong> Facts change. A new memory should mark the old one superseded — out of recall, but kept on disk for audit. Prompt framing matters too: remembered context should always read as <em>possibly stale, verify against current code</em>.</li>
+    </ul>
+
+    <h2>How OCE does it</h2>
+    <p>OCE ships a memory store beside the code index, wired the same way as everything else:</p>
+    <pre># the built-in agent harvests insights + preferences as it works
+oce trace
+
+# any MCP client gets the memory tools
+claude mcp add oce -- oce mcp
+#   → memory_remember / memory_recall / memory_forget
+
+# read and manage it directly
+oce memory list
+oce memory add "the team prefers pnpm" --kind preference
+oce memory search "how is auth done"</pre>
+    <p>Recall is hybrid — lexical + embeddings fused, <a href="semantic-code-search">the same conviction as code search</a>. Memories render as a Markdown twin (<code>memories.md</code> beside <code>memories.json</code>) that you can read, diff, and hand-edit. Secret-shaped content is refused at write time. Every injection shows in the evidence rail's <a href="context-engineering">context engineering</a> view. Nothing leaves the machine, and MCP clients share the same store — <a href="claude-code">Claude Code</a>, Cursor, CI bots — without a hosted service in the middle.</p>
+
+    <h2>Where the line is</h2>
+    <p>Memory is not a knowledge graph, not a hosted service, and not a substitute for code search — it's the small, high-trust layer above it: facts, preferences, and decisions that make each session start smarter than the last one ended. If a "memory" is big enough to need its own ranking pipeline, it belongs in the index; if it's a fact small enough to state in one sentence, it belongs here.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>What is agent memory?</h3>
+      <p>Durable cross-session context: codebase facts, user preferences, decisions. Harnesses keep it natively (Claude Code's MEMORY.md); memory layers expose it over MCP for portability across clients.</p>
+      <h3>How does Claude Code memory work?</h3>
+      <p>CLAUDE.md/AGENTS.md hold static, human-maintained instructions; auto-memory is a per-project memory file the agent itself maintains and the system prompt loads every session.</p>
+      <h3>Harness memory or a memory layer?</h3>
+      <p>Harness memory for single-tool workflows; an MCP memory layer when you want one store across Claude Code, Cursor, and CLI agents — provided it gives you visibility and provenance.</p>
+      <h3>Can agent memory run fully locally?</h3>
+      <p>Yes — OCE's memory store lives beside the index, recall fuses lexical and local embeddings, and the MCP tools serve it to any client on stdio or localhost HTTP.</p>
+      <h3>What happens when a memory goes stale?</h3>
+      <p>Supersede it: the replacement stops the old fact from being recalled while keeping it auditable. OCE also frames remembered context as possibly-stale in the prompt, so fresh tool results win conflicts.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

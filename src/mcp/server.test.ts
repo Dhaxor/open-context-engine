@@ -66,6 +66,9 @@ describe("MCP server tools", () => {
       "find-symbol-references",
       "index-status",
       "list-files",
+      "memory_forget",
+      "memory_recall",
+      "memory_remember",
       "read-file",
       "repo-map",
     ]);
@@ -165,6 +168,63 @@ describe("repo-map tool over the MCP server", () => {
     const res: any = await client.callTool({ name: "repo-map", arguments: { pathPrefix: "src/" } });
     const text = res.content[0].text;
     expect(text).toContain("src/");
+    await client.close();
+  });
+});
+
+describe("memory tools over the MCP server", () => {
+  it("remembers, recalls, and forgets across clients on the same store", async () => {
+    const client = await connectedClient();
+    const put: any = await client.callTool({
+      name: "memory_remember",
+      arguments: { content: "auth middleware lives in src/auth/jwt.ts", kind: "codebase_insight", tags: ["auth"] },
+    });
+    expect(put.isError).toBeUndefined();
+    expect(put.content[0].text).toContain("Remembered mem_");
+
+    const res: any = await client.callTool({
+      name: "memory_recall",
+      arguments: { query: "where is auth middleware" },
+    });
+    expect(res.isError).toBeUndefined();
+    expect(res.content[0].text).toContain("src/auth/jwt.ts");
+    expect(res.content[0].text).toContain("may be stale");
+
+    // Forget, then recall finds nothing.
+    const id = /mem_[a-z0-9_]+/.exec(put.content[0].text)![0];
+    const del: any = await client.callTool({ name: "memory_forget", arguments: { id } });
+    expect(del.content[0].text).toContain("Forgot");
+    const empty: any = await client.callTool({ name: "memory_recall", arguments: { query: "auth middleware" } });
+    expect(empty.content[0].text).toContain("No relevant memories");
+    await client.close();
+  });
+
+  it("rejects secret-shaped content", async () => {
+    const client = await connectedClient();
+    const res: any = await client.callTool({
+      name: "memory_remember",
+      arguments: { content: "the deploy key is ghp_ABCDEFGHIJKLMNOPQRSTUVWX1234" },
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("secret");
+    await client.close();
+  });
+
+  it("supersedes an older memory through the tool surface", async () => {
+    const client = await connectedClient();
+    const first: any = await client.callTool({
+      name: "memory_remember", arguments: { content: "builds run through webpack" },
+    });
+    const id = /mem_[a-z0-9_]+/.exec(first.content[0].text)![0];
+    const second: any = await client.callTool({
+      name: "memory_remember", arguments: { content: "builds run through vite", supersedes: id },
+    });
+    expect(second.content[0].text).toContain("supersedes " + id);
+    const res: any = await client.callTool({
+      name: "memory_recall", arguments: { query: "what do builds run through" },
+    });
+    expect(res.content[0].text).toContain("vite");
+    expect(res.content[0].text).not.toContain("webpack");
     await client.close();
   });
 });

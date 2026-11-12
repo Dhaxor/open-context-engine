@@ -373,6 +373,12 @@ export class ContextAgent {
     }
     this.messages.push({ role: "user", content: query });
     this.audit?.log("run-start", { query });
+    // Capture preferences/corrections stated in the user's own words before
+    // anything else — they're the highest-trust memory kind, and capturing
+    // them at turn start means the *next* recall already respects them.
+    if (this.memory && query) {
+      try { this.memory.extractFromUserMessage(query, "user"); } catch {}
+    }
     const budget = new StepBudget(query, {
       baseSimple: this.maxSteps,
       baseComplex: Math.min(this.maxSteps * 2, 25),
@@ -393,7 +399,7 @@ export class ContextAgent {
     while (budget.shouldContinue()) {
       options.onStream?.({ type: "step_start", step });
       await this.compactIfNeeded(caller, options);
-      const systemWithGuidelines = this.buildSystemPrompt(query);
+      const systemWithGuidelines = await this.buildSystemPrompt(query, options);
       const resp = await withRetry(
         () => {
           stats.llmCalls++;
@@ -521,7 +527,7 @@ export class ContextAgent {
     return { call: tc, result: stored, isError };
   }
 
-  private buildSystemPrompt(query: string): string {
+  private async buildSystemPrompt(query: string, options: AgentRunOptions): Promise<string> {
     let prompt = this.system;
     if (this.environmentProvider) {
       try {
@@ -533,9 +539,14 @@ export class ContextAgent {
     if (guidelines) prompt += `\n\n## Project Guidelines\n${guidelines}`;
     if (this.memory) {
       try {
-        // formatForSystemPrompt returns "" when nothing relevant is remembered.
-        const remembered = this.memory.formatForSystemPrompt(query);
-        if (remembered) prompt += `\n\n${remembered}`;
+        // recallForPrompt returns "" when nothing relevant is remembered, and
+        // also hands back the entries so the evidence rail can show exactly
+        // what the model was reminded of.
+        const remembered = await this.memory.recallForPrompt(query);
+        if (remembered.text) {
+          prompt += `\n\n${remembered.text}`;
+          options.onMemoryInjected?.(remembered.entries);
+        }
       } catch {}
     }
     return prompt;

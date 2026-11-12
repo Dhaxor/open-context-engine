@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Context Engine vs Cursor, Copilot & Grep — Codebase Context Compared | Open Context Engine</title>
+<meta name="description" content="Cursor, Copilot, grep and OCE solve codebase context differently. An honest comparison: what each indexes, how retrieval works, when you need a dedicated engine — and when you don't.">
+<link rel="canonical" href="https://opencontextengine.com/comparison">
+<meta property="og:title" content="OCE vs Cursor, Copilot & Grep — Codebase Context Compared">
+<meta property="og:description" content="What Cursor, Copilot, grep and a dedicated retrieval engine each do for codebase context — an honest comparison with the tradeoffs spelled out.">
+<meta property="og:url" content="https://opencontextengine.com/comparison">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:site_name" content="Open Context Engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OCE vs Cursor, Copilot & Grep — Codebase Context Compared">
+<meta name="twitter:description" content="An honest comparison of codebase-context approaches: built-in IDE indexing vs grep vs a measured, local retrieval engine.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="oce.css?v=0.4.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Open Context Engine vs Cursor, Copilot & Grep — Codebase Context Compared",
+  "description": "What each codebase-context approach indexes, how its retrieval works, and when a dedicated engine earns its keep.",
+  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "mainEntityOfPage": "https://opencontextengine.com/comparison",
+  "about": [
+    { "@type": "Thing", "name": "Cursor" },
+    { "@type": "Thing", "name": "GitHub Copilot" },
+    { "@type": "Thing", "name": "code retrieval" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Do I need Open Context Engine if I already use Cursor?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Maybe not — Cursor's built-in indexing is good and self-contained. OCE adds value when you want: any client (Claude Code, CLI agents, CI bots) sharing one measured index; inspectable retrieval (an evidence rail showing what the model knew); compiler-grade symbol lookups; a local-only guarantee you can verify; or team-shared indexes built in CI. Many developers run both." }
+    },
+    {
+      "@type": "Question",
+      "name": "How is OCE different from GitHub Copilot's context?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Copilot retrieves from open files and IDE-local context; it is excellent for in-editor completion and chat, but its retrieval isn't exposed as a tool to other agents, can't be measured or inspected, and is tied to Microsoft's surfaces. OCE is a standalone engine: hybrid retrieval with published recall numbers, served over MCP to any client, running fully locally." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why not just use grep (or ripgrep) for codebase search?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Grep is unbeatable for exact strings and should stay in your toolkit — but it cannot answer concept or paraphrase queries ('how does auth middleware work?'), misses synonyms, and returns lists rather than ranked, symbol-expanded context. OCE keeps exact-match strength via BM25 fusion and adds semantic retrieval, symbol expansion and a code graph on top." }
+    },
+    {
+      "@type": "Question",
+      "name": "What does 'measured retrieval' mean in practice?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Retrieval quality is scored against committed gold sets with recall@k, MRR and nDCG in CI — the same way tests are. OCE publishes its numbers (hybrid recall@10 0.943 on its own codebase) and ships the harness, so you can score it on your own repo. Most alternatives don't publish retrieval metrics at all." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I self-host OCE for a team?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The core is MIT and runs fully locally. For teams, build the index in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates pull it — only their local diff re-embeds. Policy locks can enforce local-only embeddings org-wide." }
+    }
+  ]
+}
+</script>
+<style>
+  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+  section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+  section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  section.doc code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
+  table.cmp { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  table.cmp th, table.cmp td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line, #1d2430); vertical-align: top; }
+  table.cmp th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+  .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+  .faq p { margin: 0 0 12px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="benchmarks.html" class="optional">Benchmarks</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="docs.html" style="color: var(--ink);">Docs</a>
+      <a href="guides.html">Guides</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">compare/context-options <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">OCE vs Cursor, Copilot &amp; grep</h1>
+    <p class="sub">Four ways to give an AI your codebase's context — what each actually does, the tradeoffs spelled out, and when a dedicated engine earns its keep.</p>
+  </section>
+
+  <section class="doc">
+    <h2>The honest framing</h2>
+    <p><strong>Cursor and Copilot are excellent.</strong> If their built-in context covers your workflow, keep them — this page isn't a pitch to replace them. The question is narrower: <em>when do you need a dedicated, measurable retrieval engine on top?</em> The answer, in practice, is when any of these matter to you: using more than one client, verifying what the model knew, compiler-grade symbol accuracy, a hard local-only guarantee, or shared team indexes.</p>
+
+    <h2>Side by side</h2>
+    <table class="cmp">
+      <tr><th></th><th>Cursor</th><th>Copilot</th><th>grep / ripgrep</th><th>OCE</th></tr>
+      <tr><td><strong>What it is</strong></td><td>AI IDE with built-in codebase indexing</td><td>Completion + chat inside your editor</td><td>Exact text search</td><td>Standalone retrieval engine, served over MCP</td></tr>
+      <tr><td><strong>Retrieval</strong></td><td>Proprietary embedding index</td><td>Open files + IDE context</td><td>Literal match</td><td>Hybrid BM25 + vectors over AST chunks, adaptive fusion</td></tr>
+      <tr><td><strong>Works with</strong></td><td>Cursor only</td><td>VS Code / JetBrains surfaces</td><td>Any terminal</td><td>Any MCP client — Claude Code, Cursor, CLI agents, CI bots</td></tr>
+      <tr><td><strong>Symbol accuracy</strong></td><td>Index-based</td><td>Index-based</td><td>Exact strings only</td><td>Compiler-grade via language server, AST-grade fallback</td></tr>
+      <tr><td><strong>Retrieval you can measure</strong></td><td>Not published</td><td>Not published</td><td>Exactness only</td><td>recall@k / MRR / nDCG on committed gold sets, in CI</td></tr>
+      <tr><td><strong>Context inspectable</strong></td><td>No</td><td>No</td><td>You see raw lines</td><td>Evidence rail: every chunk, score, pin, eviction</td></tr>
+      <tr><td><strong>Local-only option</strong></td><td>Cloud embedding</td><td>Cloud service</td><td>Local</td><td>Local by default, policy-lockable</td></tr>
+      <tr><td><strong>Team-shared index</strong></td><td>No</td><td>No</td><td>—</td><td>Build in CI, publish artifact, teammates pull the diff</td></tr>
+      <tr><td><strong>Price</strong></td><td>$20/mo</td><td>$10–39/mo</td><td>Free</td><td>MIT core free · Team $25/seat/mo</td></tr>
+    </table>
+
+    <h2>Where each approach wins</h2>
+    <h3>Cursor</h3>
+    <p>The whole loop — editor, chat, agent, index — is one polished product. If you live in Cursor and want nothing else, its indexing is good and you should use it. OCE doesn't compete with the editor; it competes for the <em>retrieval layer</em>, and Cursor can even be pointed at OCE's HTTP MCP endpoint to share one index with your other tools.</p>
+    <h3>Copilot</h3>
+    <p>Best-in-class inline completion and low-friction chat where your code already is. Its context is opaque and its retrieval isn't exposed as a tool — so for agents that need programmatic grounding, pair it with an engine rather than asking it to do retrieval itself.</p>
+    <h3>grep / ripgrep</h3>
+    <p>Keep it forever. For exact identifiers, ripgrep remains the fastest tool on earth, and OCE's BM25 channel exists precisely because lexical match matters. What grep can't do: paraphrases, concept queries, ranked context, symbol expansion. The honest workflow is both — <code>rg</code> for exact, OCE for everything else.</p>
+    <h3>OCE</h3>
+    <p>Choose it when retrieval is load-bearing: grounding Claude Code or custom agents (<a href="claude-code">setup in three commands</a>), auditing what the model knew (<a href="context-engineering">evidence rail</a>), scoring retrieval quality instead of trusting it (<a href="benchmarks">published numbers</a>), or enforcing a local-only guarantee org-wide. It's infrastructure, not an IDE — and it composes with the tools above rather than replacing them.</p>
+
+    <h2>The deciding question</h2>
+    <p><em>"Can you state, right now, what your coding agent's context contained at the step where it broke something?"</em> If the answer is no and that bothers you — that's the gap a dedicated, measured engine closes. If it doesn't, your built-in tooling is fine. Both are legitimate answers; only one of them is measurable.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>Do I need OCE if I already use Cursor?</h3>
+      <p>Not necessarily — Cursor's built-in indexing is self-contained and good. OCE earns its place when you want multi-client grounding, inspectable and measured retrieval, compiler-grade symbols, or a verifiable local-only mode. Many people run both.</p>
+      <h3>How is it different from Copilot's context?</h3>
+      <p>Copilot's retrieval isn't exposed to other agents, can't be measured, and is tied to Microsoft surfaces. OCE is a standalone engine with published recall numbers, served over MCP to any client.</p>
+      <h3>Should I replace grep with it?</h3>
+      <p>No — keep ripgrep for exact strings. OCE keeps exact-match strength via BM25 and adds semantic retrieval, symbol expansion, and a code graph on top.</p>
+      <h3>Is it really local?</h3>
+      <p>Yes: in-process embeddings, local SQLite, stdio or localhost HTTP. A policy system can lock local-only mode org-wide with signatures that can't be loosened locally.</p>
+      <h3>What does it cost?</h3>
+      <p>The core is MIT and free. Team features (shared indexes, policy locks, seat licensing) are $25/seat/month — details on the <a href="pricing">pricing page</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#agent">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="guides.html">Guides</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div><span class="col-h">develop</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="benchmarks.html">Benchmarks</a>
+      </div>
+      <div><span class="col-h">contact</span>
+        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

@@ -38,8 +38,9 @@ interface RetrievalRecord {
 }
 
 interface MutableEntry extends ContextEntry {
-  /** The tool result this entry's tokens live inside. */
-  toolCallId: string;
+  /** The tool result this entry's tokens live inside. Absent for memory
+   *  entries — their tokens live in the system prompt, not a tool result. */
+  toolCallId?: string;
   /** Chunk id within that result, for retrieval entries. */
   chunkId?: string;
   /** Full text, kept for pinned re-injection. */
@@ -129,6 +130,30 @@ export class ContextLedger {
     });
   }
 
+  /** Record remembered context injected into the system prompt this turn.
+   *  Memories belong in the rail like every other input the model saw — an
+   *  agent acting on a stale recollection should be debuggable the same way
+   *  as one acting on a bad retrieval. Evicting a memory row hides it from
+   *  the rail and keeps it hidden on later turns (prior state is preserved);
+   *  suppressing it from the next prompt injection is the agent's job. */
+  noteMemory(entries: { id: string; kind: string; content: string }[]): void {
+    for (const m of entries) {
+      const id = `m:${m.id}`;
+      const prior = this.entries.get(id);
+      const label = m.content.length > 72 ? `${m.content.slice(0, 72)}…` : m.content;
+      this.entries.set(id, {
+        id,
+        bucket: "memory",
+        label: `[${m.kind}] ${label}`,
+        tokens: estimateTokens(m.content),
+        pinned: prior?.pinned ?? false,
+        evicted: prior?.evicted ?? false,
+        turn: this.turn,
+        contents: m.content,
+      });
+    }
+  }
+
   pin(id: string): boolean { return this.setFlags(id, { pinned: true, evicted: false }); }
   unpin(id: string): boolean { return this.setFlags(id, { pinned: false }); }
   evict(id: string): boolean { return this.setFlags(id, { evicted: true, pinned: false }); }
@@ -137,7 +162,7 @@ export class ContextLedger {
   private setFlags(id: string, flags: Partial<Pick<ContextEntry, "pinned" | "evicted">>): boolean {
     const e = this.entries.get(id);
     if (!e) return false;
-    if (e.evicted || flags.evicted) this.touched.add(e.toolCallId);
+    if (e.toolCallId && (e.evicted || flags.evicted)) this.touched.add(e.toolCallId);
     Object.assign(e, flags);
     return true;
   }
@@ -190,13 +215,17 @@ export class ContextLedger {
     const evictedFiles = new Set<string>();
     const fileContents = new Map<string, string>();
     for (const e of this.entries.values()) {
+      // Memory entries (no toolCallId) never participate in result rewriting —
+      // their tokens live in the system prompt, not a tool message.
+      const callId = e.toolCallId;
+      if (!callId) continue;
       if (e.bucket === "files") {
-        if (e.evicted) evictedFiles.add(e.toolCallId);
-        else if (e.contents !== undefined) fileContents.set(e.toolCallId, e.contents);
+        if (e.evicted) evictedFiles.add(callId);
+        else if (e.contents !== undefined) fileContents.set(callId, e.contents);
       } else if (e.evicted && e.bucket === "retrieval" && e.chunkId) {
-        const set = evictedByCall.get(e.toolCallId) ?? new Set<string>();
+        const set = evictedByCall.get(callId) ?? new Set<string>();
         set.add(e.chunkId);
-        evictedByCall.set(e.toolCallId, set);
+        evictedByCall.set(callId, set);
       }
     }
 

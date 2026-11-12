@@ -61,6 +61,7 @@ export const BUCKET_COLORS = {
   history: "#3d4b58",
   system: "#242d38",
   tools: "#1b222d",
+  memory: "#d9a441",
 } as const;
 
 /** 1.25 from a 13px base — workbench-dense, not brochure-airy. */
