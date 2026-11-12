@@ -1,0 +1,46 @@
+# Checks the registry tokens the release workflow publishes with, without
+# publishing anything: a release tag is the worst time to learn a token has
+# expired or lost access. Prints pass/fail only — never the tokens.
+#
+# VSCE_PAT is an Azure DevOps PAT scoped to "All accessible organizations"
+# (the only kind vsce accepts). Azure DevOps retires those global PATs on
+# 2026-12-01, so the Marketplace check starts failing then — the cue to
+# finish the Entra ID setup and set MARKETPLACE_AUTH=entra
+# (extension/PUBLISHING.md, "Marketplace secrets"), which skips it.
+
+name: Verify publish tokens
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/verify-publish-tokens.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify publish tokens
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.0"
+
+      - name: Marketplace (VSCE_PAT → publisher open-context)
+        if: vars.MARKETPLACE_AUTH != 'entra'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "::error::VSCE_PAT is not set"; exit 1; fi
+          npx --yes @vscode/vsce@^3.6.0 verify-pat open-context --pat "$VSCE_PAT"
+
+      - name: Open VSX (OPEN_VSX_TOKEN → namespace open-context)
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "::error::OPEN_VSX_TOKEN is not set"; exit 1; fi
+          npx --yes ovsx verify-pat open-context --pat "$OVSX_PAT"
