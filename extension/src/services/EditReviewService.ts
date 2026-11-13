@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { EditProposal } from "../../../src/agent/types";
+import { unifiedDiff } from "../../../src/core/diff";
 import { ContextService } from "./ContextService";
 import { VSCodeEditApplier } from "./VSCodeEditApplier";
 
@@ -51,6 +52,30 @@ export class EditReviewService implements vscode.Disposable {
         this.order.push(edit.id);
         if (scope) this.scopes.set(edit.id, scope);
         return reviewed;
+    }
+
+    /**
+     * The still-applied edits among `ids` as one `git diff`-shaped unified diff
+     * (a/ and b/ prefixes), one entry per file: earliest "before" against latest
+     * "after", so a file edited three times reads as one change. Files the
+     * edits end up deleting are listed apart — they have no lines to review.
+     */
+    combinedDiff(ids: string[]): { diff: string; deletedFiles: string[] } {
+        const byPath = new Map<string, { first: ReviewedEdit; last: ReviewedEdit }>();
+        for (const id of ids) {
+            const edit = this.edits.get(id);
+            if (!edit || edit.status !== "applied") continue;
+            const seen = byPath.get(edit.path);
+            if (seen) seen.last = edit; else byPath.set(edit.path, { first: edit, last: edit });
+        }
+        const parts: string[] = [];
+        const deletedFiles: string[] = [];
+        for (const [p, { first, last }] of byPath) {
+            if (last.kind === "remove") { deletedFiles.push(p); continue; }
+            const before = first.kind === "create" ? "" : first.oldContents ?? "";
+            parts.push(unifiedDiff(before, last.newContents ?? "", { fromLabel: `a/${p}`, toLabel: `b/${p}` }));
+        }
+        return { diff: parts.join("\n"), deletedFiles };
     }
 
     /**

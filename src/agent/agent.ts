@@ -1,5 +1,6 @@
 import { OpenContext } from "../core/context";
 import { RetrieveOptions } from "../core/retriever";
+import { buildRepoMap } from "../core/repo-map";
 import { AgentConfig, AgentHooks, AgentMessage, AgentRunOptions, LLMProvider, RunStats, TokenUsage, ToolCall, ToolDefinition } from "./types";
 import { AnthropicCaller, GoogleCaller, LLMCaller, OpenAICaller, contextWindowFor } from "./providers";
 import { compactHistory, renderTranscript, splitForCompaction, totalTokens, truncateToolResult, withRetry } from "./utils";
@@ -148,6 +149,25 @@ export function defaultCodebaseTools(
         const refs = context.findSymbolReferences(symbol, args.path ? String(args.path) : undefined, 12);
         if (!refs.length) return `No references to '${symbol}' found${args.path ? ` in ${args.path}` : ""} (exact, case-sensitive match).`;
         return refs.map(c => renderReference(c, symbol)).join("\n");
+      },
+    },
+    {
+      // Same map the MCP repo-map tool serves; agents with it stop spending a
+      // dozen retrieval calls on "how is this codebase organized".
+      name: "repo-map",
+      description:
+        "Get a compact structural map of the indexed codebase: files with their declared symbols (classes, functions, types) and line ranges, ranked by structure density. Use this FIRST for broad questions (architecture, overview, 'how is this organized', 'where would X live') — a few thousand tokens instead of many retrieval calls — then read or search the files it points to. Optional pathPrefix scopes it to a subtree.",
+      parameters: {
+        type: "object",
+        properties: {
+          pathPrefix: { type: "string", description: "Optional: only files under this path prefix, e.g. 'src/core/'." },
+          maxChars: { type: "number", description: "Optional character budget for the map (default 4000, max 20000)." },
+        },
+      },
+      handler: async (args) => {
+        const maxChars = args.maxChars ? Math.max(200, Math.min(20000, Number(args.maxChars))) : undefined;
+        const map = buildRepoMap(context.getStore(), { pathPrefix: args.pathPrefix ? String(args.pathPrefix) : undefined, maxChars });
+        return map || "The index is empty — nothing to map yet.";
       },
     },
   ];

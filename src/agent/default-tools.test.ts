@@ -9,7 +9,7 @@ const names = (tools: { name: string }[]) => tools.map(t => t.name);
 describe("defaultAgentTools", () => {
   it("is read-only by default (no edits, no shell, no web)", () => {
     const tools = defaultAgentTools({ context: fakeContext });
-    expect(names(tools)).toEqual(["codebase-retrieval", "list-files", "read-file", "find-symbol-definition", "find-symbol-references"]);
+    expect(names(tools)).toEqual(["codebase-retrieval", "list-files", "read-file", "find-symbol-definition", "find-symbol-references", "repo-map"]);
   });
 
   it("adds edit tools only when includeEdits is set", () => {

@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.8.0 — the agent checks its own work
+
+- **Edits reach the trace.** The edit tools reported each change only to
+  their `onEdit` callback; `TraceSession` waited for an `edit_proposed`
+  stream event no agent emits. Edits now flow into the session
+  (`observeEdit`), so Studio, the TUI and the VS Code sidebar show them and
+  checkpoints record the files a turn changed — rewind restores them.
+- **Shell approvals that respect the sandbox.** `PermissionManager` takes
+  `alwaysAsk`: tools that ask in every mode, full-auto included, until
+  answered "always" (the VS Code agent uses it for an uncontained shell).
+- **repo-map is an agent tool**, not only an MCP tool: the CLI agent,
+  Trace, and sub-agents get the codebase outline for broad questions.
+- **Review is shared.** `oce review`'s diff parser and prompt moved to
+  `src/agent/review.ts`; `TraceSession.prompt(text, { label })` runs a
+  composed prompt (a review carrying a whole diff) under a short label.
+- **Memory** (b6c189e): hybrid recall, supersedes, a markdown twin, MCP
+  memory tools, an evidence-rail `memory` bucket, and `oce memory`.
+
+## 0.7.1
+
+- `mcpName` in package.json for the official MCP registry, and
+  smithery.yaml for smithery.ai.
+- **Local embeddings are the default** — hybrid search with no key.
+- **Project instructions:** AGENTS.md, then CLAUDE.md / .cursorrules, ride in
+  the agent's system prompt.
+- **repo-map** — a budgeted symbol outline: the `repo-map` MCP tool and
+  `oce map`.
+- **OS-sandboxed shell** (opt-in, or required by policy): Seatbelt on macOS
+  (no network, writes limited to the workspace), bubblewrap on Linux
+  (network isolated).
+- **`oce review`** and a reusable GitHub Action (`uses:
+  Dhaxor/open-context-engine@v0`) that reviews a PR diff grounded in the
+  indexed codebase.
+- Index commands fail loudly on a nonexistent workspace root.
+
+## 0.7.0 — the agentic sidebar
+
+- The VS Code chat was rebuilt as an agent sidebar on the Trace stack (see
+  extension/CHANGELOG.md). In the core: `assembleAgentStack` (src/trace/stack.ts)
+  is the one wiring path the CLI and the extension share; resumed sessions
+  retell their transcript (src/trace/replay.ts); `SessionRegistry.replace`;
+  Studio's transport and host are pluggable (studio/transport.ts).
+
+## 0.6.0
+
+- **Class declarations are indexed**, and exact symbol declarations are
+  promoted in ranking (external Flask recall@10 0.926 → 0.963).
+- LSP symbol tools open files (`didOpen`) before querying.
+- A third external gold set: gin v1.10.0 (Go), 26 cases; nightly CI runs it
+  and refreshes the benchmarks page.
+- License activation is rate-limited and enforces Polar seat limits.
+
 ## 0.5.0 — trusted publishing, adaptive fusion, compiler-grade symbol tools
 
 - **npm publishes with zero secrets.** Trusted Publishing (OIDC): the

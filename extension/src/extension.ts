@@ -65,7 +65,7 @@ function reportIndexingError(err: unknown): void {
   });
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<E2EHandles | undefined> {
     outputChannel = vscode.window.createOutputChannel("Open Context Engine");
     context.subscriptions.push(outputChannel);
 
@@ -81,7 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.showErrorMessage(`Open Context Engine cannot start — ${binding.detail}`, "Open Output").then((pick) => {
             if (pick === "Open Output") outputChannel?.show(true);
         });
-        return; // Inert rather than broken: no commands that would all fail anyway.
+        return undefined; // Inert rather than broken: no commands that would all fail anyway.
     }
 
     const svc = ContextService.getInstance();
@@ -532,7 +532,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     context.subscriptions.push({ dispose: () => svc.dispose() });
     context.subscriptions.push(treeView);
+
+    // The end-to-end suite (test/e2e) drives the agent through the same host
+    // the sidebar uses. Not an API: it exists only when that suite launched
+    // this window, so no other extension can steer the agent through it.
+    if (process.env.OCE_E2E === "1") return { traceHost, agentView } satisfies E2EHandles;
+    return undefined;
 }
+
+/** What `activate` hands the end-to-end suite (only under OCE_E2E=1). */
+export interface E2EHandles { traceHost: TraceHost; agentView: AgentView }
 
 export function deactivate(): void {
     ContextService.getInstance().dispose().catch(() => {});

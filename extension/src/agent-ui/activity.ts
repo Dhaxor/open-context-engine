@@ -29,7 +29,7 @@ export function currentStep(items: readonly ActivityItem[]): ToolItem | Subagent
   return undefined;
 }
 
-export type ToolKind = "search" | "read" | "list" | "symbol" | "edit" | "shell" | "web" | "other";
+export type ToolKind = "search" | "read" | "list" | "symbol" | "map" | "edit" | "shell" | "web" | "other";
 
 export interface ToolItem {
   kind: "tool";
@@ -105,6 +105,8 @@ export function describeTool(name: string, args?: Record<string, unknown>, runni
       return { tool: "shell", icon: "terminal", verb: v("Running", "Ran"), detail: pick(args, "command") };
     case "web-search":
       return { tool: "web", icon: "globe", verb: v("Searching the web", "Searched the web"), detail: pick(args, "query") };
+    case "repo-map":
+      return { tool: "map", icon: "layers", verb: v("Mapping", "Mapped"), detail: pick(args, "pathPrefix") || "the codebase" };
     default:
       return { tool: "other", icon: "layers", verb: name, detail: pick(args, "query", "path", "symbol", "command") };
   }
@@ -188,11 +190,12 @@ export function summarize(items: readonly ActivityItem[]): string {
     else if (item.tool === "read") bump("file");
     else if (item.tool === "list") bump("listing");
     else if (item.tool === "symbol") bump("lookup");
+    else if (item.tool === "map") bump("map");
     else if (item.tool === "shell") bump("command");
     else if (item.tool === "edit") bump("edit");
     else bump("step");
   }
-  const order = ["search", "file", "lookup", "listing", "command", "edit", "sub-agent", "step"];
+  const order = ["map", "search", "file", "lookup", "listing", "command", "edit", "sub-agent", "step"];
   const plural = (k: string, n: number) => (n === 1 ? k : k === "search" ? "searches" : `${k}s`);
   return order.filter(k => counts.has(k)).map(k => `${counts.get(k)} ${plural(k, counts.get(k)!)}`).join(" · ");
 }

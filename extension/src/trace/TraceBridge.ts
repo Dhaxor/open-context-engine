@@ -23,11 +23,16 @@ export class TraceBridge implements vscode.Disposable {
     private viewing: string | null = null;
     /** The session actually subscribed to — `viewing` resolved. */
     private attachedId: string | null = null;
+    private attachGeneration = 0;
     private unsubscribe: (() => void) | null = null;
     private disposables: vscode.Disposable[] = [];
     private stateTimer: ReturnType<typeof setTimeout> | null = null;
     private loaded = false;
     private pendingCompose: { text: string; send: boolean } | null = null;
+    private markLoaded: () => void = () => {};
+    /** Settles when the webview's script has run and said hello — proof the
+     *  bundle loaded under the webview's CSP, not just that HTML was set. */
+    readonly whenLoaded = new Promise<void>(resolve => { this.markLoaded = resolve; });
 
     constructor(
         private readonly host: TraceHost,
@@ -86,6 +91,7 @@ export class TraceBridge implements vscode.Disposable {
         switch (msg.kind) {
             case "ready":
                 this.loaded = true;
+                this.markLoaded();
                 await this.pushState();
                 this.post({ kind: "sessions", ...this.host.sessions() });
                 if (this.pendingCompose) {
@@ -113,14 +119,21 @@ export class TraceBridge implements vscode.Disposable {
         this.unsubscribe?.();
         this.unsubscribe = null;
         this.attachedId = null;
+        // Attaches overlap: the first one starts the host, and the host's
+        // start event triggers another while this one is still waiting. Only
+        // the newest may subscribe — two live subscriptions would leak the old
+        // session's events into the next one after a switch.
+        const generation = ++this.attachGeneration;
         try {
             await this.host.ready();
         } catch {
+            if (generation !== this.attachGeneration) return;
             // The setup gate (no key, no folder) arrives with the state push.
             this.post({ kind: "connection", connected: false });
             await this.pushState();
             return;
         }
+        if (generation !== this.attachGeneration) return;
         const session = this.host.session(this.viewing);
         if (!session) {
             this.post({ kind: "connection", connected: false });
@@ -195,6 +208,10 @@ export class TraceBridge implements vscode.Disposable {
                 if (!MODES.includes(mode)) throw new Error(`Unknown approval mode: ${mode}`);
                 await this.host.setMode(this.viewing, mode);
                 return { mode };
+            }
+            case "reviewChanges": {
+                const ids = p.ids as string[] | undefined;
+                return this.host.reviewChanges(this.viewing, Array.isArray(ids) ? { kind: "edits", ids: ids.map(String) } : { kind: "workspace" });
             }
             case "compact": await (await this.viewed()).compact(); return { ok: true };
             case "reset": await this.host.newConversation(this.viewing); return { ok: true };

@@ -171,6 +171,8 @@ kbd {
 .meter-bar .b-history { background: var(--vscode-charts-foreground, #8b949e); opacity: 0.55; }
 .meter-bar .b-system { background: var(--vscode-charts-foreground, #8b949e); opacity: 0.3; }
 .meter-bar .b-tools { background: var(--vscode-charts-foreground, #8b949e); opacity: 0.2; }
+.meter-bar .b-memory { background: var(--vscode-charts-orange, #d9a441); }
+.entries li[data-bucket="memory"] .memory-note { color: var(--vscode-charts-orange, #d9a441); }
 .meter[data-level="high"] .meter-label { color: var(--warn); }
 .meter:hover .meter-label { color: var(--fg); }
 
@@ -316,6 +318,8 @@ kbd {
 .approval header > .ic { color: var(--warn); }
 .approval-title { font-weight: 600; }
 .approval-target { margin: 0; color: var(--muted); }
+.approval .pill[data-sandbox="seatbelt"] { color: var(--ok); border-color: var(--ok); }
+.approval .pill[data-sandbox="none"] { color: var(--warn); border-color: var(--warn); }
 .approval .pill[data-risk="high"] { color: var(--err); border-color: var(--err); }
 .approval .pill[data-risk="medium"] { color: var(--warn); border-color: var(--warn); }
 .approval footer { display: flex; gap: 6px; flex-wrap: wrap; }

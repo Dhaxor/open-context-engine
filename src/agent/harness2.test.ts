@@ -100,6 +100,19 @@ describe("PermissionManager", () => {
     expect(asked).toHaveLength(0);
   });
 
+  it("alwaysAsk tools ask even in full-auto, until answered 'always'", async () => {
+    const asked: string[] = [];
+    const decisions: ("allow" | "always")[] = ["allow", "always"];
+    const pm = new PermissionManager({ mode: "full-auto", alwaysAsk: ["run-command"], ask: async (req) => { asked.push(req.title); return decisions.shift() ?? "deny"; } });
+    pm.registerMutatingTools(["str-replace", "run-command"]);
+    expect((await pm.check(editCall)).behavior).toBe("allow");
+    expect(asked).toHaveLength(0); // full-auto still covers everything else
+    await pm.check(shellCall);
+    await pm.check(shellCall);
+    await pm.check(shellCall); // "always" on the second ask ends the asking
+    expect(asked).toHaveLength(2);
+  });
+
   it("'always' persists for the tool within the session", async () => {
     const { pm, asked } = manager("suggest", ["always"]);
     expect((await pm.check(editCall)).behavior).toBe("allow");

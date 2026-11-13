@@ -26,6 +26,7 @@ const MODES: ApprovalMode[] = ["suggest", "auto-edit", "full-auto"];
  *  here), plus the ones only this surface has. */
 const COMMANDS: SlashCommandSpec[] = [
   ...SLASH_COMMANDS.filter(c => c.name !== "rail" && c.name !== "sessions"),
+  { name: "review-changes", summary: "Have the agent review your uncommitted changes" },
   { name: "search", summary: "Search the index for raw snippets", arg: "query" },
   { name: "context", summary: "Show what is in the context window" },
   { name: "history", summary: "Open a saved conversation" },
@@ -206,6 +207,13 @@ export function App({ transport, bindHandlers }: {
     void transport.setMode(MODES[(MODES.indexOf(current) + 1) % MODES.length]).catch(() => {});
   }, [state.meta, transport]);
 
+  /** A review turn: of a turn's edits, or (no ids) of everything uncommitted. */
+  const askReview = React.useCallback((ids?: string[]) => {
+    pinned.current = true;
+    setSearch(null);
+    void transport.reviewChanges(ids).catch(() => {});
+  }, [transport]);
+
   const runSearch = React.useCallback((query: string) => {
     if (!query) { dispatch({ type: "local-error", message: "Usage: /search what you are looking for" }); return; }
     setSearch({ query, hits: null });
@@ -239,9 +247,13 @@ export function App({ transport, bindHandlers }: {
         if (name === "history") { openHistory(); return; }
         if (name === "studio") { void transport.command("studio"); return; }
         if (name === "new") { void createSession(args || undefined); return; }
+        if (name === "review-changes") { askReview(); return; }
         if (name === "review" || name === "land") {
           if (viewed?.branch?.startsWith("trace/")) void openReview(viewed);
-          else dispatch({ type: "local-error", message: "Review and land work on a parallel session — start one with /new." });
+          // In the main checkout there is nothing to land; a review of what is
+          // uncommitted is the useful reading of "/review".
+          else if (name === "review") askReview();
+          else dispatch({ type: "local-error", message: "Landing works on a parallel session — start one with /new." });
           return;
         }
         if (name === "exit") { if (viewed?.branch?.startsWith("trace/")) void closeSession(viewed); return; }
@@ -260,7 +272,7 @@ export function App({ transport, bindHandlers }: {
         dispatch({ type: "local-error", message: `Unknown command /${name}` });
       }
     }
-  }, [closeSession, createSession, cycleMode, host, openHistory, openReview, rewind, runSearch, state.checkpoints, transport, viewed]);
+  }, [askReview, closeSession, createSession, cycleMode, host, openHistory, openReview, rewind, runSearch, state.checkpoints, transport, viewed]);
   const submitRef = React.useRef(submit);
   submitRef.current = submit;
 
@@ -315,6 +327,7 @@ export function App({ transport, bindHandlers }: {
                 onOpenEdit={id => void transport.openEdit(id)}
                 onToggleEdit={id => void toggleEdit(id)}
                 onReview={ids => void transport.openChanges(ids, `Agent changes · turn ${turn.turn}`)}
+                onAskReview={ids => askReview(ids)}
                 onUndoAll={ids => void setMany(ids, "undone")}
                 onRedoAll={ids => void setMany(ids, "applied")}
                 onRewind={hash => void rewind(hash)}
@@ -329,7 +342,7 @@ export function App({ transport, bindHandlers }: {
       <footer className="dock">
         <Notices notices={state.notices} onDismiss={dismiss} />
         {state.approval && (
-          <ApprovalDock approval={state.approval} onApprove={decision => void transport.approve(state.approval!.id, decision).catch(() => {})} />
+          <ApprovalDock approval={state.approval} sandbox={host?.shellSandbox} onApprove={decision => void transport.approve(state.approval!.id, decision).catch(() => {})} />
         )}
         <Composer
           ref={composer}
@@ -370,7 +383,14 @@ export function App({ transport, bindHandlers }: {
         />
       )}
       {sheet === "review" && review && (
-        <ReviewSheet title={review.title} review={review.data} busy={review.busy} onLand={() => void land()} onClose={() => { setSheet(null); setReview(null); }} />
+        <ReviewSheet
+          title={review.title}
+          review={review.data}
+          busy={review.busy}
+          onLand={() => void land()}
+          onAskReview={() => { setSheet(null); setReview(null); askReview(); }}
+          onClose={() => { setSheet(null); setReview(null); }}
+        />
       )}
       </Boundary>
     </div>

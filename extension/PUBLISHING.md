@@ -60,7 +60,7 @@ guard, so affected users get a specific error message instead of a silent
 |---|---|---|
 | `win32-arm64` | No `sqlite-vec-windows-arm64` package exists — the VSIX would ship without vector search | Run the x64 build of VS Code, which Windows 11 on ARM runs under emulation (with a perf hit), and install the extension there — native arm64 VS Code can't load the x64 binary. Or use VS Code's WSL backend with `linux-arm64`/`linux-x64`. |
 | Alpine / musl | `sqlite-vec` publishes glibc builds only | Use a glibc-based devcontainer image (debian, ubuntu, fedora). |
-| glibc < 2.34 | Below the `better-sqlite3` prebuild's floor | Upgrade the distribution, or use the CLI/MCP server (`npm install -g open-context-engine`), which supports older glibc. |
+| glibc < 2.34 | Below the `better-sqlite3` prebuild's floor | Upgrade the distribution, or use the CLI/MCP server (`npm install -g @dhaxor/open-context` — the unscoped `open-context-engine` on npm is an unrelated package), which supports older glibc. |
 
 ## Local: build one VSIX for your own platform
 
@@ -100,7 +100,8 @@ its platform package. CI installs the extension the same way.
 `.github/workflows/release-vsix.yml` defines a 5-leg matrix. Trigger paths:
 
 - **Tag push** (`git tag v0.1.1 && git push origin v0.1.1`) → builds all 5
-  platforms and publishes each to the Marketplace via `VSCE_PAT`.
+  platforms and publishes each to the Marketplace (via `VSCE_PAT`, or Entra
+  ID — see "Marketplace secrets") and to Open VSX.
 - **`workflow_dispatch`** with `publish: false` → builds all 5 without
   publishing. Useful for verifying a release before tagging.
 - **PR touching `extension/**`** → builds and verifies all 5 as a smoke test.
@@ -116,7 +117,74 @@ needs to be portable if we ever move it).
 
 ## Marketplace secrets
 
-- `VSCE_PAT` — Azure DevOps personal access token with **Marketplace →
-  Manage** scope, issued to the `open-context` publisher. Rotate yearly.
-  Store in repo settings → Secrets and variables → Actions → New repository
-  secret. The publish job is the only consumer.
+Two ways to publish, switched by the repository **variable**
+`MARKETPLACE_AUTH` (Settings → Secrets and variables → Actions → Variables):
+
+| `MARKETPLACE_AUTH` | Job | Needs |
+|---|---|---|
+| unset | `publish` | `VSCE_PAT` secret |
+| `entra` | `publish-entra` | `AZURE_CLIENT_ID` + `AZURE_TENANT_ID` secrets, the `marketplace` environment |
+
+**`VSCE_PAT` has an end date.** vsce only accepts an Azure DevOps personal
+access token scoped to *All accessible organizations* with **Marketplace →
+Manage** — a *global* PAT — and Azure DevOps global PATs
+[stop working on 1 December 2026](https://devblogs.microsoft.com/devops/retirement-of-global-personal-access-tokens-in-azure-devops/).
+Set up Entra ID before then; until you flip the variable, releases keep using
+the PAT.
+
+### Entra ID (secure automated publishing)
+
+The `publish-entra` job has no Marketplace token to leak or rotate. It signs
+in to Microsoft Entra ID with GitHub's OIDC token (`azure/login`, workload
+identity federation) as a user-assigned managed identity, and `vsce publish
+--azure-credential` publishes as that identity — the
+[secure automated publishing](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#secure-automated-publishing)
+setup, on GitHub Actions.
+
+1. **Managed identity and federated credential.** Create a user-assigned
+   managed identity in any subscription and resource group, with no role
+   assignments, and give it a federated credential for the `marketplace`
+   environment. In Azure Cloud Shell:
+
+   ```bash
+   az identity create -g <resource-group> -n oce-marketplace-publisher
+   az identity federated-credential create -g <resource-group> \
+     --identity-name oce-marketplace-publisher --name github-marketplace \
+     --issuer https://token.actions.githubusercontent.com \
+     --subject repo:Dhaxor/open-context-engine:environment:marketplace \
+     --audiences api://AzureADTokenExchange
+   az identity show -g <resource-group> -n oce-marketplace-publisher \
+     --query "{AZURE_CLIENT_ID: clientId, AZURE_TENANT_ID: tenantId}"
+   ```
+
+   Entra compares the subject exactly, with no wildcards — that's why it
+   names the environment and not a tag. Use a managed identity, not an app
+   registration: app registrations have been reported to pass `vsce
+   verify-pat` and then fail the publish
+   ([microsoft/vscode-vsce#1023](https://github.com/microsoft/vscode-vsce/issues/1023)).
+2. **Repository secrets.** Add `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`.
+3. **GitHub environment.** Create `marketplace` (Settings → Environments) and
+   restrict it to the tag rule `v*.*.*`, so only release tags can get a token
+   the credential trusts.
+4. **Switch.** Set the repository variable `MARKETPLACE_AUTH` to `entra`.
+5. **Publisher membership.** The Marketplace knows the identity by its Azure
+   DevOps profile ID, which only a sign-in as the identity can read — so the
+   first release does it: its *Check the identity is a publisher member*
+   step prints `Marketplace member ID of this identity: <id>` and stops
+   before uploading. Add that ID under *Members* at
+   <https://marketplace.visualstudio.com/manage/publishers/open-context>
+   with the **Contributor** role, then *Re-run failed jobs*.
+
+If the sign-in fails with **`AADSTS70021`**, the token's subject differs from
+the credential's — `azure/login` logs the subject it presented under
+*Federated token details*. **`AADSTS700024`** means too long passed between
+the sign-in and vsce; keep `azure/login` directly before the vsce steps.
+
+## Open VSX
+
+`publish-openvsx` publishes with the `OPEN_VSX_TOKEN` secret (an Open VSX
+access token from <https://open-vsx.org/user-settings/tokens>), then asks the
+public API until the release is listed and fails if it isn't after ten
+minutes. An accepted upload can still be held — 0.7.0 was — so a failure
+there means: sign in to Open VSX and check the extension's status under
+Settings → Extensions.

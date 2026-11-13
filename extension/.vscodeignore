@@ -38,6 +38,14 @@ CHANGELOG.md
 PUBLISHING.md
 dev/**
 
+# README screenshots: the Marketplace page loads them from GitHub.
+media/screenshots/**
+
+# Tests and the VS Code builds the end-to-end suite downloads.
+test/**
+.vscode-test/**
+node_modules/@vscode/test-electron/**
+
 # Build-time-only renderer deps: markdown-it + highlight.js are bundled INTO
 # dist/settings-webview.js by esbuild — dist/extension.js never references them
 # (verified by verify-vsix.mjs's runtime-require check). ~12 MB.

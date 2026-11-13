@@ -2,7 +2,7 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "open-context",
   "license": "MIT",
   "icon": "icon.png",
@@ -450,7 +450,7 @@
           "enumDescriptions": [
             "Ask before every file edit and shell command",
             "Apply file edits (each one stays reviewable and undoable); ask before shell commands",
-            "Never ask — for containers, CI, or throwaway checkouts"
+            "Never ask — for containers, CI, or throwaway checkouts. Shell commands still ask unless they run in a macOS Seatbelt sandbox (answer Always to stop asking)"
           ],
           "default": "auto-edit",
           "description": "When the agent asks before acting. The mode picker in the agent's composer changes this."
@@ -487,8 +487,13 @@
         },
         "openContext.agent.shell.enabled": {
           "type": "boolean",
-          "default": false,
-          "markdownDescription": "Give the agent a `run-command` tool to execute non-interactive shell commands in the workspace root. **Off by default** — enabling it lets the model run arbitrary commands on your machine unless you also set `#openContext.agent.shell.allowlist#`."
+          "default": true,
+          "markdownDescription": "Give the agent a `run-command` tool to execute non-interactive shell commands (tests, builds, linters) in the workspace root, so it can check its own work. Every command asks first in **Ask first** and **Auto-edit**; in **Full auto** a command runs unasked only inside a macOS Seatbelt sandbox (see `#openContext.agent.shell.sandbox#`). Narrow it with `#openContext.agent.shell.allowlist#`."
+        },
+        "openContext.agent.shell.sandbox": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Run agent shell commands under the OS sandbox: **macOS** Seatbelt denies network and limits writes to the workspace and temp dirs; **Linux** bubblewrap (when `bwrap` is installed) isolates the network but leaves the filesystem writable; **Windows** has no OS sandbox. A workspace policy can require it."
         },
         "openContext.agent.shell.allowlist": {
           "type": "array",
@@ -576,11 +581,13 @@
     "smoke-native": "node ./scripts/smoke-native.cjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "node test/e2e/run.mjs",
     "verify": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/vscode": "~1.103.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2"

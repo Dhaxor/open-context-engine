@@ -28,6 +28,10 @@ export class VSCodeEditApplier implements EditApplier {
         const dir = path.dirname(uri.fsPath);
         try { await vscode.workspace.fs.createDirectory(vscode.Uri.file(dir)); } catch {}
         const existingDoc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === uri.fsPath);
+        // Read BEFORE the edit: applying it always leaves the buffer dirty, so
+        // "is it dirty?" afterwards cannot tell the user's unsaved work apart
+        // from the agent's own change.
+        const userHadUnsavedChanges = existingDoc?.isDirty ?? false;
         let exists = true;
         try { await vscode.workspace.fs.stat(uri); } catch { exists = false; }
         const edit = new vscode.WorkspaceEdit();
@@ -48,13 +52,14 @@ export class VSCodeEditApplier implements EditApplier {
         }
         const ok = await vscode.workspace.applyEdit(edit);
         if (!ok) throw new Error(`Failed to apply edit to ${rel}`);
-        if (existingDoc && !existingDoc.isDirty) {
-            try { await existingDoc.save(); } catch {}
-        } else if (!existingDoc) {
-            try {
-                const newDoc = await vscode.workspace.openTextDocument(uri);
-                if (!newDoc.isDirty) await newDoc.save();
-            } catch {}
+        // Persist the edit: tests, builds, git, and the agent's own shell
+        // commands read the disk, not the buffer. The one exception is a buffer
+        // the user was already editing — saving would commit their unsaved
+        // work for them, so the agent's change stays in it, unsaved, beside it.
+        if (userHadUnsavedChanges) return;
+        const doc = existingDoc ?? await vscode.workspace.openTextDocument(uri);
+        if (doc.isDirty && !(await doc.save())) {
+            throw new Error(`Edited ${rel} but could not save it to disk`);
         }
     }
 

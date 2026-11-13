@@ -123,7 +123,7 @@ export function ContextMeter({ context, onOpen }: { context: ContextSnapshot | n
 
 // ─── transcript ──────────────────────────────────────────────────────────────
 
-export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdit, onToggleEdit, onReview, onUndoAll, onRedoAll, onRewind, onCopy }: {
+export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdit, onToggleEdit, onReview, onAskReview, onUndoAll, onRedoAll, onRewind, onCopy }: {
   turn: Turn;
   /** This turn is the one running now. */
   live: boolean;
@@ -134,6 +134,8 @@ export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdi
   onOpenEdit: (id: string) => void;
   onToggleEdit: (id: string) => void;
   onReview: (ids: string[]) => void;
+  /** Have the agent review these edits, as a new turn. */
+  onAskReview: (ids: string[]) => void;
   onUndoAll: (ids: string[]) => void;
   onRedoAll: (ids: string[]) => void;
   onRewind: (hash: string) => void;
@@ -157,7 +159,7 @@ export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdi
         return <EditRow key={i} edit={s.edit} status={statuses[s.edit.id] ?? "applied"} onOpen={() => onOpenEdit(s.edit.id)} onToggle={() => onToggleEdit(s.edit.id)} />;
       })}
       {!live && edits.length > 0 && (
-        <ChangesTray edits={edits} statuses={statuses} onCite={onCite} onReview={onReview} onUndoAll={onUndoAll} onRedoAll={onRedoAll} />
+        <ChangesTray edits={edits} statuses={statuses} onCite={onCite} onReview={onReview} onAskReview={isLast ? onAskReview : undefined} onUndoAll={onUndoAll} onRedoAll={onRedoAll} />
       )}
       {!live && (turn.stats || turn.checkpoint) && (
         <footer className="turn-foot">
@@ -343,11 +345,13 @@ function EditRow({ edit, status, onOpen, onToggle }: { edit: EditProposal; statu
   );
 }
 
-function ChangesTray({ edits, statuses, onCite, onReview, onUndoAll, onRedoAll }: {
+function ChangesTray({ edits, statuses, onCite, onReview, onAskReview, onUndoAll, onRedoAll }: {
   edits: EditProposal[];
   statuses: Record<string, EditStatus>;
   onCite: Cite;
   onReview: (ids: string[]) => void;
+  /** Absent on older turns: a review is a new turn, and it belongs after the latest. */
+  onAskReview?: (ids: string[]) => void;
   onUndoAll: (ids: string[]) => void;
   onRedoAll: (ids: string[]) => void;
 }) {
@@ -373,7 +377,12 @@ function ChangesTray({ edits, statuses, onCite, onReview, onUndoAll, onRedoAll }
         ))}
       </ul>
       <footer className="card-actions">
-        <button type="button" className="btn" onClick={() => onReview(ids)}><Icon name="diff" /> Review</button>
+        <button type="button" className="btn" title="Open every change in one diff editor" onClick={() => onReview(ids)}><Icon name="diff" /> Diff</button>
+        {onAskReview && !allUndone && (
+          <button type="button" className="btn secondary" title="Have the agent review these changes against the surrounding code" onClick={() => onAskReview(ids)}>
+            <Icon name="sparkle" /> Get review
+          </button>
+        )}
         {allUndone
           ? <button type="button" className="btn secondary" onClick={() => onRedoAll(ids)}><Icon name="redo" /> Reapply</button>
           : <button type="button" className="btn secondary" onClick={() => onUndoAll(ids)}><Icon name="undo" /> Undo all</button>}
@@ -452,10 +461,19 @@ export function PhaseLine({ state, startedAt }: { state: ViewState; startedAt: n
 
 function capitalize(s: string): string { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-export function ApprovalDock({ approval, onApprove }: {
+const SANDBOX_LABEL: Record<string, { label: string; title: string }> = {
+  seatbelt: { label: "sandboxed", title: "macOS Seatbelt: no network; writes limited to the workspace and temp dirs" },
+  bwrap: { label: "no network", title: "bubblewrap: network isolated; the filesystem stays writable" },
+  none: { label: "not sandboxed", title: "Runs with your user's full access (scrubbed environment, allowlist if set)" },
+};
+
+export function ApprovalDock({ approval, sandbox, onApprove }: {
   approval: PendingApproval;
+  /** What a shell command would run under (HostState.shellSandbox). */
+  sandbox?: string;
   onApprove: (decision: "allow" | "always" | "deny") => void;
 }) {
+  const box = approval.kind === "shell" && sandbox ? SANDBOX_LABEL[sandbox] : undefined;
   const lines = React.useMemo(() => parseDiff(approval.preview, 80), [approval.preview]);
   const allowRef = React.useRef<HTMLButtonElement>(null);
   React.useEffect(() => { allowRef.current?.focus(); }, [approval.id]);
@@ -467,6 +485,7 @@ export function ApprovalDock({ approval, onApprove }: {
         <Icon name="hand" />
         <span className="approval-title">{what}</span>
         <span className="spacer" />
+        {box && <span className="pill" data-sandbox={sandbox} title={box.title}>{box.label}</span>}
         {approval.callers !== undefined && approval.callers > 0 && (
           <span className="pill" title="Indexed references to what this edit touches">{approval.callers} caller{approval.callers === 1 ? "" : "s"}</span>
         )}
@@ -666,7 +685,7 @@ export const Composer = React.forwardRef<ComposerHandle, {
 const QUICK_STARTS: { icon: IconName; label: string; prompt: string }[] = [
   { icon: "layers", label: "Explain this codebase", prompt: "Give me a high-level tour of this codebase: the main modules, how they fit together, and where to start reading." },
   { icon: "search", label: "Trace a feature", prompt: "Trace how authentication works end to end and list the key entry points with file:line references." },
-  { icon: "warning", label: "Find likely bugs", prompt: "Look for likely bugs in the code I have open and explain each one with evidence." },
+  { icon: "diff", label: "Review my changes", prompt: "/review-changes" },
   { icon: "edit", label: "Add tests", prompt: "Add focused unit tests for the file I have open, following the project's existing test patterns." },
 ];
 
@@ -743,11 +762,16 @@ export function ContextSheet({ context, entries, onAction, onCite, onCompact, on
       {entries.length === 0 && <p className="muted">Retrieved code shows up here, ranked, with why it was pulled in. Pin what matters; evict what doesn't.</p>}
       <ul className="entries">
         {entries.map(e => (
-          <li key={e.id} data-evicted={e.evicted} data-pinned={e.pinned}>
+          <li key={e.id} data-evicted={e.evicted} data-pinned={e.pinned} data-bucket={e.bucket}>
             <span className="score mono">{typeof e.score === "number" ? score(e.score) : "—"}</span>
-            <button type="button" className="mono link truncate" title={`${e.label}${e.lines ? `:${e.lines}` : ""} · ${tokens(e.tokens)} tokens${e.via ? ` · via ${e.via}` : ""}`} onClick={() => onCite(e.label, Number(e.lines?.split("-")[0] ?? 0))}>
-              {basename(e.label)}{e.lines && <span className="muted">:{e.lines}</span>}
-            </button>
+            {e.bucket === "memory"
+              // A remembered note, not a file: nothing to open, so it reads as text.
+              ? <span className="truncate memory-note" title={`${e.label} · ${tokens(e.tokens)} tokens`}>{e.label}</span>
+              : (
+                <button type="button" className="mono link truncate" title={`${e.label}${e.lines ? `:${e.lines}` : ""} · ${tokens(e.tokens)} tokens${e.via ? ` · via ${e.via}` : ""}`} onClick={() => onCite(e.label, Number(e.lines?.split("-")[0] ?? 0))}>
+                  {basename(e.label)}{e.lines && <span className="muted">:{e.lines}</span>}
+                </button>
+              )}
             <span className="muted small nowrap">{e.edges?.length ? edgeLabel(e.edges[0]) : e.via ?? e.bucket}</span>
             <span className="spacer" />
             <button type="button" className="icon-btn small" data-active={e.pinned} title={e.pinned ? "Unpin" : "Pin: survives compaction"} aria-label={e.pinned ? "Unpin" : "Pin"} onClick={() => onAction(e.pinned ? "unpin" : "pin", e.id)}><Icon name="pin" /></button>
@@ -788,11 +812,13 @@ export function HistorySheet({ rows, currentTitle, onResume, onDelete, onNew, on
 
 export interface SessionReview { files: string[]; untracked: string[]; diff: string; stat: { files: number; added: number; removed: number } }
 
-export function ReviewSheet({ title, review, busy, onLand, onClose }: {
+export function ReviewSheet({ title, review, busy, onLand, onAskReview, onClose }: {
   title: string;
   review: SessionReview | null;
   busy: boolean;
   onLand: () => void;
+  /** Have the agent review the worktree's changes before they land. */
+  onAskReview: () => void;
   onClose: () => void;
 }) {
   const lines = React.useMemo(() => (review ? parseDiff(review.diff, 800) : []), [review]);
@@ -811,6 +837,9 @@ export function ReviewSheet({ title, review, busy, onLand, onClose }: {
       <footer className="card-actions">
         <span className="muted small">Landing commits the work, merges the branch, and closes the session.</span>
         <span className="spacer" />
+        <button type="button" className="btn secondary" disabled={busy || !review || !!empty} title="Have the agent review this session's changes first" onClick={onAskReview}>
+          <Icon name="sparkle" /> Get review
+        </button>
         <button type="button" className="btn" disabled={busy || !review || !!empty} onClick={onLand}>{busy ? "Landing…" : "Land it"}</button>
       </footer>
     </Sheet>

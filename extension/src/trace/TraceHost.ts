@@ -9,6 +9,8 @@ import { SessionMemory } from "../../../src/agent/session-memory";
 import { ModelRouter, defaultRoutingConfig } from "../../../src/agent/model-router";
 import type { ApprovalMode } from "../../../src/agent/permissions";
 import type { ContextAgent } from "../../../src/agent/agent";
+import { detectSandbox, type SandboxKind } from "../../../src/agent/sandbox";
+import { buildReviewQuery, parseUnifiedDiff } from "../../../src/agent/review";
 import { assembleAgentStack } from "../../../src/trace/stack";
 import { SessionRegistry, type BuiltSessionHandle } from "../../../src/trace/registry";
 import { WorktreeManager } from "../../../src/trace/worktree";
@@ -16,11 +18,13 @@ import type { TraceSession } from "../../../src/trace/session";
 import { ContextService } from "../services/ContextService";
 import type { EditReviewService, EditScope } from "../services/EditReviewService";
 import { VSCodeEditApplier } from "../services/VSCodeEditApplier";
-import { readAgentSettings, saveApprovalMode, SetupError, type AgentSettings } from "./agent-settings";
+import { configuredApprovalMode, readAgentSettings, saveApprovalMode, SetupError, type AgentSettings } from "./agent-settings";
 import { migrateLegacyChats } from "./legacy-history";
 import type { HistoryRow, HostState, SessionRow, SetupNeed } from "./protocol";
 
 const ACTIVE_SESSION_KEY = "openContext.trace.activeSession";
+/** The same cap `oce review` applies by default: past this, a review is a skim. */
+const MAX_REVIEW_FILES = 20;
 
 /** What a built session was made from — compared before every turn. */
 interface BuildStamp {
@@ -86,6 +90,9 @@ export class TraceHost implements vscode.Disposable {
         this.disposables.push(
             vscode.workspace.onDidChangeConfiguration(e => {
                 if (!e.affectsConfiguration("openContext")) return;
+                // The mode is live state, not part of a stack's fingerprint:
+                // apply it to open sessions rather than waiting for a rebuild.
+                if (e.affectsConfiguration("openContext.agent.approvalMode")) this.applyConfiguredMode();
                 this.stateEmitter.fire();
                 void this.refresh();
             }),
@@ -154,7 +161,10 @@ export class TraceHost implements vscode.Disposable {
             plan: license?.valid ? license.plan ?? "free" : "free",
             ...editorContext(svc.getIndexWorkspaceRoot()),
             parallel: this.parallel,
-            shellEnabled: cfg.get<boolean>("agent.shell.enabled", false),
+            shellEnabled: cfg.get<boolean>("agent.shell.enabled", true),
+            shellSandbox: !cfg.get<boolean>("agent.shell.enabled", true) ? "off"
+                : !cfg.get<boolean>("agent.shell.sandbox", true) ? "none"
+                : detectSandboxKind(svc.getIndexWorkspaceRoot()),
         };
     }
 
@@ -191,8 +201,10 @@ export class TraceHost implements vscode.Disposable {
         const built = sessionId ? this.builds.get(sessionId) : undefined;
         if (!sessionId || !built) return;
         if (built.session.isRunning()) built.session.interrupt();
-        if (!built.primary) { built.session.reset(); return; }
-        this.review.clear();
+        // A rebuild, never an in-place reset: the TraceSession's buffer would
+        // keep the old transcript, and every reconnect would replay it next
+        // to the new conversation. The new id also keeps the old one saved.
+        if (built.primary) this.review.clear();
         await this.rebuild(sessionId, { newId: built.store.newId() });
     }
 
@@ -214,6 +226,50 @@ export class TraceHost implements vscode.Disposable {
         for (const built of this.builds.values()) built.session.setMode(mode);
         void id;
         await saveApprovalMode(mode);
+    }
+
+    /**
+     * Have the agent review changes, as an ordinary turn of the session — so
+     * the review streams with its retrievals visible, cites file:line, is
+     * saved with the conversation, and can be followed up ("fix the first
+     * one"). `edits`: what a turn changed. `workspace`: everything uncommitted
+     * in the session's checkout (a parallel session's whole worktree).
+     */
+    async reviewChanges(id: string | null, source: { kind: "edits"; ids: string[] } | { kind: "workspace" }): Promise<{ files: number }> {
+        const session = await this.sessionForTurn(id);
+        if (session.isRunning()) throw new Error("A turn is already running — stop it first.");
+        const built = this.builds.get(session.meta().id);
+        if (!built) throw new Error("That session is no longer open.");
+
+        let diff = "";
+        let newFiles: string[] = [];
+        let deletedFiles: string[] = [];
+        if (source.kind === "edits") {
+            ({ diff, deletedFiles } = this.review.combinedDiff(source.ids));
+        } else {
+            const git = new WorktreeManager({ repoRoot: built.workspace });
+            if (!(await git.isRepo())) throw new Error("Reviewing uncommitted changes needs a git repository.");
+            const changes = await git.review(built.workspace);
+            diff = changes.diff;
+            newFiles = changes.untracked;
+        }
+        const files = parseUnifiedDiff(diff).slice(0, MAX_REVIEW_FILES);
+        const count = files.length + newFiles.length + deletedFiles.length;
+        if (!count) throw new Error(source.kind === "edits" ? "Those changes were all undone — nothing to review." : "There are no uncommitted changes to review.");
+
+        const what = source.kind === "edits" ? "this turn's changes" : "uncommitted changes";
+        const label = `Review ${what} (${count} file${count === 1 ? "" : "s"})`;
+        // Not awaited: the review streams back as the turn's events.
+        void session.prompt(buildReviewQuery(files, { newFiles, deletedFiles }), { label }).catch(() => {});
+        return { files: count };
+    }
+
+    /** Bring open sessions to the configured mode (a settings.json edit). */
+    private applyConfiguredMode(): void {
+        const mode = configuredApprovalMode();
+        for (const built of this.builds.values()) {
+            if (built.session.meta().mode !== mode) built.session.setMode(mode);
+        }
     }
 
     // ─── building ────────────────────────────────────────────────────────────
@@ -329,6 +385,12 @@ export class TraceHost implements vscode.Disposable {
             },
         };
         const memory = settings.memory ? new SessionMemory({ storePath: path.join(workspace, ".open-context") }) : undefined;
+        // The shell is on by default, so full-auto must not mean "run anything
+        // unasked" unless the command is contained: only Seatbelt also limits
+        // writes (bubblewrap isolates the network but leaves the filesystem
+        // writable; Windows has no OS sandbox). Elsewhere it asks until the
+        // user answers "always".
+        const sandbox = shellSandboxKind(settings, workspace);
         const stack = assembleAgentStack({
             ctx,
             workspaceRoot: workspace,
@@ -342,6 +404,7 @@ export class TraceHost implements vscode.Disposable {
             audit: auditOn ? new AuditLogger({ dir: defaultAuditDir(workspace) }) : undefined,
             applier: new VSCodeEditApplier(workspace),
             mode: this.currentMode() ?? settings.mode,
+            ...(settings.shell && sandbox !== "seatbelt" ? { alwaysAsk: ["run-command"] } : {}),
             includeEdits: settings.includeEdits,
             shell: settings.shell,
             webSearch: settings.webSearch ? { enabled: true, apiKey: settings.webSearchKey } : false,
@@ -476,6 +539,18 @@ export class TraceHost implements vscode.Disposable {
         this.stateEmitter.dispose();
         this.startEmitter.dispose();
     }
+}
+
+/** What the shell would run under: "off" (no shell tool), or the OS sandbox
+ *  kind — "none" when sandboxing is turned off or the platform has none. */
+function shellSandboxKind(settings: AgentSettings, workspace: string): SandboxKind | "off" {
+    if (!settings.shell) return "off";
+    if (!settings.shell.sandbox) return "none";
+    return detectSandboxKind(workspace);
+}
+
+function detectSandboxKind(workspace: string): SandboxKind {
+    try { return detectSandbox(workspace || process.cwd()).kind; } catch { return "none"; }
 }
 
 function toSetupNeed(err: unknown): SetupNeed {
