@@ -80,7 +80,7 @@
     "zod": "^3.23.0"
   },
   "optionalDependencies": {
-    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/anthropic": "^4.0.96",
     "@ai-sdk/google": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0"
   },
