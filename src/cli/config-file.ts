@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { licenseConfigDir } from "../core/license";
+import type { McpServerConfig } from "../agent/mcp-client";
 
 /**
  * File-based configuration for the CLI, so teams stop threading flags/env
@@ -34,6 +35,9 @@ export interface OceFileConfig {
   maxFileSize?: number;
   storePath?: string;
   embedCache?: boolean | string;
+  /** MCP servers the agent can use, in the shape every client uses. Read from
+   *  the USER file only — see loadUserMcpServers. */
+  mcpServers?: Record<string, McpServerConfig>;
 }
 
 export interface LoadedFileConfig {
@@ -74,6 +78,30 @@ export function mergeFileConfigs(base: OceFileConfig, next: OceFileConfig): OceF
     storePath: next.storePath ?? base.storePath,
     embedCache: next.embedCache ?? base.embedCache,
   };
+}
+
+/**
+ * The MCP servers the agent may start. User file only: a server is a program
+ * the agent launches, and a repository you cloned must not be able to launch
+ * programs by committing a config. A workspace file's `mcpServers` is
+ * reported and ignored.
+ */
+export function loadUserMcpServers(workspaceRoot: string, opts: { userDir?: string } = {}): { servers: Record<string, McpServerConfig>; warnings: string[] } {
+  const warnings: string[] = [];
+  const userFile = path.join(opts.userDir ?? licenseConfigDir(), "config.json");
+  const wsFile = path.join(workspaceRoot, ".open-context", "config.json");
+  const user = readOne(userFile, warnings);
+  const ws = readOne(wsFile, []);
+  if (ws?.mcpServers && Object.keys(ws.mcpServers).length) {
+    warnings.push(`${wsFile}: mcpServers is ignored here — the agent only starts MCP servers listed in ${userFile}, so a cloned repository can't start programs.`);
+  }
+  const raw = user?.mcpServers;
+  if (!raw) return { servers: {}, warnings };
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    warnings.push(`${userFile}: mcpServers must be an object of { name: { command, args } | { url } } — ignored`);
+    return { servers: {}, warnings };
+  }
+  return { servers: raw, warnings };
 }
 
 export function loadFileConfig(workspaceRoot: string, opts: { userDir?: string } = {}): LoadedFileConfig {

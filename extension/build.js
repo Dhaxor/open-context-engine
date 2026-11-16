@@ -32,7 +32,9 @@ const external = [
   "minimatch",
   "ignore",
   "commander",
-  "zod",
+  // zod is bundled, not external: the agent's MCP client (src/agent/mcp-client,
+  // via @modelcontextprotocol/sdk) requires it at runtime, and the VSIX ships
+  // no node_modules/zod.
 ];
 
 const options = {

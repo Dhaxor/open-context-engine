@@ -23,15 +23,32 @@ import { runTests } from "@vscode/test-electron";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const extensionRoot = path.resolve(here, "..", "..");
 
-/** The script: what the "model" says, given the conversation so far. */
-function reply(messages) {
+/** The script: what the "model" says, given the conversation so far and the
+ *  tools it was offered. */
+function reply(messages, tools = []) {
   let lastUser = -1;
   for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === "user") { lastUser = i; break; }
   const userText = String(lastUser >= 0 ? messages[lastUser].content ?? "" : "");
   const toolAnswered = messages.slice(lastUser + 1).some(m => m.role === "tool");
+  const lastTool = messages.slice(lastUser + 1).filter(m => m.role === "tool").at(-1);
+  const offered = name => tools.some(t => t.function?.name === name);
 
   if (/Review these pull-request changes/.test(userText)) {
     return { text: "## hello.txt\nLooks correct: `hello.txt:1` adds the greeting the request asked for." };
+  }
+  // The user's MCP server (test/e2e: the SDK fixture), reached through the
+  // bundled MCP client. Echo the tool's output back so the round trip shows.
+  if (/E2E-MCP-ECHO/.test(userText)) {
+    if (toolAnswered) return { text: `MCP said: ${lastTool?.content ?? ""}` };
+    return offered("mcp__echo__echo")
+      ? { tool: { id: "call_mcp_echo", name: "mcp__echo__echo", args: { text: "from vscode" } } }
+      : { text: `NO-MCP-TOOL among ${tools.map(t => t.function?.name).join(",")}` };
+  }
+  if (!toolAnswered && /E2E-MCP-TICKET/.test(userText)) {
+    return { tool: { id: "call_mcp_ticket", name: "mcp__echo__create_ticket", args: { title: "e2e" } } };
+  }
+  if (/^Fix this error at `broken\.ts/.test(userText)) {
+    return { text: "Fixed: `broken.ts:1` assigned a string to a number." };
   }
   if (!toolAnswered && /E2E-CREATE/.test(userText)) {
     return { tool: { id: "call_create", name: "create-file", args: { path: "hello.txt", contents: "hello from the agent\n" } } };
@@ -52,7 +69,7 @@ function serveModel() {
     req.on("data", c => { body += c; });
     req.on("end", () => {
       const request = JSON.parse(body || "{}");
-      const answer = reply(request.messages ?? []);
+      const answer = reply(request.messages ?? [], request.tools ?? []);
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
       const base = { id: "chatcmpl-e2e", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: request.model };
       const send = chunk => res.write(`data: ${JSON.stringify({ ...base, ...chunk })}\n\n`);
@@ -97,6 +114,12 @@ try {
     extensionTestsEnv: {
       OCE_E2E: "1",
       OCE_E2E_WORKSPACE: workspace,
+      // The suite turns on a user-level MCP server mid-run: the SDK fixture,
+      // run by this Node (the extension host's own binary is Electron).
+      OCE_E2E_NODE: process.execPath,
+      OCE_E2E_MCP_FIXTURE: path.resolve(extensionRoot, "..", "src", "agent", "__fixtures__", "mcp-echo-server.cjs"),
+      // A clean CLI config dir, so a developer's own ~/.open-context servers stay out.
+      OCE_CONFIG_DIR: fs.mkdtempSync(path.join(os.tmpdir(), "oce-e2e-cfg-")),
       // Keyword-only indexing must not be upgraded by a developer's own key.
       VOYAGE_API_KEY: "",
       OPENAI_API_KEY: "",

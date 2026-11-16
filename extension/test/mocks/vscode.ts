@@ -47,9 +47,24 @@ export const workspace: any = {
   applyEdit: async (edit: WorkspaceEdit) => { workspace._lastEdit = edit; for (const op of edit.ops) { if (op.type === "deleteFile") { workspace._files.delete(op.uri.fsPath); workspace._stats.delete(op.uri.fsPath); } if (op.type === "insert" || op.type === "replace") { workspace._files.set(op.uri.fsPath, op.text); workspace._dirty.add(op.uri.fsPath); } if (op.type === "createFile") workspace._stats.add(op.uri.fsPath); } return workspace._applyEditResult ?? true; },
 };
 export const window: any = {
-  activeTextEditor: undefined, visibleTextEditors: [], showWarningMessage: async () => undefined,
+  activeTextEditor: undefined, visibleTextEditors: [],
+  // `_messages` records toasts; `_pick` is the button the "user" clicks.
+  _messages: [] as { level: string; message: string; actions: string[] }[], _pick: undefined as string | undefined,
+  showWarningMessage: async (message: string, ...actions: any[]) => { window._messages.push({ level: "warn", message, actions: actions.filter(a => typeof a === "string") }); return window._pick; },
+  showInformationMessage: async (message: string, ...actions: any[]) => { window._messages.push({ level: "info", message, actions: actions.filter(a => typeof a === "string") }); return window._pick; },
+  state: { focused: true },
   onDidChangeActiveTextEditor: () => ({ dispose() {} }),
   onDidChangeTextEditorSelection: () => ({ dispose() {} }),
 };
-export const commands: any = { _calls: [] as any[], executeCommand: async (...args: any[]) => { commands._calls.push(args); } };
+export const commands: any = {
+  _calls: [] as any[],
+  /** Test hook: per-command behaviour, e.g. a fake terminal copySelection. */
+  _handlers: new Map<string, (...args: any[]) => any>(),
+  executeCommand: async (...args: any[]) => { commands._calls.push(args); return commands._handlers.get(args[0])?.(...args.slice(1)); },
+};
+export enum DiagnosticSeverity { Error = 0, Warning = 1, Information = 2, Hint = 3 }
+export class CodeActionKind { static readonly QuickFix = new CodeActionKind("quickfix"); constructor(public readonly value: string) {} }
+export class CodeAction { diagnostics?: any[]; command?: any; constructor(public title: string, public kind?: CodeActionKind) {} }
+export const languages: any = { _diagnostics: [] as any[], getDiagnostics: () => languages._diagnostics };
+export const env: any = { clipboard: { _text: "", readText: async () => env.clipboard._text, writeText: async (t: string) => { env.clipboard._text = t; } } };
 export interface Disposable { dispose(): any }

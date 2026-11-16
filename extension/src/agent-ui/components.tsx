@@ -13,7 +13,7 @@ import { phaseLabel } from "../../../src/trace/view-model";
 import { parseMarkdown, type MdBlock, type MdNode } from "../../../src/trace/markdown";
 import { activeToken, applyCompletion, type ActiveToken, type SlashCommandSpec } from "../../../src/trace/composer";
 import { basename, budgetSegments, duration, edgeLabel, parseDiff, score, tokens, truncate } from "../../../src/trace/format";
-import type { HistoryRow, SearchHit, SessionRow, SetupNeed } from "../trace/protocol";
+import type { HistoryRow, McpStatusRow, MemoryKind, MemoryList, MemoryRow, SearchHit, SessionRow, SetupNeed } from "../trace/protocol";
 import { changedFiles, currentStep, segment, summarize, turnEdits, type ActivityItem, type SubagentItem, type ToolItem } from "./activity";
 import { Icon, Spinner, type IconName } from "./icons";
 
@@ -41,13 +41,14 @@ export class Boundary extends React.Component<{ label: string; children: React.R
 
 // ─── header ──────────────────────────────────────────────────────────────────
 
-export function SessionBar({ sessions, viewedId, parallel, onSelect, onCreate, onHistory }: {
+export function SessionBar({ sessions, viewedId, parallel, onSelect, onCreate, onHistory, onMemory }: {
   sessions: SessionRow[];
   viewedId: string | null;
   parallel: boolean;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onHistory: () => void;
+  onMemory: () => void;
 }) {
   const current = viewedId ?? sessions.find(s => s.active)?.id ?? null;
   return (
@@ -75,6 +76,9 @@ export function SessionBar({ sessions, viewedId, parallel, onSelect, onCreate, o
           <Icon name="add" />
         </button>
       )}
+      <button type="button" className="icon-btn" title="What the agent remembers about this workspace" aria-label="Memories" onClick={onMemory}>
+        <Icon name="bookmark" />
+      </button>
       <button type="button" className="icon-btn" title="Conversation history" aria-label="Conversation history" onClick={onHistory}>
         <Icon name="history" />
       </button>
@@ -123,7 +127,7 @@ export function ContextMeter({ context, onOpen }: { context: ContextSnapshot | n
 
 // ─── transcript ──────────────────────────────────────────────────────────────
 
-export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdit, onToggleEdit, onReview, onAskReview, onUndoAll, onRedoAll, onRewind, onCopy }: {
+export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdit, onToggleEdit, onReview, onAskReview, onUndoAll, onRedoAll, onRewind, onCopy, onRemember }: {
   turn: Turn;
   /** This turn is the one running now. */
   live: boolean;
@@ -140,6 +144,8 @@ export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdi
   onRedoAll: (ids: string[]) => void;
   onRewind: (hash: string) => void;
   onCopy: (text: string) => void;
+  /** Open the memory sheet with this answer as a draft to word and save. */
+  onRemember?: (text: string) => void;
 }) {
   const segments = React.useMemo(() => segment(turn.blocks), [turn.blocks]);
   const edits = React.useMemo(() => turnEdits(turn), [turn]);
@@ -169,10 +175,17 @@ export function TurnView({ turn, live, plan, isLast, statuses, onCite, onOpenEdi
             </span>
           )}
           <span className="spacer" />
+          {answer && onRemember && (
+            <button type="button" className="icon-btn" title="Remember this for future conversations" aria-label="Remember this" onClick={() => onRemember(answer)}><Icon name="bookmark" /></button>
+          )}
           {answer && (
             <button type="button" className="icon-btn" title="Copy answer" aria-label="Copy answer" onClick={() => onCopy(answer)}><Icon name="copy" /></button>
           )}
-          {turn.checkpoint?.restorable && !isLast && (
+          {/* Rewinding HERE undoes the turns after this one, so it is offered on
+              every earlier checkpoint — not only on turns that edited files
+              (\`restorable\`), which hid it on the exploring turn you most often
+              want to go back to. */}
+          {turn.checkpoint && !isLast && (
             <button type="button" className="link-btn" title={`Checkpoint ${turn.checkpoint.short}: undo every later turn and the file changes they made`} onClick={() => onRewind(turn.checkpoint!.hash)}>
               <Icon name="rewind" /> Rewind here
             </button>
@@ -727,7 +740,13 @@ export function SetupCard({ need, onAction }: { need: SetupNeed; onAction: (acti
 
 function Sheet({ title, onClose, children, actions }: { title: string; onClose: () => void; children: React.ReactNode; actions?: React.ReactNode }) {
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // A field inside the sheet that uses Escape itself (cancel an edit).
+      if (e.target instanceof HTMLElement && e.target.dataset.escape === "local") return;
+      e.stopPropagation();
+      onClose();
+    };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
@@ -746,9 +765,11 @@ function Sheet({ title, onClose, children, actions }: { title: string; onClose: 
   );
 }
 
-export function ContextSheet({ context, entries, onAction, onCite, onCompact, onClose }: {
+export function ContextSheet({ context, entries, mcp, onAction, onCite, onCompact, onClose }: {
   context: ContextSnapshot | null;
   entries: ContextEntry[];
+  /** The user's MCP servers; their tool schemas count in the tools bucket. */
+  mcp?: McpStatusRow[];
   onAction: (action: "pin" | "unpin" | "evict" | "restore", id: string) => void;
   onCite: Cite;
   onCompact: () => void;
@@ -756,9 +777,20 @@ export function ContextSheet({ context, entries, onAction, onCite, onCompact, on
 }) {
   const segments = budgetSegments(context);
   const percent = context?.windowTokens ? Math.min(100, Math.round((context.usedTokens / context.windowTokens) * 100)) : 0;
+  const servers = (mcp ?? []).filter(s => s.state !== "disabled");
   return (
     <Sheet title="Context window" onClose={onClose} actions={<button type="button" className="link-btn" onClick={onCompact}>Compact</button>}>
       <p className="muted small">{percent}% of {tokens(context?.windowTokens ?? 0)} · {segments.map(s => `${s.bucket} ${tokens(s.tokens)}`).join(" · ") || "nothing retrieved yet"}</p>
+      {servers.length > 0 && (
+        <p className="muted small mcp-line">
+          <Icon name="plug" /> MCP:{" "}
+          {servers.map((s, i) => (
+            <span key={s.name} data-state={s.state} title={s.error ?? ""}>
+              {i > 0 ? " · " : ""}{s.name} {s.state === "connected" ? `${s.tools} tool${s.tools === 1 ? "" : "s"}` : s.state === "skipped" ? "(built in)" : "didn't start"}
+            </span>
+          ))}
+        </p>
+      )}
       {entries.length === 0 && <p className="muted">Retrieved code shows up here, ranked, with why it was pulled in. Pin what matters; evict what doesn't.</p>}
       <ul className="entries">
         {entries.map(e => (
@@ -807,6 +839,158 @@ export function HistorySheet({ rows, currentTitle, onResume, onDelete, onNew, on
         ))}
       </ul>
     </Sheet>
+  );
+}
+
+const MEMORY_GROUPS: { kind: MemoryKind; label: string }[] = [
+  { kind: "preference", label: "Preferences" },
+  { kind: "codebase_insight", label: "About the code" },
+  { kind: "fact", label: "Facts" },
+  { kind: "conversation_summary", label: "Summaries" },
+];
+
+const MEMORY_SOURCES: Record<string, string> = {
+  user: "you", "vscode-agent": "agent", agent: "agent", "cli-agent": "CLI agent", mcp: "MCP client",
+};
+
+/** Returns an error to show inline, or null on success. */
+type MemoryWrite = (content: string, kind: MemoryKind) => Promise<string | null>;
+
+/**
+ * What the agent is reminded of when it's relevant. A memory is a sentence the
+ * agent will be told is true in later conversations, so every one is visible,
+ * correctable, and forgettable here — not buried in a JSON file.
+ */
+export function MemorySheet({ list, draft, onAdd, onEdit, onForget, onClear, onOpenFile, onEnable, onClose }: {
+  list: MemoryList | null;
+  /** Prefilled text for the new memory ("Remember this…" on a turn or a selection). */
+  draft: string;
+  onAdd: MemoryWrite;
+  onEdit: (id: string, content: string, kind: MemoryKind) => Promise<string | null>;
+  onForget: (id: string) => void;
+  onClear: () => void;
+  onOpenFile: () => void;
+  onEnable: () => void;
+  onClose: () => void;
+}) {
+  const [text, setText] = React.useState(draft);
+  const [kind, setKind] = React.useState<MemoryKind>("preference");
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [editing, setEditing] = React.useState<{ id: string; text: string; kind: MemoryKind; error: string | null } | null>(null);
+  const input = React.useRef<HTMLTextAreaElement>(null);
+  React.useEffect(() => { if (draft) input.current?.focus(); }, [draft]);
+
+  const add = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    const err = await onAdd(text, kind);
+    setBusy(false);
+    setError(err);
+    if (!err) setText("");
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    const err = await onEdit(editing.id, editing.text, editing.kind);
+    if (err) setEditing(e => (e ? { ...e, error: err } : e));
+    else setEditing(null);
+  };
+  const submitKeys = (go: () => void, cancel?: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go(); }
+    if (e.key === "Escape" && cancel) { e.preventDefault(); e.stopPropagation(); cancel(); }
+  };
+
+  const rows = list?.rows ?? [];
+  return (
+    <Sheet
+      title="Memories"
+      onClose={onClose}
+      actions={<>
+        {rows.length > 0 && <button type="button" className="link-btn" onClick={onOpenFile}>Markdown</button>}
+        {rows.length > 0 && <button type="button" className="link-btn" onClick={onClear}>Clear all</button>}
+      </>}
+    >
+      {list === null && <p className="muted">Loading…</p>}
+      {list && !list.enabled && (
+        <p className="muted small">
+          Memory is off: nothing new is remembered, and nothing is recalled into conversations.{" "}
+          <button type="button" className="link-btn" onClick={onEnable}>Turn it on</button>
+        </p>
+      )}
+      {list?.enabled && (
+        <div className="memory-form">
+          <textarea
+            ref={input}
+            rows={2}
+            value={text}
+            placeholder={"Something the agent should know next time — \"we use pnpm, not npm\", \"auth lives in src/auth\""}
+            aria-label="New memory"
+            onChange={e => { setText(e.target.value); setError(null); }}
+            onKeyDown={submitKeys(() => void add())}
+          />
+          <div className="memory-form-bar">
+            <select value={kind} aria-label="Kind of memory" onChange={e => setKind(e.target.value as MemoryKind)}>
+              {MEMORY_GROUPS.slice(0, 3).map(g => <option key={g.kind} value={g.kind}>{g.label}</option>)}
+            </select>
+            <span className="muted small">{text.trim().length}/500</span>
+            <span className="spacer" />
+            <button type="button" className="btn" disabled={busy || !text.trim()} onClick={() => void add()}>Remember</button>
+          </div>
+          {error && <p className="memory-error small">{error}</p>}
+        </div>
+      )}
+      {list && rows.length === 0 && (
+        <p className="muted">Nothing remembered yet. The agent keeps what it learns and what you tell it ("actually, we use pnpm") and is reminded of it when it's relevant.</p>
+      )}
+      {MEMORY_GROUPS.map(group => {
+        const items = rows.filter(r => r.kind === group.kind);
+        if (!items.length) return null;
+        return (
+          <section key={group.kind} className="memory-group">
+            <h3 className="label">{group.label}</h3>
+            <ul className="memories">
+              {items.map(m => editing?.id === m.id ? (
+                <li key={m.id} className="editing">
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    value={editing.text}
+                    aria-label="Edit memory"
+                    data-escape="local"
+                    onChange={e => setEditing({ ...editing, text: e.target.value, error: null })}
+                    onKeyDown={submitKeys(() => void saveEdit(), () => setEditing(null))}
+                  />
+                  <div className="memory-form-bar">
+                    <select value={editing.kind} aria-label="Kind of memory" onChange={e => setEditing({ ...editing, kind: e.target.value as MemoryKind })}>
+                      {MEMORY_GROUPS.map(g => <option key={g.kind} value={g.kind}>{g.label}</option>)}
+                    </select>
+                    <span className="spacer" />
+                    <button type="button" className="btn secondary" onClick={() => setEditing(null)}>Cancel</button>
+                    <button type="button" className="btn" disabled={!editing.text.trim()} onClick={() => void saveEdit()}>Save</button>
+                  </div>
+                  {editing.error && <p className="memory-error small">{editing.error}</p>}
+                </li>
+              ) : (
+                <MemoryItem key={m.id} memory={m} onEdit={() => setEditing({ id: m.id, text: m.content, kind: m.kind, error: null })} onForget={() => onForget(m.id)} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </Sheet>
+  );
+}
+
+function MemoryItem({ memory, onEdit, onForget }: { memory: MemoryRow; onEdit: () => void; onForget: () => void }) {
+  return (
+    <li>
+      <div className="memory-text">
+        <span>{memory.content}</span>
+        <span className="muted small">{MEMORY_SOURCES[memory.source] ?? memory.source} · {relTime(memory.createdAt)}</span>
+      </div>
+      <button type="button" className="icon-btn small" title="Correct this memory" aria-label="Edit memory" onClick={onEdit}><Icon name="edit" /></button>
+      <button type="button" className="icon-btn small" title="Forget: the agent stops being reminded of this" aria-label="Forget memory" onClick={onForget}><Icon name="trash" /></button>
+    </li>
   );
 }
 

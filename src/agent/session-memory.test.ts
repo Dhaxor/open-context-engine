@@ -208,3 +208,54 @@ describe("SessionMemory — pruning stays intact", () => {
     expect(mem.getAll().length).toBe(0);
   });
 });
+
+describe("SessionMemory shared across processes", () => {
+  it("sees what another instance on the same store wrote, instead of overwriting it", () => {
+    // The MCP server, the CLI, and the editor each hold their own instance of
+    // one memories.json. Each used to load once and save its whole array, so
+    // the last writer silently discarded the others' memories.
+    const editor = new SessionMemory({ storePath: dir });
+    const mcp = new SessionMemory({ storePath: dir });
+    editor.add({ kind: "preference", content: "Use pnpm, never npm, in this repository", source: "user", tags: [] });
+    mcp.add({ kind: "codebase_insight", content: "Auth middleware lives in src/auth/jwt.ts", source: "mcp", tags: [] });
+    expect(editor.live().map(m => m.source).sort()).toEqual(["mcp", "user"]);
+    editor.add({ kind: "fact", content: "CI runs on Node 22 and 24", source: "user", tags: [] });
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, "memories.json"), "utf8"));
+    expect(onDisk).toHaveLength(3);
+  });
+
+  it("forgetting in one instance is not undone by the other's next save", () => {
+    const a = new SessionMemory({ storePath: dir });
+    const b = new SessionMemory({ storePath: dir });
+    const m = a.add({ kind: "fact", content: "The staging database is reset nightly", source: "user", tags: [] });
+    expect(b.live()).toHaveLength(1);
+    expect(a.forget(m.id)).toBe(true);
+    b.add({ kind: "fact", content: "Feature flags live in config/flags.yaml", source: "user", tags: [] });
+    expect(new SessionMemory({ storePath: dir }).live().map(e => e.content)).toEqual(["Feature flags live in config/flags.yaml"]);
+  });
+});
+
+describe("SessionMemory.edit", () => {
+  it("supersedes the old entry: recall sees only the correction, the history stays on disk", async () => {
+    const mem = new SessionMemory({ storePath: dir });
+    const old = mem.add({ kind: "codebase_insight", content: "Retrieval uses cosine similarity only", source: "agent", tags: [] });
+    const next = mem.edit(old.id, { content: "Retrieval fuses cosine similarity with bm25 via reciprocal rank fusion" });
+    expect(next.id).not.toBe(old.id);
+    expect(next).toMatchObject({ supersedes: old.id, kind: "codebase_insight", source: "user" });
+    expect(mem.live().map(m => m.id)).toEqual([next.id]);
+    expect(mem.getAll()).toHaveLength(2);
+    expect((await mem.recall("retrieval cosine", 5)).map(m => m.id)).toEqual([next.id]);
+  });
+
+  it("returns the entry unchanged when nothing changed, and rejects invalid or secret content", () => {
+    const mem = new SessionMemory({ storePath: dir });
+    const m = mem.add({ kind: "fact", content: "Releases are cut from main on Tuesdays", source: "user", tags: [] });
+    expect(mem.edit(m.id, { content: "  Releases are cut from main on Tuesdays " })).toBe(m);
+    expect(() => mem.edit(m.id, { content: "no" })).toThrow(/between 5 and 500/);
+    expect(() => mem.edit(m.id, { content: "the api_key: sk-abcdefghijklmnopqrstuvwx" })).toThrow(/secret/);
+    expect(() => mem.edit("mem_missing", { content: "Anything at all here" })).toThrow(/No memory/);
+    const moved = mem.edit(m.id, { kind: "preference" });
+    expect(moved.kind).toBe("preference");
+    expect(() => mem.edit(m.id, { content: "Edit the replaced one again" })).toThrow(/already replaced/);
+  });
+});

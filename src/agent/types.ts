@@ -135,6 +135,14 @@ export interface AgentConfig {
   memory?: import("./session-memory").SessionMemory;
   /** Label recorded as the source of extracted memories (default "agent"). */
   memorySource?: string;
+  /** Fired whenever remembered context is injected into the system prompt —
+   *  the agent-level twin of AgentRunOptions.onMemoryInjected, for wiring that
+   *  is fixed when the agent is built (the Trace evidence rail) rather than
+   *  per run. Both fire when both are set. */
+  onMemoryInjected?: (entries: import("./session-memory").MemoryEntry[]) => void;
+  /** Memories to keep out of the system prompt (true = leave out) — the ones a
+   *  user evicted from the context window. They stay in the store. */
+  memoryFilter?: (entry: import("./session-memory").MemoryEntry) => boolean;
   /** Tamper-evident audit logger. When set, run starts/ends and every tool
    *  call are appended to the audit log. Inline import type — no cycle. */
   audit?: import("../core/audit").AuditLogger;

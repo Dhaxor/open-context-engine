@@ -12,10 +12,11 @@ import type { ApprovalMode, TraceEnvelope } from "../../../src/trace/protocol";
 import { initialState, railEntries, reduce, type ViewAction, type ViewState } from "../../../src/trace/view-model";
 import { parseComposer, SLASH_COMMANDS, type SlashCommandSpec } from "../../../src/trace/composer";
 import { basename } from "../../../src/trace/format";
-import type { HistoryRow, HostState, SearchHit, SessionRow } from "../trace/protocol";
+import type { HistoryRow, HostSheet, HostState, MemoryKind, MemoryList, SearchHit, SessionRow } from "../trace/protocol";
 import type { VsCodeTransport } from "./transport";
+import { memoryDraft } from "./activity";
 import {
-  ApprovalDock, Boundary, Composer, ContextMeter, ContextSheet, EmptyState, HistorySheet, Notices, PhaseLine, ReviewSheet,
+  ApprovalDock, Boundary, Composer, ContextMeter, ContextSheet, EmptyState, HistorySheet, MemorySheet, Notices, PhaseLine, ReviewSheet,
   SearchResults, SessionBar, SetupCard, TurnView, WorktreeStrip,
   type ComposerHandle, type EditStatus, type SessionReview,
 } from "./components";
@@ -30,8 +31,11 @@ const COMMANDS: SlashCommandSpec[] = [
   { name: "search", summary: "Search the index for raw snippets", arg: "query" },
   { name: "context", summary: "Show what is in the context window" },
   { name: "history", summary: "Open a saved conversation" },
+  { name: "remember", summary: "Remember a note for future conversations", arg: "note" },
+  { name: "memory", summary: "See and edit what the agent remembers" },
   { name: "studio", summary: "Open this session in an editor tab" },
 ];
+
 
 function matchCommands(query: string): SlashCommandSpec[] {
   const q = query.trim().toLowerCase();
@@ -72,8 +76,10 @@ export function App({ transport, bindHandlers }: {
   const [parallel, setParallel] = React.useState(false);
   const [viewedId, setViewedId] = React.useState<string | null>(null);
   const [statuses, setStatuses] = React.useState<Record<string, EditStatus>>({});
-  const [sheet, setSheet] = React.useState<"context" | "history" | "review" | null>(null);
+  const [sheet, setSheet] = React.useState<"context" | "history" | "review" | "memory" | null>(null);
   const [history, setHistory] = React.useState<HistoryRow[] | null>(null);
+  /** `key` remounts the sheet so a new draft replaces the old one's text. */
+  const [memory, setMemory] = React.useState<{ list: MemoryList | null; draft: string; key: number }>({ list: null, draft: "", key: 0 });
   const [review, setReview] = React.useState<{ id: string; title: string; data: SessionReview | null; busy: boolean } | null>(null);
   const [search, setSearch] = React.useState<{ query: string; hits: SearchHit[] | null } | null>(null);
   const composer = React.useRef<ComposerHandle>(null);
@@ -92,6 +98,7 @@ export function App({ transport, bindHandlers }: {
       onSessions: (rows, p) => { setSessions(rows); setParallel(p); },
       onCompose: (text, send) => { if (send) submitRef.current(text); else composer.current?.set(text); },
       onSessionChanged: id => setViewedId(id),
+      onOpen: sheet => openSheetRef.current(sheet),
     });
     transport.connect();
     return () => transport.stop();
@@ -139,6 +146,27 @@ export function App({ transport, bindHandlers }: {
     setSheet("history");
     void transport.history().then(setHistory);
   }, [transport]);
+
+  const loadMemories = React.useCallback(() => {
+    void transport.memories().then(list => setMemory(m => ({ ...m, list: list ?? { enabled: false, rows: [] } })));
+  }, [transport]);
+
+  const openMemory = React.useCallback((draft = "") => {
+    setMemory(m => ({ list: m.list, draft, key: m.key + 1 }));
+    setSheet("memory");
+    loadMemories();
+  }, [loadMemories]);
+
+  /** Errors come back as text for the sheet to show beside the field. */
+  const writeMemory = React.useCallback(async (write: () => Promise<unknown>): Promise<string | null> => {
+    try {
+      await write();
+      loadMemories();
+      return null;
+    } catch (err) {
+      return String((err as Error)?.message ?? err);
+    }
+  }, [loadMemories]);
 
   const openReview = React.useCallback(async (row: SessionRow) => {
     setReview({ id: row.id, title: row.title || row.branch || "session", data: null, busy: false });
@@ -245,6 +273,15 @@ export function App({ transport, bindHandlers }: {
         if (name === "search") { runSearch(args); return; }
         if (name === "context") { setSheet("context"); return; }
         if (name === "history") { openHistory(); return; }
+        if (name === "memory") { openMemory(); return; }
+        if (name === "remember") {
+          if (!args.trim()) { openMemory(); return; }
+          void transport.remember(args, "preference").then(
+            () => dispatch({ type: "local-info", message: `Remembered: ${args.trim()}` }),
+            err => dispatch({ type: "local-error", message: String(err?.message ?? err) }),
+          );
+          return;
+        }
         if (name === "studio") { void transport.command("studio"); return; }
         if (name === "new") { void createSession(args || undefined); return; }
         if (name === "review-changes") { askReview(); return; }
@@ -272,9 +309,20 @@ export function App({ transport, bindHandlers }: {
         dispatch({ type: "local-error", message: `Unknown command /${name}` });
       }
     }
-  }, [askReview, closeSession, createSession, cycleMode, host, openHistory, openReview, rewind, runSearch, state.checkpoints, transport, viewed]);
+  }, [askReview, closeSession, createSession, cycleMode, host, openHistory, openMemory, openReview, rewind, runSearch, state.checkpoints, transport, viewed]);
   const submitRef = React.useRef(submit);
   submitRef.current = submit;
+
+  /** A sheet the host asked for: a command ("Remember This…") or a notification ("Review"). */
+  const openSheet = React.useCallback((request: HostSheet) => {
+    if (request.sheet === "memory") { openMemory(request.draft ?? ""); return; }
+    const row = sessions.find(s => s.id === request.sessionId);
+    if (!row) return;
+    selectSession(row.id);
+    if (request.sheet === "review") void openReview(row);
+  }, [openMemory, openReview, selectSession, sessions]);
+  const openSheetRef = React.useRef(openSheet);
+  openSheetRef.current = openSheet;
 
   // Global keys: approvals answer to y/a/n while nothing is being typed.
   React.useEffect(() => {
@@ -304,7 +352,7 @@ export function App({ transport, bindHandlers }: {
   return (
     <div className="app" data-running={running}>
       <header className="top">
-        <SessionBar sessions={sessions} viewedId={viewedId} parallel={parallel && !setup} onSelect={selectSession} onCreate={() => void createSession()} onHistory={openHistory} />
+        <SessionBar sessions={sessions} viewedId={viewedId} parallel={parallel && !setup} onSelect={selectSession} onCreate={() => void createSession()} onHistory={openHistory} onMemory={() => openMemory()} />
         {isWorktree && viewed && <WorktreeStrip session={viewed} onReview={() => void openReview(viewed)} onClose={() => void closeSession(viewed)} />}
         <ContextMeter context={state.context} onOpen={() => setSheet("context")} />
       </header>
@@ -331,6 +379,7 @@ export function App({ transport, bindHandlers }: {
                 onUndoAll={ids => void setMany(ids, "undone")}
                 onRedoAll={ids => void setMany(ids, "applied")}
                 onRewind={hash => void rewind(hash)}
+                onRemember={text => openMemory(memoryDraft(text))}
               />
               </Boundary>
             ))}
@@ -367,6 +416,7 @@ export function App({ transport, bindHandlers }: {
         <ContextSheet
           context={state.context}
           entries={railEntries(state)}
+          mcp={host?.mcp}
           onAction={(action, id) => void transport.context(action, id).catch(() => {})}
           onCite={cite}
           onCompact={() => void transport.compact().catch(() => {})}
@@ -379,6 +429,24 @@ export function App({ transport, bindHandlers }: {
           onResume={id => { setSheet(null); void transport.resume(id).catch(() => {}); }}
           onDelete={id => { void transport.deleteHistory(id).then(() => transport.history().then(setHistory)).catch(() => {}); }}
           onNew={() => { setSheet(null); void transport.reset().catch(() => {}); }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === "memory" && (
+        <MemorySheet
+          key={memory.key}
+          list={memory.list}
+          draft={memory.draft}
+          onAdd={(content, kind: MemoryKind) => writeMemory(() => transport.remember(content, kind))}
+          onEdit={(id, content, kind) => writeMemory(() => transport.editMemory(id, { content, kind }))}
+          onForget={id => { void transport.forgetMemory(id).then(loadMemories).catch(() => {}); }}
+          onClear={() => {
+            void transport.confirm("Forget every memory for this workspace? The agent stops being reminded of all of them.", "Forget all").then(ok => {
+              if (ok) void transport.clearMemories().then(loadMemories).catch(() => {});
+            });
+          }}
+          onOpenFile={() => void transport.command("memoryFile")}
+          onEnable={() => void transport.command("memorySetting")}
           onClose={() => setSheet(null)}
         />
       )}

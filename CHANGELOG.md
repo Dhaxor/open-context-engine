@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.9.0 (unreleased) — the agent meets you where you work
+
+- **Your MCP servers, in the agent.** `mcpServers` in
+  `~/.open-context/config.json` (the shape Claude Code and Cursor use:
+  `command`/`args`/`env` for stdio, `url`/`headers` for Streamable HTTP or
+  SSE; `${env:NAME}` and `${workspaceFolder}` expand) gives `oce agent`,
+  `oce trace` and the VS Code agent those servers' tools, namespaced
+  `mcp__<server>__<tool>`. A tool marked `readOnlyHint` runs freely; every
+  other one asks in every approval mode — full-auto included — until answered
+  "always" or listed in the server's `autoApprove`. Servers come from user
+  config only: a workspace's `.open-context/config.json` cannot start
+  programs (`McpToolHub`, `src/agent/mcp-client.ts`; `--no-mcp` to skip).
+- **`oce mcp install <client>`** adds Open Context to Claude Code
+  (`.mcp.json`, or `claude mcp add` for user scope), Cursor
+  (`.cursor/mcp.json`), VS Code (`.vscode/mcp.json`), Windsurf, or Claude
+  Desktop — merged into the servers already there, comments tolerated, an
+  unreadable file left alone. `--print` previews, `--remove` undoes; it uses
+  npx when `oce` is not installed.
+- **Checkpoints survive a reload.** A saved conversation now keeps its
+  timeline (each checkpoint with the before/after of the files its turn
+  edited) in `sessions/checkpoints/<id>.json`, so a resumed session — `oce
+  trace --continue`, a reloaded VS Code window, a settings rebuild — brings
+  back its changes and can still rewind. The newest checkpoints that fit
+  8 MB are kept, as one contiguous run.
+- **Memory you can see and correct.** Memories injected into the prompt now
+  reach the evidence rail (`onMemoryInjected` only rode on per-run options the
+  Trace session never passed); evicting one keeps it out of the next prompt.
+  `SessionMemory.edit()` corrects a memory by superseding it, and an instance
+  re-reads `memories.json` when another process (the MCP server, the CLI)
+  wrote it, instead of overwriting what that process remembered.
+
 ## 0.8.0 — the agent checks its own work
 
 - **Edits reach the trace.** The edit tools reported each change only to

@@ -4,13 +4,15 @@ import { OpenContext } from "../../../src/core/context";
 import { AuditLogger, defaultAuditDir } from "../../../src/core/audit";
 import { policyRequiresAudit } from "../../../src/core/policy";
 import { getLicense, isEntitled } from "../../../src/core/license";
-import { SessionStore } from "../../../src/agent/session-store";
-import { SessionMemory } from "../../../src/agent/session-memory";
+import { SessionStore, type SavedSession, type SavedTrace } from "../../../src/agent/session-store";
+import { SessionMemory, memoryTags, validateMemoryContent, type MemoryEntry } from "../../../src/agent/session-memory";
 import { ModelRouter, defaultRoutingConfig } from "../../../src/agent/model-router";
 import type { ApprovalMode } from "../../../src/agent/permissions";
 import type { ContextAgent } from "../../../src/agent/agent";
 import { detectSandbox, type SandboxKind } from "../../../src/agent/sandbox";
 import { buildReviewQuery, parseUnifiedDiff } from "../../../src/agent/review";
+import type { McpToolHub } from "../../../src/agent/mcp-client";
+import type { ToolDefinition } from "../../../src/agent/types";
 import { assembleAgentStack } from "../../../src/trace/stack";
 import { SessionRegistry, type BuiltSessionHandle } from "../../../src/trace/registry";
 import { WorktreeManager } from "../../../src/trace/worktree";
@@ -20,7 +22,22 @@ import type { EditReviewService, EditScope } from "../services/EditReviewService
 import { VSCodeEditApplier } from "../services/VSCodeEditApplier";
 import { configuredApprovalMode, readAgentSettings, saveApprovalMode, SetupError, type AgentSettings } from "./agent-settings";
 import { migrateLegacyChats } from "./legacy-history";
-import type { HistoryRow, HostState, SessionRow, SetupNeed } from "./protocol";
+import type { HistoryRow, HostState, McpStatusRow, MemoryKind, MemoryList, MemoryRow, SessionRow, SetupNeed } from "./protocol";
+
+const MEMORY_KINDS: MemoryKind[] = ["preference", "codebase_insight", "fact", "conversation_summary"];
+
+/** A conversation to continue: its messages, title, and (when it ran in a
+ *  TraceSession) the timeline that brings its checkpoints back. */
+interface Restore {
+    session: string;
+    title: string;
+    trace?: SavedTrace;
+    turns?: number;
+}
+
+function restoreOf(saved: SavedSession): Restore {
+    return { session: saved.session, title: saved.title, turns: saved.turns, ...(saved.trace ? { trace: saved.trace } : {}) };
+}
 
 const ACTIVE_SESSION_KEY = "openContext.trace.activeSession";
 /** The same cap `oce review` applies by default: past this, a review is a skim. */
@@ -50,6 +67,22 @@ interface Built {
     primary: boolean;
     branch?: string;
     memory?: SessionMemory;
+    /** Stops watching the session for attention events. */
+    unwatch?: () => void;
+    /** The MCP hub (by config digest) whose tools this stack holds; "" for none. */
+    mcpKey: string;
+}
+
+type ExtraTools = { tools: ToolDefinition[]; alwaysAsk: string[] };
+
+/** Something a session wants the user to see while they may be looking away. */
+export interface Attention {
+    sessionId: string;
+    title: string;
+    kind: "finished" | "failed" | "approval";
+    detail: string;
+    /** A parallel session in its own worktree, which can be reviewed and landed. */
+    worktree: boolean;
 }
 
 /**
@@ -70,6 +103,13 @@ export class TraceHost implements vscode.Disposable {
     private parallel = false;
     private disposables: vscode.Disposable[] = [];
     private refreshing: Promise<void> | null = null;
+    /** One memory store per repository root, shared by every session in it. */
+    private memoryStores = new Map<string, SessionMemory>();
+    /** Connected MCP hubs by config digest. A hub stays open while any built
+     *  stack holds its tools, so a settings change never cuts a running turn
+     *  off mid-call; the next build picks up the new one. */
+    private mcpHubs = new Map<string, Promise<McpToolHub | null>>();
+    private mcpStatus: McpStatusRow[] = [];
 
     private readonly sessionsEmitter = new vscode.EventEmitter<void>();
     private readonly resetEmitter = new vscode.EventEmitter<{ from: string; to: string }>();
@@ -80,6 +120,13 @@ export class TraceHost implements vscode.Disposable {
     private readonly startEmitter = new vscode.EventEmitter<void>();
     /** The primary session came up — after a setup gate cleared, say. */
     readonly onDidStart = this.startEmitter.event;
+    private readonly attentionEmitter = new vscode.EventEmitter<Attention>();
+    /** A turn finished or failed, or one is waiting on an approval. */
+    readonly onDidNeedAttention = this.attentionEmitter.event;
+    private readonly viewedEmitter = new vscode.EventEmitter<string>();
+    /** A webview started showing this session. */
+    readonly onDidViewSession = this.viewedEmitter.event;
+    private rosterTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(private readonly review: EditReviewService, private readonly extCtx?: vscode.ExtensionContext) {
         // API keys live in SecretStorage, which no configuration event covers:
@@ -142,6 +189,12 @@ export class TraceHost implements vscode.Disposable {
         return { sessions: (this.registry?.list() ?? []) as SessionRow[], parallel: this.parallel };
     }
 
+    /** The checkout a path belongs to — the session workspace that holds it. */
+    workspaceFor(fsPath: string): string | undefined {
+        const id = this.sessionIdFor(fsPath);
+        return id ? this.builds.get(id)?.workspace : undefined;
+    }
+
     workspaceOf(id: string | null): string | undefined {
         const sessionId = id ?? this.registry?.activeId_() ?? null;
         return sessionId ? this.builds.get(sessionId)?.workspace : undefined;
@@ -165,7 +218,50 @@ export class TraceHost implements vscode.Disposable {
             shellSandbox: !cfg.get<boolean>("agent.shell.enabled", true) ? "off"
                 : !cfg.get<boolean>("agent.shell.sandbox", true) ? "none"
                 : detectSandboxKind(svc.getIndexWorkspaceRoot()),
+            mcp: this.mcpStatus,
         };
+    }
+
+    // ─── the user's MCP servers ──────────────────────────────────────────────
+
+    /** The tools of the configured MCP servers, connecting them on first use. */
+    private async mcpTools(settings: AgentSettings): Promise<ExtraTools | undefined> {
+        if (!settings.mcpKey) {
+            if (this.mcpStatus.length) { this.mcpStatus = []; this.stateEmitter.fire(); }
+            return undefined;
+        }
+        let pending = this.mcpHubs.get(settings.mcpKey);
+        if (!pending) {
+            pending = (async () => {
+                const { McpToolHub } = await import("../../../src/agent/mcp-client");
+                const workspaceRoot = this.primary()?.workspace || ContextService.getInstance().getIndexWorkspaceRoot() || process.cwd();
+                const hub = await McpToolHub.connect(settings.mcpServers, {
+                    workspaceRoot, clientName: "open-context-vscode", clientVersion: String(this.extCtx?.extension?.packageJSON?.version ?? "0.0.0"),
+                });
+                this.mcpStatus = hub.status();
+                for (const s of hub.status()) {
+                    if (s.state === "failed") warnOnce(`MCP server "${s.name}" didn't start: ${s.error ?? "unknown error"}. Its tools are not available to the agent.`);
+                }
+                this.stateEmitter.fire();
+                return hub;
+            })().catch(err => {
+                warnOnce(`Couldn't load MCP support: ${String(err?.message ?? err)}`);
+                return null;
+            });
+            this.mcpHubs.set(settings.mcpKey, pending);
+        }
+        const hub = await pending;
+        return hub ? { tools: hub.tools(), alwaysAsk: hub.alwaysAsk() } : undefined;
+    }
+
+    /** Close hubs no built stack holds any more. */
+    private releaseMcp(): void {
+        const inUse = new Set([...this.builds.values()].map(b => b.mcpKey));
+        for (const [key, pending] of this.mcpHubs) {
+            if (inUse.has(key)) continue;
+            this.mcpHubs.delete(key);
+            void pending.then(hub => hub?.close()).catch(() => {});
+        }
     }
 
     /** Something only the host knows changed (license, index root): re-push state. */
@@ -173,11 +269,125 @@ export class TraceHost implements vscode.Disposable {
         this.stateEmitter.fire();
     }
 
-    /** Clear the primary session's remembered insights. Null when memory is off
-     *  or nothing has been built yet (the caller then clears the file itself). */
+    /** A webview is now showing this session — whatever it had to say is seen. */
+    noteViewing(sessionId: string): void {
+        this.viewedEmitter.fire(sessionId);
+    }
+
+    // ─── watching sessions ───────────────────────────────────────────────────
+
+    /**
+     * Follow a session's own events (not its sub-agents') for what the user
+     * should hear about when they are not looking at it: a turn that ended, a
+     * turn that failed, a tool call waiting on them. Subscribed from the
+     * current cursor, so a resumed conversation's replay is not news.
+     */
+    private watch(id: string, built: Built): void {
+        built.unwatch?.();
+        let turn = { files: new Set<string>(), error: "", interrupted: false };
+        built.unwatch = built.session.subscribe(env => {
+            if (env.agentId) return;
+            const e = env.event;
+            switch (e.type) {
+                case "turn_start":
+                    turn = { files: new Set(), error: "", interrupted: false };
+                    this.scheduleRoster();
+                    return;
+                case "edit": turn.files.add(e.edit.path); return;
+                case "notice": if (e.level === "error") turn.error = e.message; return;
+                case "phase":
+                    // The roster's spinner reads isRunning(); it changed.
+                    if (e.phase === "interrupted") turn.interrupted = true;
+                    this.scheduleRoster();
+                    return;
+                case "approval_request":
+                    this.attend(id, built, "approval", e.request.title);
+                    return;
+                case "checkpoint": {
+                    if (!built.primary) void this.registry?.refreshChanges(id);
+                    // The user pressed Stop; telling them it stopped is noise.
+                    if (turn.interrupted) return;
+                    const n = turn.files.size;
+                    this.attend(id, built, turn.error ? "failed" : "finished",
+                        turn.error || (n ? `${n} file${n === 1 ? "" : "s"} changed` : "no files changed"));
+                    return;
+                }
+            }
+        }, built.session.cursor());
+    }
+
+    private attend(id: string, built: Built, kind: Attention["kind"], detail: string): void {
+        // The main checkout's title is the conversation's first prompt — too
+        // long for a toast; a parallel session's is the task it was given.
+        const title = built.primary ? "Agent" : built.session.meta().title || built.branch?.replace(/^trace\//, "") || "Parallel session";
+        this.attentionEmitter.fire({ sessionId: id, title, kind, detail, worktree: !built.primary });
+    }
+
+    /** Phase changes arrive in bursts; the roster needs the settled picture. */
+    private scheduleRoster(): void {
+        if (this.rosterTimer) return;
+        this.rosterTimer = setTimeout(() => { this.rosterTimer = null; this.sessionsEmitter.fire(); }, 120);
+    }
+
+    // ─── memory ──────────────────────────────────────────────────────────────
+
+    /** What the agent remembers about this workspace, newest first. Works
+     *  before any session starts — the store only needs the workspace root. */
+    memories(): MemoryList {
+        const enabled = memoryEnabled();
+        const store = this.memoryStore();
+        return { enabled, rows: store ? store.live().map(toMemoryRow) : [] };
+    }
+
+    /** Remember a note the user wrote. Same rules as the MCP memory_remember tool. */
+    remember(content: string, kind: MemoryKind = "preference"): MemoryRow {
+        const store = this.writableMemory();
+        const text = content.trim();
+        const invalid = validateMemoryContent(text);
+        if (invalid) throw new Error(invalid);
+        return toMemoryRow(store.add({ kind: memoryKind(kind), content: text, source: "user", tags: memoryTags(text) }));
+    }
+
+    /** Correct a memory: the edit supersedes it, so recall only sees the new text. */
+    editMemory(id: string, patch: { content?: string; kind?: MemoryKind }): MemoryRow {
+        return toMemoryRow(this.writableMemory().edit(id, {
+            ...(patch.content !== undefined ? { content: patch.content } : {}),
+            ...(patch.kind ? { kind: memoryKind(patch.kind) } : {}),
+        }));
+    }
+
+    forgetMemory(id: string): boolean {
+        return this.memoryStore()?.forget(id) ?? false;
+    }
+
+    /** Clear every remembered note. Null when there is no workspace to clear. */
     clearMemories(): number | null {
-        const memory = this.primary()?.memory;
-        return memory ? memory.clearAll() : null;
+        const store = this.memoryStore();
+        return store ? store.clearAll() : null;
+    }
+
+    /** The store for the repository the primary session runs in — parallel
+     *  sessions are worktrees of the same repository, so they share it rather
+     *  than each learning into a worktree that is deleted when it lands. */
+    private memoryStore(): SessionMemory | undefined {
+        const root = this.primary()?.workspace || ContextService.getInstance().getIndexWorkspaceRoot();
+        return root ? this.memoryAt(root) : undefined;
+    }
+
+    private writableMemory(): SessionMemory {
+        if (!memoryEnabled()) throw new Error("Memory is off. Turn on openContext.agent.memory.enabled to remember notes.");
+        const store = this.memoryStore();
+        if (!store) throw new Error("Open a folder to remember notes about it.");
+        return store;
+    }
+
+    private memoryAt(root: string): SessionMemory {
+        let store = this.memoryStores.get(root);
+        if (!store) {
+            store = new SessionMemory({ storePath: path.join(root, ".open-context") });
+            this.memoryStores.set(root, store);
+        }
+        return store;
     }
 
     // ─── conversations ───────────────────────────────────────────────────────
@@ -217,7 +427,7 @@ export class TraceHost implements vscode.Disposable {
         const saved = primary.store.load(savedId);
         if (!saved) throw new Error("That conversation is no longer saved.");
         this.review.clear();
-        await this.rebuild(this.primaryId()!, { newId: saved.id, restore: { session: saved.session, title: saved.title } });
+        await this.rebuild(this.primaryId()!, { newId: saved.id, restore: restoreOf(saved) });
     }
 
     async setMode(id: string | null, mode: ApprovalMode): Promise<void> {
@@ -264,6 +474,34 @@ export class TraceHost implements vscode.Disposable {
         return { files: count };
     }
 
+    /**
+     * Run a composed prompt as a turn (a "Fix with agent" from a squiggle or a
+     * failed command), in the session whose checkout holds `fsPath` — a
+     * problem in a parallel session's worktree belongs to that session — or
+     * the active one. Returns the session id, for the sidebar to switch to.
+     */
+    async promptFor(fsPath: string | null, text: string, label: string): Promise<string> {
+        const registry = await this.ready();
+        const id = (fsPath ? this.sessionIdFor(fsPath) : null) ?? registry.activeId_();
+        const session = await this.sessionForTurn(id);
+        if (session.isRunning()) throw new Error("The agent is already working on something in that session — stop it or wait for it to finish.");
+        // Not awaited: the turn streams back as events.
+        void session.prompt(text, { label }).catch(() => {});
+        return session.meta().id;
+    }
+
+    /** The session whose workspace contains the path (the deepest, since
+     *  worktrees can sit inside the main checkout). */
+    private sessionIdFor(fsPath: string): string | null {
+        let best: { id: string; depth: number } | null = null;
+        for (const [id, built] of this.builds) {
+            const rel = path.relative(built.workspace, fsPath);
+            if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
+            if (!best || built.workspace.length > best.depth) best = { id, depth: built.workspace.length };
+        }
+        return best?.id ?? null;
+    }
+
     /** Bring open sessions to the configured mode (a settings.json edit). */
     private applyConfiguredMode(): void {
         const mode = configuredApprovalMode();
@@ -305,11 +543,13 @@ export class TraceHost implements vscode.Disposable {
         const lastId = this.extCtx?.workspaceState.get<string>(ACTIVE_SESSION_KEY);
         const saved = lastId ? store.load(lastId) : null;
         const id = saved?.id ?? store.newId();
+        const extraTools = await this.mcpTools(settings);
         const built = this.buildStack({
-            id, ctx, workspace: root, store, settings, primary: true, branch: mainBranch,
-            ...(saved ? { restore: { session: saved.session, title: saved.title } } : {}),
+            id, ctx, workspace: root, store, settings, primary: true, branch: mainBranch, extraTools,
+            ...(saved ? { restore: restoreOf(saved) } : {}),
         });
         this.builds.set(id, built);
+        this.watch(id, built);
         void this.extCtx?.workspaceState.update(ACTIVE_SESSION_KEY, id);
         // The primary's index belongs to ContextService; closing the session
         // must not close it.
@@ -331,14 +571,16 @@ export class TraceHost implements vscode.Disposable {
             // The shared embedding cache makes this mostly cache hits: a fresh
             // worktree is the same files the main index already embedded.
             await ctx.incrementalIndex();
+            const extraTools = await this.mcpTools(settings);
             const built = this.buildStack({
                 id: spec.id, ctx, workspace: spec.workspace, store: SessionStore.forWorkspace(spec.workspace),
-                settings, primary: false, branch: spec.branch, title: spec.title,
+                settings, primary: false, branch: spec.branch, title: spec.title, extraTools,
             });
             this.builds.set(spec.id, built);
+            this.watch(spec.id, built);
             return {
                 session: built.session,
-                close: async () => { this.builds.delete(spec.id); ctx.close(); },
+                close: async () => { this.forget(spec.id); ctx.close(); },
             };
         } catch (err) {
             ctx.close();
@@ -355,7 +597,9 @@ export class TraceHost implements vscode.Disposable {
         primary: boolean;
         branch?: string;
         title?: string;
-        restore?: { session: string; title: string };
+        restore?: Restore;
+        /** The user's MCP servers' tools (mcpTools). */
+        extraTools?: ExtraTools;
     }): Built {
         const { ctx, settings, workspace } = input;
         const svc = ContextService.getInstance();
@@ -384,7 +628,10 @@ export class TraceHost implements vscode.Disposable {
                 else await ctx.addFiles([{ path: p, contents }]);
             },
         };
-        const memory = settings.memory ? new SessionMemory({ storePath: path.join(workspace, ".open-context") }) : undefined;
+        // Parallel sessions remember into the main checkout's store: their
+        // worktree is the same repository, and it goes away when they land.
+        const memoryRoot = input.primary ? workspace : this.primary()?.workspace ?? workspace;
+        const memory = settings.memory ? this.memoryAt(memoryRoot) : undefined;
         // The shell is on by default, so full-auto must not mean "run anything
         // unasked" unless the command is contained: only Seatbelt also limits
         // writes (bubblewrap isolates the network but leaves the filesystem
@@ -416,14 +663,25 @@ export class TraceHost implements vscode.Disposable {
             agent: settings.limits,
             onEdit: edit => this.review.record(edit, scope),
             onPolicyBlock: (_cap, reason) => warnOnce(`Workspace policy: ${reason}.`),
+            ...(input.extraTools ? { extraTools: input.extraTools } : {}),
             sessionStore: input.store,
             sessionId: input.id,
-            ...(input.restore ? { restore: input.restore.session } : {}),
+            ...(input.restore ? {
+                restore: input.restore.session,
+                ...(input.restore.trace ? { restoreTrace: input.restore.trace } : {}),
+                ...(input.restore.turns !== undefined ? { restoreTurns: input.restore.turns } : {}),
+            } : {}),
             meta: {
                 ...(input.restore ? { title: input.restore.title } : input.title ? { title: input.title } : {}),
                 ...(input.branch ? { branch: input.branch } : {}),
             },
         });
+        // The changes tray of a restored turn diffs and undoes through the
+        // review service, which only knows edits it has seen. A rebuild of a
+        // live session carries edits it already has; leave those as they are.
+        for (const checkpoint of input.restore?.trace?.checkpoints ?? []) {
+            for (const edit of checkpoint.edits) if (!this.review.get(edit.id)) this.review.record(edit, scope);
+        }
         return {
             session: stack.trace!,
             agent: stack.agent,
@@ -440,6 +698,7 @@ export class TraceHost implements vscode.Disposable {
             primary: input.primary,
             branch: input.branch,
             memory,
+            mcpKey: input.extraTools ? settings.mcpKey : "",
         };
     }
 
@@ -448,7 +707,7 @@ export class TraceHost implements vscode.Disposable {
      * `newId` the conversation carries over (a settings change); with one it
      * is a new or resumed conversation.
      */
-    private async rebuild(id: string, opts: { newId?: string; restore?: { session: string; title: string } } = {}): Promise<void> {
+    private async rebuild(id: string, opts: { newId?: string; restore?: Restore } = {}): Promise<void> {
         const registry = await this.ready();
         const old = this.builds.get(id);
         if (!old) return;
@@ -459,16 +718,25 @@ export class TraceHost implements vscode.Disposable {
         const workspace = old.primary ? ctx.getWorkspaceRoot() : old.workspace;
         const store = old.primary && workspace !== old.workspace ? SessionStore.forWorkspace(workspace) : old.store;
         const nextId = opts.newId ?? id;
-        const carried = opts.newId === undefined
-            ? { session: old.agent.exportSession(), title: old.session.meta().title || "" }
+        // A settings rebuild carries the whole conversation, checkpoints
+        // included — it used to keep only the messages, so changing a setting
+        // silently took Rewind away.
+        const carried: Restore | undefined = opts.newId === undefined
+            ? { session: old.agent.exportSession(), title: old.session.meta().title || "", trace: old.session.exportTrace(), turns: old.session.turnCount() }
             : opts.restore;
+        const extraTools = await this.mcpTools(settings);
         const built = this.buildStack({
-            id: nextId, ctx, workspace, store, settings, primary: old.primary, branch: old.branch,
+            id: nextId, ctx, workspace, store, settings, primary: old.primary, branch: old.branch, extraTools,
             ...(carried && carried.session ? { restore: carried } : {}),
         });
-        const close = old.primary ? async () => {} : async () => { this.builds.delete(nextId); ctx.close(); };
+        const close = old.primary ? async () => {} : async () => { this.forget(nextId); ctx.close(); };
+        // Swap without forget(): its MCP release would run before the new
+        // stack is registered and close the hub that stack was just given.
+        old.unwatch?.();
         this.builds.delete(id);
         this.builds.set(nextId, built);
+        this.watch(nextId, built);
+        this.releaseMcp();
         registry.replace(id, { id: nextId, handle: { session: built.session, close } });
         if (old.primary) void this.extCtx?.workspaceState.update(ACTIVE_SESSION_KEY, nextId);
         this.resetEmitter.fire({ from: id, to: nextId });
@@ -508,6 +776,13 @@ export class TraceHost implements vscode.Disposable {
         return this.refreshing;
     }
 
+    /** Drop a build and stop watching it. */
+    private forget(id: string): void {
+        this.builds.get(id)?.unwatch?.();
+        this.builds.delete(id);
+        this.releaseMcp();
+    }
+
     private currentId(id: string): string {
         // A rebuild may have handed the entry a new id; the active one is the
         // best answer for a caller still holding the old.
@@ -532,12 +807,21 @@ export class TraceHost implements vscode.Disposable {
     async dispose(): Promise<void> {
         for (const d of this.disposables) d.dispose();
         this.disposables = [];
-        for (const built of this.builds.values()) if (built.session.isRunning()) built.session.interrupt();
+        for (const built of this.builds.values()) {
+            built.unwatch?.();
+            if (built.session.isRunning()) built.session.interrupt();
+        }
+        if (this.rosterTimer) clearTimeout(this.rosterTimer);
         await this.registry?.closeAll().catch(() => {});
+        const hubs = [...this.mcpHubs.values()];
+        this.mcpHubs.clear();
+        await Promise.all(hubs.map(p => p.then(h => h?.close()).catch(() => {})));
         this.sessionsEmitter.dispose();
         this.resetEmitter.dispose();
         this.stateEmitter.dispose();
         this.startEmitter.dispose();
+        this.attentionEmitter.dispose();
+        this.viewedEmitter.dispose();
     }
 }
 
@@ -551,6 +835,18 @@ function shellSandboxKind(settings: AgentSettings, workspace: string): SandboxKi
 
 function detectSandboxKind(workspace: string): SandboxKind {
     try { return detectSandbox(workspace || process.cwd()).kind; } catch { return "none"; }
+}
+
+function memoryEnabled(): boolean {
+    return vscode.workspace.getConfiguration("openContext").get<boolean>("agent.memory.enabled", true);
+}
+
+function memoryKind(kind: string): MemoryKind {
+    return (MEMORY_KINDS as string[]).includes(kind) ? (kind as MemoryKind) : "preference";
+}
+
+function toMemoryRow(e: MemoryEntry): MemoryRow {
+    return { id: e.id, kind: memoryKind(e.kind), content: e.content, source: e.source, createdAt: new Date(e.createdAt).toISOString() };
 }
 
 function toSetupNeed(err: unknown): SetupNeed {

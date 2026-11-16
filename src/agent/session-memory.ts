@@ -46,6 +46,12 @@ export class SessionMemory {
   private embedder?: MemoryEmbedder;
   /** In-flight ensureEmbeddings() call, so concurrent recalls share one batch. */
   private embeddingPromise?: Promise<void>;
+  /** mtime+size of memories.json as this instance last read or wrote it. The
+   *  same store is shared by the MCP server, the CLI, and the editor, each in
+   *  its own process: a stamp that moved means another one wrote, so reload
+   *  before reading or mutating — otherwise the next save() silently discards
+   *  what the other process remembered. */
+  private diskStamp = "";
 
   constructor(config: SessionMemoryConfig) {
     this.filePath = path.join(config.storePath, "memories.json");
@@ -57,6 +63,7 @@ export class SessionMemory {
   }
 
   add(entry: Omit<MemoryEntry, "id" | "createdAt" | "relevanceScore"> & { supersedes?: string }): MemoryEntry {
+    this.syncFromDisk();
     const full: MemoryEntry = {
       ...entry,
       id: generateId(),
@@ -79,6 +86,7 @@ export class SessionMemory {
   /** Lexical-only retrieval, kept for compatibility. Superseded entries never
    *  surface: a replaced memory is dead knowledge, not low-ranked knowledge. */
   retrieve(query: string, topK = 5): MemoryEntry[] {
+    this.syncFromDisk();
     const live = this.entries.filter(e => !e.supersededBy);
     const queryTokens = tokenize(query);
     if (!queryTokens.length) return live.slice(-topK);
@@ -114,6 +122,7 @@ export class SessionMemory {
    *  per-signal normalization, then freshness × relevance. Entries without an
    *  embedding still compete on the lexical path — recall degrades, never dies. */
   async recall(query: string, topK = 5): Promise<MemoryEntry[]> {
+    this.syncFromDisk();
     await this.ensureEmbeddings();
     const live = this.entries.filter(e => !e.supersededBy);
     if (!live.length) return [];
@@ -157,14 +166,42 @@ export class SessionMemory {
   }
 
   getAll(): MemoryEntry[] {
+    this.syncFromDisk();
     return [...this.entries];
   }
 
+  /** What recall can return: every memory nothing has replaced, newest first. */
+  live(): MemoryEntry[] {
+    this.syncFromDisk();
+    return this.entries.filter(e => !e.supersededBy).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   getByKind(kind: MemoryKind): MemoryEntry[] {
+    this.syncFromDisk();
     return this.entries.filter(e => e.kind === kind);
   }
 
+  /**
+   * Correct a memory. The edit is a new entry that supersedes the old one —
+   * the same move `memory_remember --supersedes` makes — so the original stays
+   * on disk as history while recall only ever sees the correction. Unchanged
+   * content and kind return the entry as it was. Throws on invalid content.
+   */
+  edit(id: string, patch: { content?: string; kind?: MemoryKind }, source = "user"): MemoryEntry {
+    this.syncFromDisk();
+    const old = this.entries.find(e => e.id === id);
+    if (!old) throw new Error(`No memory with id ${id}.`);
+    if (old.supersededBy) throw new Error("That memory was already replaced by a newer one.");
+    const content = (patch.content ?? old.content).trim();
+    const kind = patch.kind ?? old.kind;
+    if (content === old.content && kind === old.kind) return old;
+    const invalid = validateMemoryContent(content);
+    if (invalid) throw new Error(invalid);
+    return this.add({ kind, content, source, tags: extractTags(content), supersedes: old.id });
+  }
+
   remove(id: string): boolean {
+    this.syncFromDisk();
     const before = this.entries.length;
     this.entries = this.entries.filter(e => e.id !== id);
     if (this.entries.length < before) {
@@ -181,6 +218,7 @@ export class SessionMemory {
   }
 
   updateRelevance(id: string, score: number): void {
+    this.syncFromDisk();
     const entry = this.entries.find(e => e.id === id);
     if (entry) {
       entry.relevanceScore = Math.max(0, Math.min(2, score));
@@ -222,8 +260,16 @@ export class SessionMemory {
 
   /** Hybrid recall formatted for the system prompt. Returns the entries too,
    *  so the evidence rail can show exactly what the model was reminded of. */
-  async recallForPrompt(query: string, maxChars = 2000): Promise<{ text: string; entries: MemoryEntry[] }> {
-    const relevant = await this.recall(query, 8);
+  async recallForPrompt(
+    query: string,
+    maxChars = 2000,
+    /** Memories to leave out — the ones a user evicted from the window. They
+     *  stay in the store; they just stop being injected. */
+    exclude?: (entry: MemoryEntry) => boolean,
+  ): Promise<{ text: string; entries: MemoryEntry[] }> {
+    const relevant = exclude
+      ? (await this.recall(query, 16)).filter(e => !exclude(e)).slice(0, 8)
+      : await this.recall(query, 8);
     if (!relevant.length) return { text: "", entries: [] };
 
     let result = "## Remembered Context (from prior sessions — may be stale; verify against the current code before relying on it)\n";
@@ -279,6 +325,7 @@ export class SessionMemory {
 
   /** Remove every entry and persist the empty store. */
   clearAll(): number {
+    this.syncFromDisk();
     const n = this.entries.length;
     this.entries = [];
     this.save();
@@ -297,6 +344,7 @@ export class SessionMemory {
   }
 
   private harvest(text: string, source: string, patterns: { pattern: RegExp; kind: MemoryKind }[], forcedKind?: MemoryKind): MemoryEntry[] {
+    this.syncFromDisk();
     const added: MemoryEntry[] = [];
     // Code fences are full of strings that pattern-match prose ("the project
     // uses..." inside a README diff); never harvest from them.
@@ -341,10 +389,27 @@ export class SessionMemory {
       if (fs.existsSync(this.filePath)) {
         const data = fs.readFileSync(this.filePath, "utf8");
         const parsed = JSON.parse(data);
-        if (Array.isArray(parsed)) this.entries = parsed;
+        this.entries = Array.isArray(parsed) ? parsed : [];
+      } else {
+        this.entries = [];
       }
     } catch {
       this.entries = [];
+    }
+    this.diskStamp = this.stampOnDisk();
+  }
+
+  /** Reload when another process wrote memories.json since we last touched it. */
+  private syncFromDisk(): void {
+    if (this.stampOnDisk() !== this.diskStamp) this.load();
+  }
+
+  private stampOnDisk(): string {
+    try {
+      const st = fs.statSync(this.filePath);
+      return `${st.mtimeMs}:${st.size}`;
+    } catch {
+      return "";
     }
   }
 
@@ -353,11 +418,27 @@ export class SessionMemory {
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2));
+      this.diskStamp = this.stampOnDisk();
       // Markdown twin: the human-inspectable, harness-portable rendering of the
       // same store (MEMORY.md convention). JSON stays the source of truth.
       fs.writeFileSync(this.markdownPath, renderMarkdown(this.entries, this.maxAge));
     } catch {}
   }
+}
+
+/** Why `content` can't be a memory, or null when it can. The one rule set the
+ *  MCP tool, the CLI, and the editor all apply: one sentence-sized note, and
+ *  never anything secret-shaped (memories are plain text on disk). */
+export function validateMemoryContent(content: string): string | null {
+  const text = content.trim();
+  if (text.length < 5 || text.length > 500) return "A memory must be one note between 5 and 500 characters.";
+  if (looksLikeSecret(text)) return "That looks like a secret (an API key, token, or credential). Memories never store secrets.";
+  return null;
+}
+
+/** Lookup tags for a memory, the same way harvested memories get theirs. */
+export function memoryTags(content: string): string[] {
+  return extractTags(content);
 }
 
 /** Render the store as Markdown, grouped by kind, newest first. Superseded

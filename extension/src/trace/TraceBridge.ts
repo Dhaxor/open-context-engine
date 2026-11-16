@@ -4,7 +4,7 @@ import type { ApprovalDecision, ApprovalMode } from "../../../src/agent/permissi
 import { ContextService } from "../services/ContextService";
 import type { EditReviewService } from "../services/EditReviewService";
 import type { TraceHost } from "./TraceHost";
-import type { HostMessage, SearchHit, Surface, WebviewMessage } from "./protocol";
+import type { HostMessage, HostSheet, MemoryKind, SearchHit, Surface, WebviewMessage } from "./protocol";
 
 const MODES: ApprovalMode[] = ["suggest", "auto-edit", "full-auto"];
 const DECISIONS: ApprovalDecision[] = ["allow", "always", "deny"];
@@ -29,6 +29,7 @@ export class TraceBridge implements vscode.Disposable {
     private stateTimer: ReturnType<typeof setTimeout> | null = null;
     private loaded = false;
     private pendingCompose: { text: string; send: boolean } | null = null;
+    private pendingOpen: HostSheet | null = null;
     private markLoaded: () => void = () => {};
     /** Settles when the webview's script has run and said hello — proof the
      *  bundle loaded under the webview's CSP, not just that HTML was set. */
@@ -61,6 +62,17 @@ export class TraceBridge implements vscode.Disposable {
     compose(text: string, send = false): void {
         if (this.loaded) this.post({ kind: "compose", text, send });
         else this.pendingCompose = { text, send };
+    }
+
+    /** Open a sheet in this webview — held until it has loaded, like compose. */
+    open(sheet: HostSheet): void {
+        if (this.loaded) this.post({ kind: "open", ...sheet });
+        else this.pendingOpen = sheet;
+    }
+
+    /** The session this webview shows: an explicit one, or the active one. */
+    viewedSessionId(): string | null {
+        return this.attachedId;
     }
 
     dispose(): void {
@@ -97,6 +109,10 @@ export class TraceBridge implements vscode.Disposable {
                 if (this.pendingCompose) {
                     this.post({ kind: "compose", ...this.pendingCompose });
                     this.pendingCompose = null;
+                }
+                if (this.pendingOpen) {
+                    this.post({ kind: "open", ...this.pendingOpen });
+                    this.pendingOpen = null;
                 }
                 return;
             case "subscribe":
@@ -141,6 +157,7 @@ export class TraceBridge implements vscode.Disposable {
         }
         this.post({ kind: "sessions", ...this.host.sessions() });
         this.attachedId = session.meta().id;
+        this.host.noteViewing?.(this.attachedId);
         this.unsubscribe = session.subscribe(envelope => this.post({ kind: "trace", envelope }), since > 0 ? since : undefined);
         this.post({ kind: "connection", connected: true });
         await this.pushState();
@@ -250,6 +267,16 @@ export class TraceBridge implements vscode.Disposable {
             case "deleteHistory": return { ok: this.host.deleteHistory(str("id")) };
             case "search": return this.search(str("query"));
             case "command": return this.runCommand(str("name"));
+
+            // What the agent remembers about this workspace.
+            case "memories": return this.host.memories();
+            case "remember": return this.host.remember(str("content"), (str("kind") || "preference") as MemoryKind);
+            case "editMemory": return this.host.editMemory(str("id"), {
+                ...(typeof p.content === "string" ? { content: p.content } : {}),
+                ...(typeof p.kind === "string" ? { kind: p.kind as MemoryKind } : {}),
+            });
+            case "forgetMemory": return { ok: this.host.forgetMemory(str("id")) };
+            case "clearMemories": return { cleared: this.host.clearMemories() ?? 0 };
             default:
                 throw new Error(`Unknown method: ${method}`);
         }
@@ -277,16 +304,18 @@ export class TraceBridge implements vscode.Disposable {
 
     /** The few extension commands a webview may trigger — an allowlist, not a passthrough. */
     private async runCommand(name: string): Promise<void> {
-        const allowed: Record<string, string> = {
-            settings: "openContext.openSettings",
-            index: "openContext.indexWorkspace",
-            studio: "openContext.openTrace",
-            llmKey: "openContext.setLLMApiKey",
-            health: "openContext.showIndexHealth",
-            folder: "vscode.openFolder",
+        const allowed: Record<string, [string, ...unknown[]]> = {
+            settings: ["openContext.openSettings"],
+            index: ["openContext.indexWorkspace"],
+            studio: ["openContext.openTrace"],
+            llmKey: ["openContext.setLLMApiKey"],
+            health: ["openContext.showIndexHealth"],
+            folder: ["vscode.openFolder"],
+            memorySetting: ["workbench.action.openSettings", "openContext.agent.memory"],
+            memoryFile: ["openContext.openMemoryFile"],
         };
-        const command = allowed[name];
-        if (!command) throw new Error(`Unknown command: ${name}`);
-        await vscode.commands.executeCommand(command);
+        const entry = allowed[name];
+        if (!entry) throw new Error(`Unknown command: ${name}`);
+        await vscode.commands.executeCommand(...entry);
     }
 }

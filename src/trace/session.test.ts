@@ -9,6 +9,7 @@ import { CheckpointStore } from "./checkpoints";
 import { ContextLedger } from "./ledger";
 import { SessionMeta, TraceEnvelope, TraceEvent } from "./protocol";
 import { TraceSession, truncateToTurn } from "./session";
+import { initialState, reduce } from "./view-model";
 
 class MemoryApplier implements EditApplier {
   constructor(public files = new Map<string, string>()) {}
@@ -591,5 +592,72 @@ describe("truncateToTurn", () => {
     const kept = truncateToTurn(history, 1);
     const calls = kept.flatMap(m => m.toolCalls ?? []);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("TraceSession across a reload", () => {
+  /** A session saving to `store` — or resuming what `store` holds under `id`. */
+  async function persisted(store: import("../agent/session-store").SessionStore, applier: MemoryApplier, resume = false) {
+    const agent = new StubAgent();
+    const saved = resume ? store.load("s1") : null;
+    if (saved) agent.messages = JSON.parse(saved.session).messages;
+    const checkpoints = new CheckpointStore({ applier });
+    const ledger = new ContextLedger({ windowTokens: 128_000, systemPrompt: () => "system", toolSchemas: () => [] });
+    const session = new TraceSession({
+      id: "s1", agent: agent as unknown as ContextAgent, plan: new AgentPlan(),
+      permissions: new PermissionManager({ mode: "full-auto" }), ledger, checkpoints, meta: META, sessionStore: store,
+      ...(saved ? { resumed: { title: saved.title, messages: agent.messages, turns: saved.turns, ...(saved.trace ? { trace: saved.trace } : {}) } } : {}),
+    });
+    const events: TraceEvent[] = [];
+    session.subscribe(e => events.push(e.event));
+    return { session, agent, checkpoints, events };
+  }
+
+  it("brings back the changes and Rewind after the window reloads", async () => {
+    // Checkpoints lived only in memory: a reloaded window replayed the text of
+    // a conversation but had nothing to rewind to, and no changes tray.
+    const fs = await import("fs");
+    const os = await import("os");
+    const path = await import("path");
+    const { SessionStore } = await import("../agent/session-store");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oce-reload-"));
+    try {
+      const store = new SessionStore(dir);
+      const applier = new MemoryApplier(new Map([["a.ts", "v1"]]));
+      const first = await persisted(store, applier);
+      first.agent.script = async () => {};
+      await first.session.prompt("look around");
+      first.agent.script = async emit => {
+        applier.files.set("a.ts", "v2");
+        emit({ type: "edit_proposed", edit: { id: "e1", kind: "str-replace", path: "a.ts", oldContents: "v1", newContents: "v2", diff: "-v1\n+v2" } });
+      };
+      await first.session.prompt("change a.ts");
+      const [target, last] = first.checkpoints.list();
+
+      // ── reload ──
+      const second = await persisted(store, applier, true);
+      const state = second.events.reduce(
+        (s, event, i) => reduce(s, { type: "event", envelope: { seq: i + 1, ts: "", sessionId: "s1", event } }),
+        initialState,
+      );
+      expect(state.turns.map(t => t.turn)).toEqual([1, 2]);
+      expect(state.turns[1].blocks.some(b => b.kind === "edit")).toBe(true);
+      expect(state.turns[1].checkpoint).toMatchObject({ hash: last.hash, restorable: true });
+      expect(state.turns[0].checkpoint?.hash).toBe(target.hash);
+
+      await second.session.rewind(target.hash);
+      expect(applier.files.get("a.ts")).toBe("v1");
+      expect(second.agent.messages.filter(m => m.role === "user")).toHaveLength(1);
+      // The rewind is saved too: another reload must not resurrect turn 2.
+      expect(store.load("s1")!.trace!.checkpoints.map(c => c.hash)).toEqual([target.hash]);
+
+      // The chain is append-only: it continues from its last link (turn 2,
+      // rewound or not), never from a fresh genesis after a reload.
+      second.agent.script = async () => {};
+      await second.session.prompt("again");
+      expect(second.checkpoints.list().at(-1)!.prev).toBe(last.hash);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

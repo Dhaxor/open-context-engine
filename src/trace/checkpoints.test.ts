@@ -138,3 +138,34 @@ describe("CheckpointStore", () => {
     await expect(s.rewindTo("deadbeef")).rejects.toThrow(/No checkpoint deadbeef/);
   });
 });
+
+describe("CheckpointStore export/restore", () => {
+  it("saves the newest checkpoints that fit, as one contiguous run ending at the latest", () => {
+    // Rewinding to N undoes every checkpoint after N, so a gap in the middle
+    // would make an earlier target silently incomplete.
+    const s = store(new MemoryApplier());
+    s.noteEdit(edit({ path: "big.ts", oldContents: "x".repeat(600), newContents: "y".repeat(600) }));
+    commit(s, 1, "h1");
+    s.noteEdit(edit({ path: "a.ts", oldContents: "1", newContents: "2" }));
+    commit(s, 2, "h2", "h1");
+    commit(s, 3, "h3", "h2");
+    expect(s.export(100).map(c => c.hash)).toEqual(["h2", "h3"]);
+    expect(s.export().map(c => c.hash)).toEqual(["h1", "h2", "h3"]);
+  });
+
+  it("restores into a store that can rewind as if the session never ended", async () => {
+    const applier = new MemoryApplier(new Map([["a.ts", "2"]]));
+    const before = store(applier);
+    commit(before, 1, "h1");
+    before.noteEdit(edit({ path: "a.ts", oldContents: "1", newContents: "2" }));
+    commit(before, 2, "h2", "h1");
+    const saved = JSON.parse(JSON.stringify(before.export()));
+
+    const after = store(applier);
+    after.restore(saved);
+    expect(after.list().map(c => c.hash)).toEqual(["h1", "h2"]);
+    const result = await after.rewindTo("h1");
+    expect(result.filesRestored).toEqual(["a.ts"]);
+    expect(applier.files.get("a.ts")).toBe("1");
+  });
+});

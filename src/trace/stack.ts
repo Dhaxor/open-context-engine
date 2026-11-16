@@ -48,6 +48,10 @@ export interface AgentStackInput {
   mode: ApprovalMode;
   /** Tools that ask in every mode, full-auto included (PermissionManager.alwaysAsk). */
   alwaysAsk?: string[];
+  /** Tools from outside the engine — the user's MCP servers (McpToolHub) —
+   *  offered beside the built-in ones. `alwaysAsk` names those that ask in
+   *  every mode; `mutates` registers the rest with the approval system. */
+  extraTools?: { tools: ToolDefinition[]; alwaysAsk: string[] };
   includeEdits: boolean;
   shell: ToolOptions["shell"];
   webSearch?: ToolOptions["webSearch"];
@@ -70,6 +74,12 @@ export interface AgentStackInput {
   sessionId: string;
   /** A saved conversation to continue. Import failures throw. */
   restore?: Parameters<ContextAgent["importSession"]>[0];
+  /** Its Trace timeline (checkpoints, chain position), so Rewind and the
+   *  changes tray come back with it — SavedSession.trace, or a live session's
+   *  exportTrace() when a settings change rebuilds it. */
+  restoreTrace?: import("../agent/session-store").SavedTrace;
+  /** The turn count it was saved at (SavedSession.turns). */
+  restoreTurns?: number;
   /** Static session facts for the TraceSession beyond what this can derive. */
   meta?: Partial<Pick<SessionMeta, "title" | "branch" | "indexFresh">>;
   maxOutputLength?: number;
@@ -89,7 +99,8 @@ export interface AgentStack {
 export function assembleAgentStack(input: AgentStackInput): AgentStack {
   const { ctx, provider, model, traced } = input;
 
-  const permissions = new PermissionManager({ mode: input.mode, ...(input.alwaysAsk ? { alwaysAsk: input.alwaysAsk } : {}) });
+  const alwaysAsk = [...(input.alwaysAsk ?? []), ...(input.extraTools?.alwaysAsk ?? [])];
+  const permissions = new PermissionManager({ mode: input.mode, ...(alwaysAsk.length ? { alwaysAsk } : {}) });
   const plan = new AgentPlan();
 
   // The traced surfaces need the ledger before the agent exists (tools capture
@@ -134,7 +145,7 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     ? (edit: EditProposal) => { input.onEdit?.(edit); editObserver.fn?.(edit); }
     : undefined;
 
-  const tools = defaultAgentTools({
+  const builtIn = defaultAgentTools({
     context: ctx,
     applier,
     includeEdits: input.includeEdits,
@@ -159,6 +170,9 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     } : undefined,
     ...(input.onPolicyBlock ? { onPolicyBlock: input.onPolicyBlock } : {}),
   });
+  // A built-in name always wins: an external tool can never shadow one.
+  const reserved = new Set(builtIn.map(t => t.name));
+  const tools = [...builtIn, ...(input.extraTools?.tools ?? []).filter(t => !reserved.has(t.name))];
   permissions.registerMutatingTools(tools.filter(t => t.mutates).map(t => t.name));
 
   const baseEnv = input.env
@@ -184,7 +198,13 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
     router: input.router,
     memory: input.memory,
     memorySource: input.memorySource,
-    ...(traced ? { onMemoryInjected: (entries: { id: string; kind: string; content: string }[]) => memoryObserver.fn?.(entries) } : {}),
+    // The agent fires these from buildSystemPrompt, at every step — not via the
+    // per-run options, which TraceSession.prompt never sets, so memories used
+    // to reach the prompt yet never the evidence rail.
+    ...(traced && ledger ? {
+      onMemoryInjected: (entries: { id: string; kind: string; content: string }[]) => memoryObserver.fn?.(entries),
+      memoryFilter: (entry: { id: string }) => ledger.isMemoryEvicted(entry.id),
+    } : {}),
     audit: input.audit,
     hooks: permissions.asHooks(),
     environmentProvider: environment,
@@ -222,11 +242,16 @@ export function assembleAgentStack(input: AgentStackInput): AgentStack {
       listFiles: () => safeIndexedPaths(ctx),
       readFile: (p) => ctx.readFile(p),
       ...(shell ? { runCommand: (command, signal) => shell.handler({ command }, signal) } : {}),
-      ...(input.restore ? { resumed: { title: input.meta?.title ?? "", messages: agent.getMessages() } } : {}),
+      ...(input.restore ? { resumed: {
+        title: input.meta?.title ?? "",
+        messages: agent.getMessages(),
+        ...(input.restoreTrace ? { trace: input.restoreTrace } : {}),
+        ...(input.restoreTurns !== undefined ? { turns: input.restoreTurns } : {}),
+      } } : {}),
     });
     observer.fn = trace.observeRetrieval;
     delegation.observer = trace.delegateObserver;
-    memoryObserver.fn = entries => ledger.noteMemory(entries);
+    memoryObserver.fn = trace.observeMemory;
     editObserver.fn = trace.observeEdit;
   }
 
