@@ -3,38 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MCP Server for Code Search — Claude Code, Cursor &amp; Any MCP Client | Open Context Engine</title>
-<meta name="description" content="Give any AI agent grounded access to your codebase. OCE's MCP server exposes hybrid code search, symbol definitions and references, repo maps, and file tools — locally, over stdio or HTTP.">
+<title>MCP server for code search: Claude Code, Cursor, any client</title>
+<meta name="description" content="An open-source MCP server that gives AI agents your codebase: hybrid code search, symbol definitions and references, repo maps. Local, stdio or HTTP.">
 <link rel="canonical" href="https://opencontextengine.com/mcp-server">
-<meta property="og:title" content="MCP Server for Code Search — Claude Code, Cursor & Any MCP Client">
-<meta property="og:description" content="Hybrid code search, symbol lookups, and repo maps over the Model Context Protocol. One command to connect Claude Code or Cursor — everything runs locally.">
-<meta property="og:url" content="https://opencontextengine.com/mcp-server">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="MCP server for code search: Claude Code, Cursor, any client">
+<meta property="og:description" content="An open-source MCP server that gives AI agents your codebase: hybrid code search, symbol definitions and references, repo maps. Local, stdio or HTTP.">
+<meta property="og:url" content="https://opencontextengine.com/mcp-server">
+<meta property="og:image" content="https://opencontextengine.com/og/mcp-server.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="MCP Server for Code Search — Open Context Engine">
-<meta name="twitter:description" content="Connect Claude Code or Cursor to your real codebase via MCP: hybrid search, symbol definitions and references, repo maps, file tools. Local by default.">
-<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<meta name="twitter:title" content="MCP server for code search: Claude Code, Cursor, any client">
+<meta name="twitter:description" content="An open-source MCP server that gives AI agents your codebase: hybrid code search, symbol definitions and references, repo maps. Local, stdio or HTTP.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/mcp-server.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "MCP Server for Code Search — Claude Code, Cursor & Any MCP Client",
   "description": "OCE's MCP server exposes hybrid code search, symbol definitions and references, repo maps, and file tools over the Model Context Protocol — locally.",
-  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
-  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
   "mainEntityOfPage": "https://opencontextengine.com/mcp-server",
   "about": [
-    { "@type": "Thing", "name": "Model Context Protocol" },
-    { "@type": "SoftwareApplication", "name": "Open Context Engine", "applicationCategory": "DeveloperApplication" },
-    { "@type": "Thing", "name": "code search" }
-  ]
+    {
+      "@type": "Thing",
+      "name": "Model Context Protocol"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine",
+      "applicationCategory": "DeveloperApplication"
+    },
+    {
+      "@type": "Thing",
+      "name": "code search"
+    }
+  ],
+  "datePublished": "2026-11-03",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/mcp-server.png"
 }
 </script>
 <script type="application/ld+json">
@@ -45,27 +70,42 @@
     {
       "@type": "Question",
       "name": "What is an MCP server for code search?",
-      "acceptedAnswer": { "@type": "Answer", "text": "An MCP server for code search exposes your codebase to AI agents through the Model Context Protocol: tools like semantic + keyword hybrid search, symbol definition and reference lookup, repo maps, and file reading. The agent calls these tools instead of guessing, so its answers cite real code. Open Context Engine ships one MCP server (stdio or HTTP) backed by a local AST-aware index." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "An MCP server for code search exposes your codebase to AI agents through the Model Context Protocol: tools like semantic + keyword hybrid search, symbol definition and reference lookup, repo maps, and file reading. The agent calls these tools instead of guessing, so its answers cite real code. Open Context Engine ships one MCP server (stdio or HTTP) backed by a local AST-aware index."
+      }
     },
     {
       "@type": "Question",
       "name": "How do I connect Claude Code to my codebase with MCP?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Install Open Context Engine and add it as a Claude Code MCP server: npm install -g @dhaxor/open-context, run oce index once, then run claude mcp add oce -- oce mcp. Claude Code then gets codebase-retrieval, repo-map, find-symbol-definition, find-symbol-references, read-file, and list-files tools grounded in your repository." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Install Open Context Engine and add it as a Claude Code MCP server: npm install -g @dhaxor/open-context, run oce index once, then run oce mcp install claude-code. Claude Code then gets codebase-retrieval, repo-map, find-symbol-definition, find-symbol-references, read-file, and list-files tools grounded in your repository."
+      }
     },
     {
       "@type": "Question",
-      "name": "How do I connect Cursor or another HTTP MCP client?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Run the server over Streamable HTTP: oce mcp --http --port 8940 --auth-token <token>. Add an MCP entry in Cursor pointing at http://127.0.0.1:8940/mcp with the bearer token. Any MCP-compatible client that speaks HTTP can use the same endpoint." }
+      "name": "How do I connect Cursor or another MCP client?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Run oce mcp install cursor (or vscode, windsurf, claude-desktop) in the project; it writes the client's MCP config. To share one index across clients, run oce mcp --http --port 8940 --auth-token <token> and point any HTTP MCP client at http://127.0.0.1:8940/mcp with the bearer token."
+      }
     },
     {
       "@type": "Question",
       "name": "Which tools does the Open Context Engine MCP server expose?",
-      "acceptedAnswer": { "@type": "Answer", "text": "codebase-retrieval (hybrid semantic + BM25 search fused over AST-aware chunks), repo-map (a budgeted structural outline of the codebase), find-symbol-definition and find-symbol-references (compiler-grade via an integrated language server when available, AST-grade otherwise), read-file, list-files, and index-status." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "codebase-retrieval (hybrid semantic + BM25 search fused over AST-aware chunks), repo-map (a budgeted structural outline of the codebase), find-symbol-definition and find-symbol-references (compiler-grade via an integrated language server when available, AST-grade otherwise), read-file, list-files, and index-status."
+      }
     },
     {
       "@type": "Question",
       "name": "Does my code leave my machine?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. Indexing, embeddings (in-process MiniLM by default), and the SQLite index are entirely local. Over stdio the whole loop stays on your machine; over HTTP the server binds to localhost with bearer auth. There is no telemetry, and a policy system can force local-only mode org-wide." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Indexing, embeddings (in-process MiniLM by default), and the SQLite index are entirely local. Over stdio the whole loop stays on your machine; over HTTP the server binds to localhost with bearer auth. There is no telemetry, and a policy system can force local-only mode org-wide."
+      }
     }
   ]
 }
@@ -88,9 +128,24 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
-    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
-    { "@type": "ListItem", "position": 3, "name": "The MCP Server for Code Search", "item": "https://opencontextengine.com/mcp-server" }
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Guides",
+      "item": "https://opencontextengine.com/guides"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "MCP server",
+      "item": "https://opencontextengine.com/mcp-server"
+    }
   ]
 }
 </script>
@@ -102,11 +157,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -120,24 +176,33 @@
     <div class="chunk">mcp/server <span class="score">1.00</span></div>
     <h1 style="font-size: var(--t-h1);">The MCP server for code search</h1>
     <p class="sub">Connect Claude Code, Cursor, or any MCP client to your real codebase: hybrid search, symbol definitions and references, repo maps, and file tools — served from a local index, over stdio or HTTP.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
   </section>
 
   <section class="doc">
     <h2>What an MCP server for code search does</h2>
     <p>An <strong>MCP server for code search</strong> lets AI agents query your codebase through the <a href="https://modelcontextprotocol.io" rel="noopener">Model Context Protocol</a> instead of guessing from filenames. The agent calls tools — <em>search this repo</em>, <em>find where this symbol is defined</em>, <em>show its callers</em>, <em>read this file</em> — and each answer comes back grounded in the actual source. That's the difference between an agent that edits the right function and one that invents an API that doesn't exist.</p>
-    <p>Most code-search MCP servers wrap grep or plain vector search. OCE's server is backed by a measured retrieval engine: tree-sitter AST-aware chunking across 13 languages, dense vectors fused with BM25 keyword scoring (Reciprocal Rank Fusion), a code graph that rides callers and callees along with results, and an optional language server for compiler-grade symbol lookups. Recall@10 is <strong>0.943 hybrid / 0.886 keyword-only</strong> on committed gold sets — <a href="benchmarks.html">published, not claimed</a>.</p>
+    <p>Most code-search MCP servers wrap grep or plain vector search. OCE's server is backed by a measured retrieval engine: tree-sitter AST-aware chunking across 13 languages, dense vectors fused with BM25 keyword scoring (Reciprocal Rank Fusion), a code graph that rides callers and callees along with results, and an optional language server for compiler-grade symbol lookups. Recall@10 is <strong>0.943 hybrid / 0.886 keyword-only</strong> on committed gold sets — <a href="/benchmarks">published, not claimed</a>.</p>
 
     <h2>Connect Claude Code (stdio)</h2>
-    <p>Claude Code speaks MCP over stdio. Three commands and it's grounded — the <a href="claude-code">Claude Code setup guide</a> walks through each step with verification:</p>
+    <p>Claude Code speaks MCP over stdio. Three commands and it's grounded — the <a href="/claude-code">Claude Code setup guide</a> walks through each step with verification:</p>
     <pre>npm install -g @dhaxor/open-context
 oce index                              # build the local index once (auto-updates on save)
-claude mcp add oce -- oce mcp          # register the MCP server</pre>
+oce mcp install claude-code          # register the MCP server</pre>
     <p>That's it. Ask Claude Code <em>"where do we validate JWTs?"</em> and it will call <code>codebase-retrieval</code> before answering. The index lives in local SQLite and re-indexes as files change — nothing is uploaded anywhere.</p>
 
-    <h2>Connect Cursor &amp; HTTP clients</h2>
-    <p>For clients that speak Streamable HTTP, run the shared endpoint with bearer auth:</p>
+    <h2>Connect Cursor, VS Code, Windsurf and Claude Desktop</h2>
+    <p>The same command writes each client's own config file, merged into the servers already there:</p>
+    <pre>oce mcp install cursor            # .cursor/mcp.json
+oce mcp install vscode            # .vscode/mcp.json (Copilot agent mode)
+oce mcp install windsurf          # ~/.codeium/windsurf/mcp_config.json
+oce mcp install claude-desktop    # claude_desktop_config.json</pre>
+    <p>Step-by-step guides: <a href="/cursor">Cursor</a> · <a href="/vscode">VS Code</a> · <a href="/windsurf">Windsurf</a> · <a href="/claude-desktop">Claude Desktop</a>.</p>
+
+    <h2>One endpoint for many clients</h2>
+    <p>For clients that speak Streamable HTTP, run a shared endpoint with bearer auth:</p>
     <pre>oce mcp --http --port 8940 --auth-token $TOKEN
-# then point Cursor (or any HTTP MCP client) at:
+# then point any HTTP MCP client at:
 #   http://127.0.0.1:8940/mcp   with header  Authorization: Bearer $TOKEN</pre>
     <p>One server process serves any number of MCP clients on the same index — Claude Code, Cursor, a CI review bot, and your own scripts can all query it.</p>
 
@@ -150,22 +215,23 @@ claude mcp add oce -- oce mcp          # register the MCP server</pre>
       <tr><td><code>find-symbol-references</code></td><td>Every call site and mention — so edits account for the callers the agent would otherwise miss.</td></tr>
       <tr><td><code>read-file</code> / <code>list-files</code></td><td>Direct file access within the indexed workspace, so retrieval results can be read in full context.</td></tr>
       <tr><td><code>index-status</code></td><td>Index freshness, file count, and search mode (hybrid / keyword-only) — the agent knows what it's standing on.</td></tr>
+      <tr><td><code>memory_remember</code> / <code>memory_recall</code> / <code>memory_forget</code></td><td>Durable notes about the codebase that survive across sessions and clients — see <a href="/agent-memory">agent memory</a>.</td></tr>
     </table>
 
     <h2>Local and private by default</h2>
     <p>Everything runs on your machine: in-process MiniLM embeddings need no API key, the index is local SQLite, and degradation is graceful — if vector search is unavailable, keyword-only BM25 keeps the server useful. Over stdio, not a single byte leaves the loop. Over HTTP, the server binds to localhost behind a bearer token. There is no telemetry; a policy system can lock local-only mode org-wide with signatures that can't be loosened locally.</p>
 
     <h2>An agentic workflow needs grounding — MCP is the wire</h2>
-    <p>The MCP server is how any agent in an <a href="agentic-workflow">agentic workflow</a> sees your code — and the retrieval underneath it is code RAG: <a href="code-rag">how it works</a>. Read the <a href="agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="docs">docs</a>; the rest of the field guides are on <a href="guides">guides</a>; pricing is on <a href="pricing">pricing</a> (MIT core — free forever).</p>
+    <p>The MCP server is how any agent in an <a href="/agentic-workflow">agentic workflow</a> sees your code — and the retrieval underneath it is code RAG: <a href="/code-rag">how it works</a>. Read the <a href="/agentic-workflow">agentic workflow guide</a> for why retrieval is the bottleneck, or the <a href="/docs">docs</a> for search modes, team index sync, and troubleshooting. Task-based MCP setup lives in the <a href="/docs">docs</a>; the rest of the field guides are on <a href="/guides">guides</a>; pricing is on <a href="/pricing">pricing</a> (MIT core — free forever).</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
       <h3>What is an MCP server for code search?</h3>
       <p>A server that exposes your codebase to AI agents through the Model Context Protocol: hybrid search, symbol definition/reference lookup, repo maps, and file reading. Agents call these tools instead of guessing — answers cite real code. OCE ships one over stdio and HTTP, backed by a local AST-aware index.</p>
       <h3>How do I connect Claude Code to my codebase?</h3>
-      <p><code>npm install -g @dhaxor/open-context</code>, then <code>oce index</code>, then <code>claude mcp add oce -- oce mcp</code>. Full steps are in the <a href="docs">docs</a>.</p>
+      <p><code>npm install -g @dhaxor/open-context</code>, then <code>oce index</code>, then <code>oce mcp install claude-code</code>. Full steps are in the <a href="/docs">docs</a>.</p>
       <h3>How do I connect Cursor?</h3>
-      <p>Run <code>oce mcp --http --port 8940 --auth-token $TOKEN</code> and add <code>http://127.0.0.1:8940/mcp</code> as an MCP entry in Cursor with the bearer token.</p>
+      <p>Run <code>oce mcp install cursor</code> in the project — it writes <code>.cursor/mcp.json</code>. The <a href="/cursor">Cursor guide</a> covers verification and the shared HTTP endpoint.</p>
       <h3>Which tools are exposed?</h3>
       <p><code>codebase-retrieval</code>, <code>repo-map</code>, <code>find-symbol-definition</code>, <code>find-symbol-references</code>, <code>read-file</code>, <code>list-files</code>, and <code>index-status</code> — see the table above.</p>
       <h3>Does my code leave my machine?</h3>
@@ -178,27 +244,50 @@ claude mcp add oce -- oce mcp          # register the MCP server</pre>
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

@@ -1,32 +1,45 @@
 # Open Context Engine
 
-> Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search, an evidence rail that shows what the agent knew, MCP-native, MIT core. One command: `npm install -g @dhaxor/open-context`.
+> Open-source (MIT), local-first context engine for AI coding agents. Indexes a codebase on your machine — AST-aware chunks, hybrid semantic + keyword search, a code graph — and serves it to Claude Code, Cursor, VS Code (Copilot), Windsurf, Claude Desktop and any MCP client. Also a CLI agent and a VS Code extension. Install: `npm install -g @dhaxor/open-context`.
 
-Open Context Engine (OCE) indexes a codebase into a local SQLite store with AST-aware chunking (13 languages), hybrid retrieval (dense vectors fused with BM25), and serves it to any AI agent over the Model Context Protocol — with a fully local mode (in-process MiniLM embeddings, zero API keys) and an audit log that makes every agent run verifiable.
+Open Context Engine (OCE, by Dhaxor; npm `@dhaxor/open-context`, GitHub Dhaxor/open-context-engine — not the unrelated npm package `open-context-engine`) indexes a codebase into a local SQLite store with AST-aware chunking (13 languages) and hybrid retrieval (dense vectors fused with BM25, expanded along a code graph), and serves it over the Model Context Protocol. It runs fully locally (in-process MiniLM embeddings, no API key), keeps durable agent memory, and records an audit log of every agent run.
 
-## Pages
+## Set up a client
 
-- [Home](https://opencontextengine.com/): product overview — hybrid retrieval, evidence rail, local mode, team index sync.
-- [Guides](https://opencontextengine.com/guides): index of all field guides — agentic workflows, code RAG, MCP, semantic search, fine-tuning tradeoffs, context engineering.
-- [Agentic workflows](https://opencontextengine.com/agentic-workflow): what an agentic workflow is, why code retrieval is the bottleneck, and how OCE grounds agents like Claude Code and Cursor.
-- [MCP server for code search](https://opencontextengine.com/mcp-server): connect Claude Code (`claude mcp add oce -- oce mcp`) or Cursor (`oce mcp --http`) to hybrid code search, symbol lookups, repo maps, and file tools over the Model Context Protocol.
-- [Code RAG](https://opencontextengine.com/code-rag): what retrieval-augmented generation over source code is, why naive line-chunked vector search fails on real repos, and how to run AST-aware, measured code RAG locally.
-- [Semantic code search](https://opencontextengine.com/semantic-code-search): finding code by meaning — where grep and pure vector search each fail, and how hybrid retrieval covers both, measured with recall@k.
-- [RAG vs fine-tuning for code](https://opencontextengine.com/rag-vs-fine-tuning): retrieval keeps codebase answers current, grounded, and citable; fine-tuning shapes style. Why code questions usually want RAG.
-- [Context engineering](https://opencontextengine.com/context-engineering): the four levers of what an agent sees — retrieval, structure, budget, verification — and OCE's evidence rail.
-- [Claude Code setup](https://opencontextengine.com/claude-code): three commands to ground Claude Code in your codebase — `npm i -g @dhaxor/open-context`, `oce index`, `claude mcp add oce -- oce mcp` — with the tools Claude gets and privacy notes.
-- [Comparison](https://opencontextengine.com/comparison): OCE vs Cursor vs Copilot vs grep — what each indexes, retrieval tradeoffs, and when a dedicated engine earns its keep.
-- [Changelog](https://opencontextengine.com/changelog): every release and what shipped.
-- [Agent memory](https://opencontextengine.com/agent-memory): how coding agents remember across sessions — harness-native memory, MCP memory layers, and OCE's local, measured, evidence-rail-visible memory store (memory_remember/recall/forget).
-- [Docs](https://opencontextengine.com/docs): task-based guides — MCP setup for Claude Code and Cursor, search modes, team index sync, license activation, troubleshooting.
-- [Benchmarks](https://opencontextengine.com/benchmarks): measured recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0) in keyword-only and hybrid modes, generated from the eval harness's own reports.
-- [Pricing](https://opencontextengine.com/pricing): MIT core free forever; Team $25/seat/month for shared indexes and policy locks; offline-verifiable Ed25519 licenses.
+- [Claude Code](https://opencontextengine.com/claude-code): `oce mcp install claude-code` writes `.mcp.json` (`--scope user` for every project).
+- [Cursor](https://opencontextengine.com/cursor): `oce mcp install cursor` writes `.cursor/mcp.json`.
+- [VS Code](https://opencontextengine.com/vscode): the Open Context Engine extension (VS Code Marketplace, Open VSX), or `oce mcp install vscode` for Copilot agent mode (`.vscode/mcp.json`).
+- [Windsurf](https://opencontextengine.com/windsurf): `oce mcp install windsurf` writes `~/.codeium/windsurf/mcp_config.json`.
+- [Claude Desktop](https://opencontextengine.com/claude-desktop): `oce mcp install claude-desktop` writes `claude_desktop_config.json`.
+- [Docs](https://opencontextengine.com/docs): install, connect a client, search modes, team index sync, the agent's own MCP servers, license activation, troubleshooting.
+
+## Guides
+
+- [Guides](https://opencontextengine.com/guides): index of all field guides.
+- [MCP server for code search](https://opencontextengine.com/mcp-server): the tools — codebase-retrieval, repo-map, find-symbol-definition, find-symbol-references, read-file, list-files, index-status, memory_remember/recall/forget — over stdio or HTTP.
+- [Agentic workflows](https://opencontextengine.com/agentic-workflow): what an agentic workflow is and why code retrieval is the bottleneck.
+- [Code RAG](https://opencontextengine.com/code-rag): retrieval-augmented generation over source code, and why naive line-chunked vector search fails.
+- [Semantic code search](https://opencontextengine.com/semantic-code-search): finding code by meaning; hybrid retrieval measured with recall@k.
+- [RAG vs fine-tuning for code](https://opencontextengine.com/rag-vs-fine-tuning): why codebase questions usually want retrieval.
+- [Context engineering](https://opencontextengine.com/context-engineering): retrieval, structure, budget, verification — and the evidence rail.
+- [Agent memory](https://opencontextengine.com/agent-memory): how coding agents remember across sessions, locally.
+
+## Compare
+
+- [OCE vs Cursor, Copilot and MCP context tools](https://opencontextengine.com/comparison): editor built-ins, grep, claude-context, Serena, Repomix, codebase-memory-mcp, Sourcegraph, Greptile — what each indexes and where, with sources.
+- [Alternative to Augment's Context Engine](https://opencontextengine.com/augment-alternative): license, where code is indexed, accounts and pricing, sourced.
+
+## Project
+
+- [Changelog](https://opencontextengine.com/changelog): every release, generated from the repository's changelogs.
+- [Benchmarks](https://opencontextengine.com/benchmarks): recall@10 / MRR / nDCG on committed gold sets (this repo, Flask 3.1.2, gin v1.10.0), generated from the eval harness's reports.
+- [Pricing](https://opencontextengine.com/pricing): MIT core free; Team $25/seat/month for shared indexes and policy locks.
 
 ## Key facts
 
-- Install: `npm install -g @dhaxor/open-context` (Node 22+).
-- MCP: `claude mcp add oce -- oce mcp`, or `oce mcp --http --port 8940 --auth-token <token>` for HTTP clients.
+- Install: `npm install -g @dhaxor/open-context` (Node 22+). Then `oce mcp install <client>`.
 - Works offline: local MiniLM embeddings in-process; keyword-only BM25 as the degradation path.
-- Quality is measured, not claimed: committed gold sets and CI baselines; benchmarks page is generated from the eval harness's reports.
+- The agent can use your own MCP servers (`mcpServers` in `~/.open-context/config.json`); tools that change things ask first in every approval mode.
+- Quality is measured, not claimed: committed gold sets and CI baselines.
 - License: MIT core; Team/Enterprise features gate on offline-verifiable license tokens.
-- Source: https://github.com/Dhaxor/open-context-engine
+- Source: https://github.com/Dhaxor/open-context-engine · VS Code: https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine · Open VSX: https://open-vsx.org/extension/open-context/open-context-engine

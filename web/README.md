@@ -1,21 +1,40 @@
 # opencontextengine.com
 
-Static site — no build step, no framework. `index.html` + `pricing.html` +
-`oce.css` + `site.js`. Design system: `.interface-design/system.md`.
+Plain HTML, no framework and no deploy-time build. This README is internal —
+`.assetsignore` keeps it from being served. Design system:
+`.interface-design/system.md`.
 
-## Deploy (Cloudflare, domain already on CF)
+## Deploy
 
-Either connect the repo in the dashboard (Workers & Pages → Create → Pages →
-connect `Dhaxor/open-context-engine`, build command *none*, output dir `web`),
-or push from the CLI:
+The Cloudflare Worker `open-context-engine` (`wrangler.jsonc`, `worker.ts`)
+serves `web/` as static assets and is redeployed by Workers Builds on every
+push to `main`. `_headers` sets caching and security headers; a path that
+matches nothing gets `404.html` with a 404 status.
+
+## Editing pages
+
+Every page's `<head>`, nav and footer are generated — edit
+`scripts/build-site.mjs` (the `PAGES` table holds each page's title and
+description), not the copies in the HTML. After any change in `web/`:
 
 ```bash
-npx wrangler pages project create opencontextengine --production-branch main
-npx wrangler pages deploy web --project-name opencontextengine
+npm run build:web     # benchmarks page, then build-site: heads, nav/footer, links,
+                      # JSON-LD, changelog.html from CHANGELOG.md, sitemap.xml
+npm run check:web     # what CI runs: drift, title ≤ 60, description 70–160,
+                      # one <h1>, no broken internal links
 ```
 
-Then Pages → Custom domains → add `opencontextengine.com` (DNS is already on
-Cloudflare, so it's one click) and `www` if wanted.
+A new page needs an entry in `PAGES`. Page dates (sitemap `lastmod`, Article
+JSON-LD, the visible "Updated" line) live in `scripts/site-dates.json` and move
+only when a page's content hash does. Social cards: `scripts/og/render.cjs`
+(Electron, under xvfb on a headless box); icons: `node scripts/build-icons.mjs`.
+
+## Still to do in the dashboards (owner)
+
+- Cloudflare → SSL/TLS → Edge Certificates → **Always Use HTTPS** (http:// is
+  served without a redirect today; `_headers` already sends HSTS).
+- DNS: a proxied `www` record plus a Redirect Rule `www` → apex (301).
+- Google Search Console: a Domain property (DNS TXT), submit the sitemap.
 
 ## Checkout
 

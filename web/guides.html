@@ -3,24 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guides — Agentic Workflows, Code RAG, MCP & Context Engineering | Open Context Engine</title>
-<meta name="description" content="Field guides for grounding AI coding agents in real codebases: agentic workflows, code RAG, semantic code search, MCP servers, RAG vs fine-tuning, and context engineering.">
+<title>Guides: agentic workflows, code RAG, MCP and context</title>
+<meta name="description" content="Field guides for grounding AI coding agents in real codebases: agentic workflows, code RAG, semantic search, MCP servers and context engineering.">
 <link rel="canonical" href="https://opencontextengine.com/guides">
-<meta property="og:title" content="Guides — Agentic Workflows, Code RAG, MCP & Context Engineering">
-<meta property="og:description" content="Field guides for grounding AI coding agents in real codebases — all built around one engine you can run locally.">
-<meta property="og:url" content="https://opencontextengine.com/guides">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Guides: agentic workflows, code RAG, MCP and context">
+<meta property="og:description" content="Field guides for grounding AI coding agents in real codebases: agentic workflows, code RAG, semantic search, MCP servers and context engineering.">
+<meta property="og:url" content="https://opencontextengine.com/guides">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Open Context Engine — Guides">
-<meta name="twitter:description" content="Agentic workflows, code RAG, semantic code search, MCP servers, RAG vs fine-tuning, context engineering.">
+<meta name="twitter:title" content="Guides: agentic workflows, code RAG, MCP and context">
+<meta name="twitter:description" content="Field guides for grounding AI coding agents in real codebases: agentic workflows, code RAG, semantic search, MCP servers and context engineering.">
 <meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -28,17 +33,57 @@
   "name": "Open Context Engine Guides",
   "description": "Field guides for grounding AI coding agents in real codebases.",
   "url": "https://opencontextengine.com/guides",
-  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
   "hasPart": [
-    { "@type": "Article", "headline": "What Is an Agentic Workflow?", "url": "https://opencontextengine.com/agentic-workflow" },
-    { "@type": "Article", "headline": "The MCP Server for Code Search", "url": "https://opencontextengine.com/mcp-server" },
-    { "@type": "Article", "headline": "Code RAG: Retrieval-Augmented Generation for Your Codebase", "url": "https://opencontextengine.com/code-rag" },
-    { "@type": "Article", "headline": "Semantic Code Search", "url": "https://opencontextengine.com/semantic-code-search" },
-    { "@type": "Article", "headline": "RAG vs Fine-Tuning for Code", "url": "https://opencontextengine.com/rag-vs-fine-tuning" },
-    { "@type": "Article", "headline": "Context Engineering for Coding Agents", "url": "https://opencontextengine.com/context-engineering" },
-    { "@type": "Article", "headline": "Give Claude Code Your Whole Codebase", "url": "https://opencontextengine.com/claude-code" },
-    { "@type": "Article", "headline": "OCE vs Cursor, Copilot & Grep", "url": "https://opencontextengine.com/comparison" },
-    { "@type": "Article", "headline": "Agent Memory for Coding Agents", "url": "https://opencontextengine.com/agent-memory" }
+    {
+      "@type": "Article",
+      "headline": "What Is an Agentic Workflow?",
+      "url": "https://opencontextengine.com/agentic-workflow"
+    },
+    {
+      "@type": "Article",
+      "headline": "The MCP Server for Code Search",
+      "url": "https://opencontextengine.com/mcp-server"
+    },
+    {
+      "@type": "Article",
+      "headline": "Code RAG: Retrieval-Augmented Generation for Your Codebase",
+      "url": "https://opencontextengine.com/code-rag"
+    },
+    {
+      "@type": "Article",
+      "headline": "Semantic Code Search",
+      "url": "https://opencontextengine.com/semantic-code-search"
+    },
+    {
+      "@type": "Article",
+      "headline": "RAG vs Fine-Tuning for Code",
+      "url": "https://opencontextengine.com/rag-vs-fine-tuning"
+    },
+    {
+      "@type": "Article",
+      "headline": "Context Engineering for Coding Agents",
+      "url": "https://opencontextengine.com/context-engineering"
+    },
+    {
+      "@type": "Article",
+      "headline": "Give Claude Code Your Whole Codebase",
+      "url": "https://opencontextengine.com/claude-code"
+    },
+    {
+      "@type": "Article",
+      "headline": "OCE vs Cursor, Copilot & Grep",
+      "url": "https://opencontextengine.com/comparison"
+    },
+    {
+      "@type": "Article",
+      "headline": "Agent Memory for Coding Agents",
+      "url": "https://opencontextengine.com/agent-memory"
+    }
   ]
 }
 </script>
@@ -47,8 +92,18 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
-    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" }
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Guides",
+      "item": "https://opencontextengine.com/guides"
+    }
   ]
 }
 </script>
@@ -69,10 +124,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html">Docs</a>
-      <a href="guides.html" style="color: var(--ink);">Guides</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides" aria-current="page">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -91,61 +148,91 @@
   <section class="guides">
     <p class="lede">Every guide is grounded in the same engine — hybrid, AST-aware, measured retrieval you can run on your own machine in three commands. Start wherever your question lives.</p>
 
-    <a class="card" href="agentic-workflow">
+    <a class="card" href="/agentic-workflow">
       <span class="tag">agents</span>
       <h2>What is an agentic workflow?</h2>
       <p>How LLM agents plan, act, and loop — why code retrieval is the bottleneck that decides whether they help or hallucinate, and how to ground any agent in your real codebase.</p>
     </a>
 
-    <a class="card" href="mcp-server">
+    <a class="card" href="/mcp-server">
       <span class="tag">integration</span>
       <h2>The MCP server for code search</h2>
       <p>Connect Claude Code, Cursor, or any MCP client to your codebase: hybrid search, symbol lookups, repo maps, and file tools — one command each, all local.</p>
     </a>
 
-    <a class="card" href="code-rag">
+    <a class="card" href="/code-rag">
       <span class="tag">retrieval</span>
       <h2>Code RAG: RAG for your codebase</h2>
       <p>What retrieval-augmented generation over source code is, why naive line-chunked vector search fails on real repos, and how to run measured code RAG locally.</p>
     </a>
 
-    <a class="card" href="semantic-code-search">
+    <a class="card" href="/semantic-code-search">
       <span class="tag">retrieval</span>
       <h2>Semantic code search</h2>
       <p>Find code by meaning, not keywords — where grep and pure vector search each fail, and how hybrid fusion covers the queries both miss.</p>
     </a>
 
-    <a class="card" href="rag-vs-fine-tuning">
+    <a class="card" href="/rag-vs-fine-tuning">
       <span class="tag">decisions</span>
       <h2>RAG vs fine-tuning for code</h2>
       <p>Retrieve from your codebase or train on it? What each approach actually does, where each fails, and why code questions almost always want RAG.</p>
     </a>
 
-    <a class="card" href="agent-memory">
+    <a class="card" href="/agent-memory">
       <span class="tag">agents</span>
       <h2>Agent memory for coding agents</h2>
       <p>What harnesses remember across sessions, how MCP memory layers work, and why memory should be local, measured, and visible.</p>
     </a>
 
-    <a class="card" href="claude-code">
+    <a class="card" href="/claude-code">
       <span class="tag">setup</span>
       <h2>Give Claude Code your whole codebase</h2>
-      <p>Three commands to ground Claude Code in your real source: install, index, register the MCP server. Five minutes, fully local.</p>
+      <p>Install, index, and one command — <code>oce mcp install claude-code</code> — to ground Claude Code in your real source. Five minutes, fully local.</p>
     </a>
 
-    <a class="card" href="comparison">
+    <a class="card" href="/cursor">
+      <span class="tag">setup</span>
+      <h2>Give Cursor your whole codebase</h2>
+      <p>Add hybrid code search, symbol lookups and a repo map to Cursor's agent over MCP — one command writes <code>.cursor/mcp.json</code>.</p>
+    </a>
+
+    <a class="card" href="/vscode">
+      <span class="tag">setup</span>
+      <h2>VS Code: an agent that shows its work</h2>
+      <p>The extension's agent with approvals, checkpoints and memory — and the same index for Copilot's agent mode over MCP.</p>
+    </a>
+
+    <a class="card" href="/windsurf">
+      <span class="tag">setup</span>
+      <h2>Codebase context for Windsurf's Cascade</h2>
+      <p>One command adds a local index of your repo to Windsurf's MCP config, with a server per project.</p>
+    </a>
+
+    <a class="card" href="/claude-desktop">
+      <span class="tag">setup</span>
+      <h2>Ask Claude Desktop about your code</h2>
+      <p>Let Claude Desktop search a local index of your repository — explain modules, trace requests, draft docs — while the code stays on disk.</p>
+    </a>
+
+    <a class="card" href="/comparison">
       <span class="tag">decisions</span>
-      <h2>OCE vs Cursor, Copilot &amp; grep</h2>
-      <p>An honest comparison of codebase-context approaches — what each indexes, the tradeoffs, and when a dedicated engine earns its keep.</p>
+      <h2>OCE vs Cursor, Copilot and MCP context tools</h2>
+      <p>Editor built-ins, grep, and the MCP servers people compare — what each indexes, where your code goes, and when a dedicated engine earns its keep.</p>
     </a>
 
-    <a class="card" href="context-engineering">
+    <a class="card" href="/augment-alternative">
+      <span class="tag">decisions</span>
+      <h2>An open-source alternative to Augment's Context Engine</h2>
+      <p>License, where code is indexed, accounts and per-query pricing — the structural differences, sourced, and how to switch in five minutes.</p>
+    </a>
+
+    <a class="card" href="/context-engineering">
       <span class="tag">practice</span>
       <h2>Context engineering for coding agents</h2>
       <p>The context window is the agent's entire world. The four levers — retrieval, structure, budget, verification — and the evidence rail that makes them visible.</p>
     </a>
 
-    <p class="lede" style="margin-top: 28px;">Task-based setup lives in the <a href="docs">docs</a>; retrieval quality is published on the <a href="benchmarks">benchmarks page</a>; licensing on <a href="pricing">pricing</a>.</p>
+    <p class="lede" style="margin-top: 28px;">Task-based setup lives in the <a href="/docs">docs</a>; retrieval quality is published on the <a href="/benchmarks">benchmarks page</a>; licensing on <a href="/pricing">pricing</a>.</p>
   </section>
 </main>
 
@@ -153,26 +240,50 @@
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

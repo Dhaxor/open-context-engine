@@ -1,0 +1,3 @@
+# Files in web/ that are not part of the public site.
+# The deploy notes (secret names, the billing setup) must not be served.
+README.md

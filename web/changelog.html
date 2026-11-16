@@ -3,33 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Changelog — Open Context Engine Releases</title>
-<meta name="description" content="What shipped in each Open Context Engine release: MCP registry listing, repo-map, sandboxed shell, agentic sidebar, adaptive fusion, LSP-backed symbol tools, and more.">
+<title>Changelog: Open Context Engine releases</title>
+<meta name="description" content="Every Open Context Engine release: the MCP server, the CLI agent and the VS Code extension, with what shipped and why.">
 <link rel="canonical" href="https://opencontextengine.com/changelog">
-<meta property="og:title" content="Open Context Engine — Changelog">
-<meta property="og:description" content="What shipped in each release: registry listing, repo-map, sandboxed shell, agentic sidebar, adaptive fusion, compiler-grade symbol tools.">
-<meta property="og:url" content="https://opencontextengine.com/changelog">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Changelog: Open Context Engine releases">
+<meta property="og:description" content="Every Open Context Engine release: the MCP server, the CLI agent and the VS Code extension, with what shipped and why.">
+<meta property="og:url" content="https://opencontextengine.com/changelog">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Open Context Engine — Changelog">
-<meta name="twitter:description" content="What shipped in each Open Context Engine release.">
+<meta name="twitter:title" content="Changelog: Open Context Engine releases">
+<meta name="twitter:description" content="Every Open Context Engine release: the MCP server, the CLI agent and the VS Code extension, with what shipped and why.">
 <meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <style>
-  section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px 60px; }
-  section.doc h2 { font-size: 20px; margin: 42px 0 6px; font-family: var(--mono, 'IBM Plex Mono', monospace); }
-  section.doc h2 .date { font-size: 12px; opacity: .55; font-family: var(--sans, 'IBM Plex Sans', sans-serif); margin-left: 10px; }
-  section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
-  section.doc ul { margin: 8px 0 0; padding-left: 22px; }
-  section.doc code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
-  .verhead { display: flex; align-items: baseline; gap: 10px; }
+  section.doc h2 { font-family: var(--mono); font-size: 20px; margin-top: 44px; }
+  section.doc h3 { font-size: 14px; font-family: var(--mono); color: var(--ink-3); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; margin-top: 18px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Changelog",
+      "item": "https://opencontextengine.com/changelog"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -38,10 +58,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -52,53 +74,262 @@
 
 <main>
   <section class="hero wrap" style="padding-bottom: 0;">
-    <div class="chunk">releases/index <span class="score">1.00</span></div>
+    <div class="chunk">CHANGELOG.md <span class="score">1.00</span></div>
     <h1 style="font-size: var(--t-h1);">Changelog</h1>
-    <p class="sub">Every release, what shipped, and why. Install the latest with <code>npm install -g @dhaxor/open-context</code>.</p>
+    <p class="sub">Every release of the engine, the MCP server, the CLI agent and the VS Code extension — generated from the repository's changelogs, so it can't fall behind. Install the latest with <code>npm install -g @dhaxor/open-context</code>.</p>
   </section>
 
   <section class="doc">
-    <h2>0.7.1 <span class="date">2026-11-08</span></h2>
+    <!-- changelog:start -->
+    <h2 id="v0-9-0">0.9.0 <span class="tagline">the agent meets you where you work</span> <span class="date">2026-11-16</span></h2>
     <ul>
-      <li><strong>Listed in the official MCP Registry</strong> as <code>io.github.Dhaxor/open-context-engine</code> — the package now carries the registry-required <code>mcpName</code> field, so clients can discover and install it straight from the canonical registry.</li>
-      <li><strong>repo-map</strong> — a budgeted symbol outline of the whole codebase, exposed as an MCP tool and via <code>oce map</code>, so agents can orient before diving in.</li>
-      <li><strong>OS-sandboxed shell execution</strong> — the agent's shell tool runs under Seatbelt on macOS and bubblewrap on Linux.</li>
-      <li><strong>OCE review agent</strong> — a GitHub Action that reviews PRs grounded in the indexed codebase.</li>
-      <li><strong>AGENTS.md support</strong> — agent guidelines read from AGENTS.md / CLAUDE.md / .cursorrules into the system prompt.</li>
-      <li><strong>Guides hub</strong> — opencontextengine.com/guides plus field guides on agentic workflows, code RAG, MCP, semantic code search, RAG vs fine-tuning, and context engineering.</li>
+      <li><strong>Your MCP servers, in the agent.</strong> <code>mcpServers</code> in <code>~/.open-context/config.json</code> (the shape Claude Code and Cursor use: <code>command</code>/<code>args</code>/<code>env</code> for stdio, <code>url</code>/<code>headers</code> for Streamable HTTP or SSE; <code>${env:NAME}</code> and <code>${workspaceFolder}</code> expand) gives <code>oce agent</code>, <code>oce trace</code> and the VS Code agent those servers' tools, namespaced <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>. A tool marked <code>readOnlyHint</code> runs freely; every other one asks in every approval mode — full-auto included — until answered &quot;always&quot; or listed in the server's <code>autoApprove</code>. Servers come from user config only: a workspace's <code>.open-context/config.json</code> cannot start programs (<code>McpToolHub</code>, <code>src/agent/mcp-client.ts</code>; <code>--no-mcp</code> to skip).</li>
+      <li><strong><code>oce mcp install &lt;client&gt;</code></strong> adds Open Context to Claude Code (<code>.mcp.json</code>, or <code>claude mcp add</code> for user scope), Cursor (<code>.cursor/mcp.json</code>), VS Code (<code>.vscode/mcp.json</code>), Windsurf, or Claude Desktop — merged into the servers already there, comments tolerated, an unreadable file left alone. <code>--print</code> previews, <code>--remove</code> undoes; it uses npx when <code>oce</code> is not installed.</li>
+      <li><strong>Checkpoints survive a reload.</strong> A saved conversation now keeps its timeline (each checkpoint with the before/after of the files its turn edited) in <code>sessions/checkpoints/&lt;id&gt;.json</code>, so a resumed session — <code>oce trace --continue</code>, a reloaded VS Code window, a settings rebuild — brings back its changes and can still rewind. The newest checkpoints that fit 8 MB are kept, as one contiguous run.</li>
+      <li><strong>Memory you can see and correct.</strong> Memories injected into the prompt now reach the evidence rail (<code>onMemoryInjected</code> only rode on per-run options the Trace session never passed); evicting one keeps it out of the next prompt. <code>SessionMemory.edit()</code> corrects a memory by superseding it, and an instance re-reads <code>memories.json</code> when another process (the MCP server, the CLI) wrote it, instead of overwriting what that process remembered.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>Fix with agent.</strong> Errors and warnings get a <strong>Fix with Open Context agent</strong> quick fix: an agent turn with the problem and the code around it, labelled <code>Fix: …</code> in the transcript. A failed terminal command (with shell integration) can be handed over with <strong>Fix Last Failed Command with Agent</strong>, and selected terminal output with <strong>Ask Agent to Fix This</strong> — both in the terminal's context menu. Turn the quick fix off with <code>openContext.agent.quickFix.enabled</code>.</li>
+      <li><strong>Background sessions tell you.</strong> When a session you are not looking at finishes a turn, fails, or waits for an approval, you get a notification — with <strong>Review</strong> for a parallel session — and a count on the Open Context icon until you look. Nothing for the session on screen. (<code>openContext.agent.notifications.enabled</code>.) Session tabs now show their spinner while a turn runs, and a parallel session's changed-file count updates after each turn.</li>
+      <li><strong>Your MCP servers, in the agent.</strong> Add servers to <code>openContext.agent.mcpServers</code> (user settings) or <code>~/.open-context/config.json</code> and the agent gets their tools. Read-only tools run freely; any other tool asks first in every mode until you answer <em>always</em> or list it in <code>autoApprove</code>. A workspace cannot add servers, and none start in Restricted Mode. The context sheet shows which servers connected.</li>
+      <li><strong>Set Up MCP for Another Tool…</strong> adds this project's Open Context server to Claude Code, Cursor, VS Code (Copilot), Windsurf, or Claude Desktop.</li>
+      <li><strong>Memories panel.</strong> The bookmark button (or <strong>Show Memories</strong>) lists what the agent remembers about the workspace — correct a note, forget it, or add your own. <strong>Remember this</strong> on an answer or an editor selection drafts one; <code>/remember &lt;note&gt;</code> saves one from the composer. Recalled memories now show in the context window, and evicting one keeps it out of the next request. Parallel sessions share the workspace's memories instead of each keeping its own in a worktree that disappears when it lands.</li>
+      <li><strong>Rewind after a reload.</strong> Checkpoints and the changes tray come back with a resumed conversation — after a window reload, and after a settings change rebuilds the session (which used to drop them). <strong>Rewind here</strong> is offered on every earlier turn, not only on turns that edited files.</li>
     </ul>
 
-    <h2>0.7.0 <span class="date">2026-11-01</span></h2>
+    <h2 id="v0-8-0">0.8.0 <span class="tagline">the agent checks its own work</span> <span class="date">2026-11-13</span></h2>
     <ul>
-      <li><strong>The agentic sidebar ships</strong> — the extension's chat is rebuilt on the Trace stack: an evidence rail in the editor, agent edits with per-file diffs and undo, and a live index underneath.</li>
+      <li><strong>Edits reach the trace.</strong> The edit tools reported each change only to their <code>onEdit</code> callback; <code>TraceSession</code> waited for an <code>edit_proposed</code> stream event no agent emits. Edits now flow into the session (<code>observeEdit</code>), so Studio, the TUI and the VS Code sidebar show them and checkpoints record the files a turn changed — rewind restores them.</li>
+      <li><strong>Shell approvals that respect the sandbox.</strong> <code>PermissionManager</code> takes <code>alwaysAsk</code>: tools that ask in every mode, full-auto included, until answered &quot;always&quot; (the VS Code agent uses it for an uncontained shell).</li>
+      <li><strong>repo-map is an agent tool</strong>, not only an MCP tool: the CLI agent, Trace, and sub-agents get the codebase outline for broad questions.</li>
+      <li><strong>Review is shared.</strong> <code>oce review</code>'s diff parser and prompt moved to <code>src/agent/review.ts</code>; <code>TraceSession.prompt(text, { label })</code> runs a composed prompt (a review carrying a whole diff) under a short label.</li>
+      <li><strong>Memory</strong> (b6c189e): hybrid recall, supersedes, a markdown twin, MCP memory tools, an evidence-rail <code>memory</code> bucket, and <code>oce memory</code>.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>Fixed: agent edits are saved to disk.</strong> Since the first release the edit path checked whether the document was dirty <em>after</em> applying the edit — it always is — so it never saved: new files reached disk empty and edits to open files stayed in unsaved buffers, invisible to tests, builds and git. Edits are saved now, except into a buffer you already had unsaved changes in. A save that fails is reported to the agent.</li>
+      <li><strong>Fixed: edits show in the sidebar and rewind restores them.</strong> Edits never reached the session's transcript or checkpoints, so the changes tray stayed empty and Rewind had no files to restore.</li>
+      <li><strong>The agent can run your tests.</strong> The shell is on by default and runs under the OS sandbox (<code>openContext.agent.shell.sandbox</code>): Seatbelt on macOS, bubblewrap on Linux. Commands ask first in Ask first and Auto-edit; in Full auto they run unasked only inside Seatbelt, which also limits writes — the approval card says whether a command is sandboxed.</li>
+      <li><strong>Review changes.</strong> A turn's changes tray, a parallel session's review sheet, and <code>/review-changes</code> (or <code>/review</code> in the main checkout) have the agent review the diff against the surrounding code — a normal turn you can follow up on (&quot;fix the first one&quot;).</li>
+      <li><strong>Repo map.</strong> The agent maps the codebase's structure before answering broad questions instead of spending a dozen searches.</li>
+      <li><strong>Memory in the context window.</strong> Remembered notes show in the context meter and sheet.</li>
+      <li>Fixed: a session could subscribe twice while the agent was starting, leaking one session's events into another after a switch; <code>/reset</code> in a parallel session replayed the old conversation; changing <code>openContext.agent.approvalMode</code> in settings did not reach open sessions.</li>
+      <li>An end-to-end suite runs the extension in a real VS Code (1.103 and stable) against a scripted model on every change.</li>
     </ul>
 
-    <h2>0.6.0 <span class="date">2026-10-27</span></h2>
+    <h2 id="v0-7-1">0.7.1 <span class="date">2026-11-08</span></h2>
     <ul>
-      <li><strong>Class declarations indexed; exact symbol declarations promoted</strong> in ranking — retrieval now surfaces the declaration chunk for class-shaped questions and exact-match symbol queries.</li>
-      <li><strong>Symbol-tool capability indicator</strong> in the extension, backed by a real language-server validation pass (tsserver files opened before querying).</li>
-      <li><strong>Third external gold set</strong> — gin v1.10.0 (Go), 26 cases — with nightly CI running all gold sets plus the agent eval suite, and the benchmarks page auto-refreshing from committed baselines.</li>
-      <li><strong>License hardening</strong> — rate-limited activation endpoint and Polar seat enforcement.</li>
+      <li><code>mcpName</code> in package.json for the official MCP registry, and smithery.yaml for smithery.ai.</li>
+      <li><strong>Local embeddings are the default</strong> — hybrid search with no key.</li>
+      <li><strong>Project instructions:</strong> AGENTS.md, then CLAUDE.md / .cursorrules, ride in the agent's system prompt.</li>
+      <li><strong>repo-map</strong> — a budgeted symbol outline: the <code>repo-map</code> MCP tool and <code>oce map</code>.</li>
+      <li><strong>OS-sandboxed shell</strong> (opt-in, or required by policy): Seatbelt on macOS (no network, writes limited to the workspace), bubblewrap on Linux (network isolated).</li>
+      <li><strong><code>oce review</code></strong> and a reusable GitHub Action (<code>uses: Dhaxor/open-context-engine@v0</code>) that reviews a PR diff grounded in the indexed codebase.</li>
+      <li>Index commands fail loudly on a nonexistent workspace root.</li>
     </ul>
 
-    <h2>0.5.0 <span class="date">2026-10-27</span></h2>
+    <h2 id="v0-7-0">0.7.0 <span class="tagline">the agentic sidebar</span> <span class="date">2026-11-01</span></h2>
     <ul>
-      <li><strong>npm publishes with zero secrets</strong> — Trusted Publishing (OIDC): the registry trusts the repository's workflow directly; no token to rotate or leak.</li>
-      <li><strong>Adaptive fusion</strong> — queries classified by shape tilt BM25/semantic weights: hybrid recall@10 on the Flask gold set 0.852 → 0.926. A/B with <code>oce eval --no-adaptive-fusion</code>.</li>
-      <li><strong>LSP-backed symbol tools</strong> — find-symbol-definition / references use tsserver, pyright, gopls or rust-analyzer when installed, falling back to the AST index; results tagged [LSP-verified].</li>
-      <li><strong>Self-serve Team licenses</strong> — <code>oce activate polar_lk_…</code> completes checkout without support.</li>
-      <li><strong>Local embeddings work out of the box</strong> — ungated all-MiniLM-L6-v2 default, no API key.</li>
-      <li><strong>Docs + generated benchmarks</strong> on the Worker-served site.</li>
+      <li>The VS Code chat was rebuilt as an agent sidebar on the Trace stack (see extension/CHANGELOG.md). In the core: <code>assembleAgentStack</code> (src/trace/stack.ts) is the one wiring path the CLI and the extension share; resumed sessions retell their transcript (src/trace/replay.ts); <code>SessionRegistry.replace</code>; Studio's transport and host are pluggable (studio/transport.ts).</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>A rebuilt, agentic sidebar.</strong> The chat panel is now the Agent view, running the same Trace session as <code>oce trace</code> (Studio and the TUI fold the same events with the same reducer): - <strong>Live plan</strong> — the model's own checklist, updated as it works. - <strong>Activity you can read</strong> — searches, file reads, and commands fold into one line per run (&quot;3 searches · 4 files&quot;), each saying what it touched; expand a search to see every chunk's score and why it was retrieved. - <strong>Sub-agents</strong> — a delegated investigation shows its own steps nested under it while it runs. - <strong>Approvals</strong> — an approval mode picker in the composer (Ask first / Auto-edit / Full auto, setting <code>openContext.agent.approvalMode</code>). Ask-first edits and commands show the diff, a blast-radius risk, and how many indexed callers the change reaches; answer with y / a / n. - <strong>Changes tray</strong> — every turn that edits files ends with the files it changed, a multi-file diff review, and undo / reapply. - <strong>Checkpoints</strong> — rewind the conversation and the files to any earlier turn. - <strong>Context window</strong> — a meter of what the model sees, with pin / evict per retrieved chunk. - <strong>Parallel sessions</strong> — in a git repository, start another session in its own worktree and branch; review its diff and land it when done.</li>
+      <li><strong>Open Agent in Editor</strong> opens Trace Studio in an editor tab — timeline, transcript, and evidence rail — on the same sessions as the sidebar.</li>
+      <li>Conversations persist per workspace and reopen with their transcript; chats from the previous sidebar are imported into the history once.</li>
+      <li><code>openContext.agent.maxSteps</code> now defaults to 25 (was 10): multi-step agent work was hitting the cap.</li>
     </ul>
 
-    <h2>0.4.x <span class="date">2026-10-25 → 26</span></h2>
+    <h2 id="v0-6-0">0.6.0 <span class="date">2026-10-27</span></h2>
     <ul>
-      <li><strong>0.4.5</strong> — tokenless npm publishing (first landing), <code>oce eval-agent</code> end-to-end agent grading, dual-mode retrieval baselines committed fresh, pricing checkout.</li>
-      <li><strong>0.4.6</strong> — cross-platform path-validation fix (a Windows-only <code>path.isAbsolute</code> escape-check bug caught by CI).</li>
-      <li><strong>0.4.7</strong> — re-release of 0.4.6 content: the two prior versions never reached the registry (CI publish failure, then a Trusted-Publishing E404) — the release train now ships through both gates cleanly.</li>
+      <li><strong>Class declarations are indexed</strong>, and exact symbol declarations are promoted in ranking (external Flask recall@10 0.926 → 0.963).</li>
+      <li>LSP symbol tools open files (<code>didOpen</code>) before querying.</li>
+      <li>A third external gold set: gin v1.10.0 (Go), 26 cases; nightly CI runs it and refreshes the benchmarks page.</li>
+      <li>License activation is rate-limited and enforces Polar seat limits.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>The Indexing panel shows what grade of symbol lookup the workspace can serve</strong> — an installed language server (with its name) when one covers the dominant source language, otherwise the AST index. Informational: the MCP symbol tools pick the best available automatically.</li>
+      <li><strong>Class declarations are indexed.</strong> A chunker fix means Python/TS/JS class definitions now exist as searchable chunks with their own symbol names — find-symbol-definition works for classes, and definition-shaped ranking can lift the declaring file above importers (external Flask recall@10 0.926 → 0.963).</li>
     </ul>
 
-    <p style="margin-top: 30px; opacity: .75;">Full technical detail lives in the repo's <a href="https://github.com/Dhaxor/open-context-engine/blob/main/CHANGELOG.md">CHANGELOG.md</a>. Retrieval numbers behind these releases are on the <a href="benchmarks">benchmarks page</a>.</p>
+    <h2 id="v0-5-0">0.5.0 <span class="tagline">trusted publishing, adaptive fusion, compiler-grade symbol tools</span> <span class="date">2026-10-27</span></h2>
+    <ul>
+      <li><strong>npm publishes with zero secrets.</strong> Trusted Publishing (OIDC): the registry trusts this repository's npm-publish.yml workflow directly — no granular token to rotate or leak, ahead of npm's Jan-2027 removal of token-based direct publishing.</li>
+      <li><strong>Adaptive fusion.</strong> Queries are classified by shape (definition vs intent) and the BM25/semantic fusion weights tilt accordingly. Hybrid recall@10 on the external Flask gold set: 0.852 → 0.926 — parity with keyword-only, previously hybrid's worst ground. A/B with <code>oce eval --no-adaptive-fusion</code>.</li>
+      <li><strong>LSP-backed symbol tools.</strong> find-symbol-definition / references use a language server when one is installed (tsserver, pyright, gopls, rust-analyzer; <code>OCE_LSP_*_CMD</code> overrides, <code>OCE_LSP=off</code> to disable), falling back to the AST index untouched. Results are tagged [LSP-verified].</li>
+      <li><strong>Self-serve Team licenses.</strong> <code>oce activate polar_lk_…</code> exchanges a Polar license key for an offline-verifiable signed token; the pricing page's checkout now completes the loop without support.</li>
+      <li><strong>Local embeddings work out of the box.</strong> The default local model is the ungated all-MiniLM-L6-v2 (the previous default 401s on Hugging Face); a refused model download explains the fix.</li>
+      <li><strong>Docs + generated benchmarks</strong> on the Worker-served site: /docs task guides and /benchmarks rendered from the committed eval reports. Nightly CI runs the full matrix plus both gold sets and the agent eval suite.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>Local embeddings work out of the box.</strong> The default local embedding model is the ungated all-MiniLM-L6-v2; the previous default is gated on Hugging Face and 401s on first download. The settings enum marks which models are gated.</li>
+    </ul>
+
+    <h2 id="v0-4-7">0.4.7 <span class="date">2026-10-26</span></h2>
+    <ul>
+      <li>Re-release: 0.4.5 and 0.4.6 never reached the registry. 0.4.5's publish failed in CI (fixed in 0.4.6), and 0.4.6's tokenless OIDC publish was refused by the registry (E404) — npm's Trusted Publishing record needs a 2FA-verified re-save that only the package owner can do. This version ships the same content as 0.4.6 through the standing granular token; everything below is new on npm since 0.4.4.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li>Version sync; no extension changes.</li>
+    </ul>
+
+    <h2 id="v0-4-6">0.4.6 <span class="date">2026-10-26</span></h2>
+    <ul>
+      <li>The 0.4.5 tag's test gate failed on Linux: agent-task path validation used <code>path.isAbsolute</code>, which calls <code>C:bs.js</code> relative on POSIX — so the escape check passed a Windows dev machine and failed every CI leg. Validation now refuses Windows drive paths, leading separators, and <code>..</code> on all platforms, with a dedicated cross-platform test.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li>Version sync; no extension changes.</li>
+    </ul>
+
+    <h2 id="v0-4-5">0.4.5 <span class="tagline">operate it: tokenless npm publishing, agent evals, honest numbers, checkout</span> <span class="date">2026-10-26</span></h2>
+    <ul>
+      <li><strong>npm publishes without a token now.</strong> Trusted Publishing (OIDC): the registry trusts this exact repository + workflow — <code>id-token: write</code> is the credential. No NPM_TOKEN to rotate, leak, or lose to npm's Jan-2027 removal of granular-token direct publishing.</li>
+      <li><strong><code>oce eval-agent</code></strong> — end-to-end agent tasks (fix a failing test, create a module, rename a symbol, delete dead code, add an endpoint) in throwaway workspaces, graded by verification scripts. The first harness that can catch a prompt, tool, or provider regression in the agent itself.</li>
+      <li><strong>Dual-mode retrieval baselines, measured fresh.</strong> This repo: keyword 0.886 / hybrid 0.943. Flask (external): keyword 0.926 / hybrid 0.889. The honest finding, committed with the numbers: fusion demotes confident BM25 hits on definition-shaped queries — tuning it is tracked open work, and the baselines are the harness. (June's 0.977 no longer reproduces.)</li>
+      <li><strong>Fixed: OpenAI embeddings rejected chunks over 8192 tokens</strong>, silently dropping their whole file from the index. Oversized chunks now embed their head; full contents stay stored.</li>
+      <li><strong>The Team plan is purchasable</strong> — pricing's button goes through Polar.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li>Version sync with the 0.4.5 release train. No extension changes; releases are versioned in lockstep so tag-driven publishing stays consistent.</li>
+    </ul>
+
+    <h2 id="v0-4-4">0.4.4 <span class="tagline">npm package is `@dhaxor/open-context`</span> <span class="date">2026-10-26</span></h2>
+    <p>npm's typosquat guard rejects the unscoped name <code>open-context</code> as too similar to the existing <code>opencontext</code>, and suggests the scoped form — which also can never be taken or impersonated. Install:</p>
+    <p>``<code>bash npm install -g @dhaxor/open-context </code>``</p>
+    <p>Same CLI (<code>oce</code>), same code. The 0.4.2/0.4.3 tags taught us the two things that had to be fixed for any name to ship: the publish gate and the token.</p>
+
+    <h2 id="v0-4-3">0.4.3 <span class="tagline">republish of 0.4.2</span> <span class="date">2026-10-26</span></h2>
+    <p>The 0.4.2 tag's <code>npm publish</code> failed before reaching the registry: the package's <code>prepublishOnly</code> gate ran the extension's typecheck, which needs <code>extension/node_modules</code> that the publish workflow never installs. The gate now verifies what the npm package actually ships (core typecheck + tests); the extension is gated by its own release workflow, which installs its deps.</p>
+
+    <h2 id="v0-4-2">0.4.2 <span class="tagline">npm package renamed to `open-context`</span> <span class="date">2026-10-26</span></h2>
+    <p>The name <code>open-context-engine</code> on npm is owned by a different account, so no release from this repository could ever publish under it (0.4.0's changelog claimed an npm release that never happened — the publish was failing on the name all along). The package now ships as <strong><code>open-context</code></strong>: same CLI (<code>oce</code>), same code, versioned forward. The VS Code extension's Marketplace identity (<code>open-context.open-context-engine</code>) is unchanged.</p>
+    <p>``<code>bash npm install -g open-context </code>``</p>
+
+    <h2 id="v0-4-1">0.4.1 <span class="date">2026-10-25</span></h2>
+    <p>### Fixes</p>
+    <ul>
+      <li><strong>The file watcher no longer strands stale chunks.</strong> A file rejected during a debounced flush — replaced with binary bytes, or unreadable at that instant — was parked for removal with no timer armed, so its old chunks stayed in the index until the next unrelated edit. The watcher now re-arms itself and completes the eviction.</li>
+      <li><strong><code>oce watch</code> reports removals honestly.</strong> When additions and deletions landed in one debounce window, the <code>[reindex]</code> line always said <code>0 removed</code> because it relayed the add-result verbatim. Removals from the same window are folded into the report.</li>
+      <li><strong><code>oce index</code> closes its store before exit.</strong> Process teardown masked it, but the open handle kept the database locked against <code>oce clean</code> on Windows and left WAL files behind.</li>
+      <li><strong><code>release-check.sh</code> runs on Windows dev machines.</strong> It assumed npm's POSIX <code>$PREFIX/bin/oce</code> layout; Windows npm puts the shim at the prefix root.</li>
+    </ul>
+    <p>### Internal</p>
+    <ul>
+      <li>All pending dependency majors landed: TypeScript 7, vitest 5 (with an explicit vite 8 devDependency — vitest 5 takes vite as a required peer), openai 7, chokidar 6, ignore 7, markdown-it 15, @types/node 26, vsce 4.</li>
+      <li>The 1,025-line <code>src/cli/index.ts</code> is now <code>io</code>/<code>config</code>/six command modules plus a thin entry point, with 33 tests running the real commands in-process (keyword-only path, no keys needed).</li>
+      <li>New regression suites: the file watcher (real-store create/edit/delete, binary eviction, error survival, mid-flush queuing), <code>MultiContext</code> and <code>packWithDependencies</code> (previously exported-but-untested), and a Studio guard that fails the build if a raw-HTML sink ever appears next to model-derived strings.</li>
+      <li>The shared design tokens between the marketing site and Trace are enforced by test instead of by hand.</li>
+      <li><code>eval/external/</code> — a Flask 3.1.2 gold set (27 cases, recall@10 0.926 keyword-only) with a committed baseline, so ranking changes are validated against a codebase this repo has never seen.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>The Indexing section of Settings is real.</strong> What was a &quot;coming soon&quot; placeholder now shows live index status — workspace root, indexed files and chunks, search mode (with the reason when it degrades to keyword-only), and the active embedding provider/model — and edits the settings that govern indexing: index-on-startup, re-index on file changes, the shared embedding cache, and chunk size/overlap. A Rebuild index button runs the same command as the command palette. Every value the webview can write is validated host-side (unknown keys and corrupting values are refused), and all dynamic content renders through text nodes, consistent with the Studio invariant.</li>
+      <li><strong>Toolchain and dependency majors:</strong> TypeScript 7, markdown-it 15 (ships its own types; <code>@types/markdown-it</code> removed), ignore 7, <code>@types/node</code> 26, <code>@vscode/vsce</code> 4 — all verified against the full build, test, and VSIX packaging pipeline.</li>
+      <li>Stale &quot;Unreleased&quot; entries that shipped with 0.4.0 (session memory, model routing, streaming render, auto-scroll, edit review/undo, resilient chat) are folded into the 0.4.0 section where they belonged.</li>
+    </ul>
+
+    <h2 id="v0-4-0">0.4.0 <span class="tagline">first public release</span></h2>
+    <p>The first version published to npm. Earlier version numbers were internal.</p>
+    <p>### Trace — the agent workspace</p>
+    <ul>
+      <li><strong><code>oce trace</code></strong> opens the workspace in your browser; bare <strong><code>oce</code></strong> opens it full-screen in the terminal. Both render one event stream from one session, so they cannot disagree.</li>
+      <li><strong>Evidence rail</strong> — what is in the model's context window right now: ranked retrieved chunks with fusion scores, the graph edge that pulled each one in, and a token budget split into retrieval / files / history / system. Pinned chunks survive compaction; evicted chunks are removed from the next request by re-rendering the original tool result without them.</li>
+      <li><strong>Checkpoints and rewind</strong> — one checkpoint per turn on the audit hash chain. Rewinding restores both the conversation and the files the agent changed, and refuses to overwrite a file you edited by hand since.</li>
+      <li><strong>Approvals</strong> show the diff, a blast-radius score, and indexed caller count.</li>
+      <li><strong>Sub-agent visibility</strong> — delegated work streams into its own block.</li>
+      <li><strong>Parallel sessions</strong> — in a git repository each session runs in its own worktree and branch. Review a session's changes and land it (commit, then <code>--no-ff</code> merge); closing a session never discards uncommitted work.</li>
+      <li><strong>Composer</strong> — <code>@path</code> pins a file into context, <code>!command</code> runs a shell command through the approval flow, <code>/command</code> for the rest.</li>
+      <li><strong>Reconnect-safe</strong> — the event stream replays from a cursor, so a dropped connection or a second window never loses the session.</li>
+      <li><strong>Desktop shell</strong> (<code>desktop/</code>, build from source) — Electron wrapper with attention-only notifications, a menu, and <code>trace://</code> deep links.</li>
+    </ul>
+    <p>### Getting started without paying</p>
+    <ul>
+      <li><strong><code>oce setup</code></strong> lists every way to get a working model and records your choice. Presets for free providers: Ollama (local), Google Gemini, Groq, Cerebras, OpenRouter free models — <code>oce trace -p groq</code> just works with a key.</li>
+      <li><strong>No embedding key required.</strong> With no embedding provider configured, the engine runs keyword (BM25) search instead of failing. This fallback refuses to run if it would discard an existing vector index — one that actually holds chunks; an empty one left by a failed first index is rebuilt.</li>
+      <li>A missing key now names the free options instead of dead-ending.</li>
+    </ul>
+    <p>### Fixes</p>
+    <ul>
+      <li><code>oce status</code> no longer wipes the index when run with a different embedding provider than the index was built with; it reports the mismatch instead.</li>
+      <li>Switching to another embedding model of the same dimension (for example two 768-dimension Ollama models) now rebuilds the index. Before, the old model's vectors stayed and queries from the new model ranked against them at random. The index records which model built it.</li>
+      <li>Retrieval explanations (<code>retrieveDebug</code>) now describe the pipeline production actually runs — they previously skipped the score floor and the AST graph expander.</li>
+      <li>Configuration errors print one readable line instead of a stack trace (<code>OCE_DEBUG=1</code> restores it).</li>
+      <li>Running outside a git repository no longer prints git's &quot;not a repository&quot; error on every command.</li>
+      <li><code>oce --version</code> and the MCP handshake report the real version instead of <code>0.1.0</code>.</li>
+    </ul>
+    <h3>VS Code extension</h3>
+    <ul>
+      <li><strong>Works on VS Code 1.139, and on every Electron after it.</strong> VS Code 1.139 moved to Electron 43, and the per-ABI SQLite bindings this extension shipped (up to Electron 42) did not match it. The extension now uses better-sqlite3 13, a Node-API addon: one binary per platform loads in every Electron VS Code runs extensions in, and in plain Node on remote hosts (SSH, WSL, Codespaces). A new Electron in VS Code no longer needs a new extension build.</li>
+      <li><strong>Works with no embedding key.</strong> A fresh install indexes with keyword search and says so once, instead of failing with a misleading native-binding error. Saving a Voyage or OpenAI key — from the command, the settings panel, or the chat — rebuilds the index with semantic search, and the chat keeps its conversation. An index built with a key that is later removed is kept, not wiped, and the extension asks for the key.</li>
+      <li><strong>Picking a provider picks its model.</strong> Switching <code>openContext.embedding.provider</code> or <code>openContext.llm.provider</code> in settings now uses that provider's default model, instead of carrying over <code>voyage-code-3</code> or <code>gpt-5.4</code>.</li>
+      <li><strong>Six more languages get AST-aware chunking in the extension.</strong> The C, C++, Ruby, PHP, Kotlin, and Swift grammars now ship in the VSIX. The engine supported them, but the extension left their grammars out and fell back to line-based chunking.</li>
+      <li><strong>Linux needs glibc 2.34+</strong> (Ubuntu 22.04 / RHEL 9 / Debian 12 or newer), the floor of the new binding's prebuild. On an older host, activation says so instead of failing mid-index.</li>
+      <li><strong>A smaller VSIX:</strong> one native SQLite binding per platform instead of five.</li>
+      <li><strong>Security hardening.</strong> Every agent-reachable filesystem/exec surface is now workspace-contained (<code>read-file</code>, edit tools, shell <code>cwd</code> — <code>../../etc/passwd</code> and absolute-path escapes are refused); shell commands run with a <strong>scrubbed environment</strong> (API keys/tokens/secrets never reach child processes); the credential blocklist now covers <code>.env*</code>, <code>.npmrc</code>, <code>.netrc</code>, <code>.git-credentials</code>, <code>secrets.*</code>, tfstate, and everything under <code>.aws/</code>/<code>.ssh/</code>/<code>.kube/</code>/<code>.gnupg/</code>, and <code>read-file</code> refuses credential-like files outright.</li>
+      <li><strong>Google + Ollama agent LLMs.</strong> Selecting Google no longer throws at runtime — a native Gemini streaming caller (tools, usage) ships; new <code>ollama</code> provider runs the agent fully offline against a local model. History budgets now derive from each model's real context window.</li>
+      <li><strong>Local reranker.</strong> <code>reranker: { provider: &quot;local&quot; }</code> runs a cross-encoder in-process via the optional <code>@huggingface/transformers</code> dep — the full retrieval pipeline (embed + BM25 + rerank) now works with zero cloud keys.</li>
+      <li><strong>Robustness.</strong> Embedding/rerank HTTP calls carry hard timeouts and honor <code>Retry-After</code>; SQLite gets <code>busy_timeout</code> so the CLI and extension can share a store without SQLITE_BUSY crashes; oversized files are rejected by <code>stat</code> before being read into memory; the <code>search.minScore</code> setting is now actually enforced (as a bounded relevance floor).</li>
+      <li><strong>Real streaming retrieval.</strong> <code>StreamingRetriever.retrieveWithStages</code> now yields stages as they happen — BM25 results arrive before the query embedding round-trip even starts.</li>
+      <li><strong>CLI: config file + new commands.</strong> <code>~/.open-context/config.json</code> and <code>&lt;ws&gt;/.open-context/config.json</code> (flags/env still win; API keys in files are rejected); <code>oce status</code>, <code>oce clean --yes</code>, <code>oce search --json</code>; <code>--store-path/--chunk-size/--chunk-overlap/--max-file-size</code> are now real flags on every store command. Fixed: <code>oce agent -p anthropic</code> no longer crashes (LLM vs embedding provider fully separated; new <code>--embedding-provider/--embedding-model</code>).</li>
+      <li><strong>Structured logging.</strong> <code>OCE_LOG=debug|info|error|silent</code> (+ <code>OCE_LOG_FORMAT=json</code>) replaces silent <code>catch {}</code> swallows in graph extraction, git state, grammar loading, and reranker fallback. Local stderr only — still zero telemetry.</li>
+      <li><strong>CI/release.</strong> Tests now run on Linux/macOS/Windows on Node 22, plus Node 24 on Linux; Dependabot + CodeQL enabled; npm publishing automated on version tags.</li>
+      <li><strong>Reworked <code>oce</code> CLI into an interactive coding agent.</strong> Bare <code>oce</code> now launches a full REPL: streamed styled output, live tool-call lines with timing, inline diff/command previews with <code>y</code>/<code>a</code>/<code>n</code> approvals, and slash commands (<code>/help</code> <code>/compact</code> <code>/plan</code> <code>/diff</code> <code>/usage</code> <code>/mode</code> <code>/sessions</code> <code>/resume</code> …). Approval modes <code>--auto-edit</code> / <code>--full-auto</code>, session persistence with <code>--continue</code> / <code>--resume</code>, and <code>--print [--json]</code> for scripting.</li>
+      <li><strong>Harness upgraded toward best-in-class:</strong> model-summarized history compaction (with drop-oldest fallback), a live plan/todo tool, sub-agent delegation for broad explorations, environment context (platform/git/index) in the system prompt, and a composable permission system (suggest / auto-edit / full-auto).</li>
+      <li><strong>⚠ Security: the agent's shell tool now defaults to OFF.</strong> <code>openContext.agent.shell.enabled</code> shipped as <code>true</code> with an empty allowlist, meaning a fresh install let the model run arbitrary commands. It is now opt-in; when enabling it, consider also pinning <code>openContext.agent.shell.allowlist</code>.</li>
+      <li><strong>Workspace/org policy enforcement.</strong> A committed <code>.open-context/policy.json</code> (or an org-signed <code>policy.lock</code>) can disable the agent's shell/edit/web-search tools, pin shell allowlists, force local-only embeddings, and exclude paths from indexing. Policies always win over settings; the extension shows one warning when a capability was stripped.</li>
+      <li><strong>Tamper-evident audit log (opt-in, Enterprise).</strong> <code>openContext.agent.audit.enabled</code> appends every agent run and tool call to a hash-chained <code>.open-context/audit/audit.jsonl</code>; verify with <code>oce audit --verify</code>. A policy with <code>&quot;audit&quot;: { &quot;required&quot;: true }</code> forces it on.</li>
+      <li><strong>Fully-local in-process embeddings.</strong> New <code>local</code> embedding provider (<code>jina-embeddings-v2-base-code</code> or <code>all-MiniLM-L6-v2</code>) — no API key and no Ollama server; needs the optional <code>@huggingface/transformers</code> package. Models cache under <code>~/.open-context/models</code>.</li>
+      <li><strong>Six new indexed languages.</strong> C, C++, Ruby, PHP, Kotlin, and Swift now get AST-aware chunking and code-graph edges (imports/exports/inheritance) instead of line-based fallback.</li>
+      <li><strong>Faster agent turns.</strong> Read-only tool calls within a turn now execute in parallel; turns containing edits or shell commands stay strictly ordered. Provider-reported token usage is tracked per run.</li>
+      <li><strong>Embedding cache (on by default).</strong> Vectors are cached by content hash in <code>~/.open-context/embed-cache.db</code>, shared across repos and branches — identical code never embeds (or bills) twice. Disable with <code>openContext.embedding.cache.enabled</code>.</li>
+      <li><strong>Team index sync (Team license, CLI).</strong> <code>oce push-index</code> publishes the index as an artifact; <code>oce pull-index</code> installs it and re-embeds only the local diff. Pairs with the embedding cache for a one-embedding-bill-per-team story.</li>
+      <li><strong>Linux arm64 is now a supported platform.</strong> The release matrix gained a native <code>ubuntu-22.04-arm</code> leg (same glibc 2.34 floor as x64) — no cross-compiling, and <code>sqlite-vec-linux-arm64</code> ships in the VSIX. Raspberry Pi 5 / Graviton / Ampere dev boxes and arm64 devcontainers get first-class support.</li>
+      <li><strong>Session memory (on by default)</strong> — the agent now remembers codebase insights across chat sessions, stored locally in <code>.open-context/memories.json</code>. Relevant memories ride along in the agent's context per query. Disable with <code>openContext.agent.memory.enabled</code>.</li>
+      <li><strong>Model routing (opt-in)</strong> — <code>openContext.agent.routing.enabled</code> routes each query to a cost-appropriate tier: quick lookups go to a fast model (e.g. Haiku), multi-file/analytical work to the strongest (e.g. Opus), everything else to your configured model. Tier models are overridable; the chat shows which tier each turn used.</li>
+      <li><strong>Smooth streaming render</strong> — agent responses no longer flicker. The chat bubble keeps a stable rendered prefix (the <em>committed</em> markdown) and a live plain-text <em>tail</em> that grows by single text-node append per token, with a dedicated cursor element anchored to the end. Full markdown-it + highlight.js only re-runs when a paragraph or code fence closes — not every animation frame.</li>
+      <li><strong>Auto-scroll respects the user</strong> — if you scroll up to read, the chat stops yanking you back down. A floating &quot;Latest&quot; pill reattaches with one click. Sending a new message snaps to the bottom regardless.</li>
+      <li><strong>Review &amp; undo agent edits</strong> — every file the agent changes now shows <em>Open diff</em> (native side-by-side), <em>Undo</em>, and <em>Redo</em>, with a per-turn &quot;N files changed · Undo all&quot; summary. Undo/redo apply exact inverses and keep the index in sync.</li>
+      <li><strong>Undo Last Agent Edit</strong> command (also in the chat title bar).</li>
+      <li><strong>Resilient chat</strong> — the conversation no longer disappears when the panel is hidden or moved (<code>retainContextWhenHidden</code>), and the last active conversation is restored after a window reload.</li>
+    </ul>
+
+    <h2 id="v0-2-0">0.2.0</h2>
+    <h3>VS Code extension</h3>
+    <p><strong>One VSIX now covers VS Code 1.103 → current.</strong> Each platform package bundles a <code>better_sqlite3.node</code> per supported Electron ABI (37.x / 39.x / 42.x); at activation the extension selects the one matching your VS Code's runtime. The <code>engines.vscode</code> floor drops from <code>^1.124.0</code> back to <code>^1.103.0</code> — the 0.1.1 restriction existed only because a single binary can't span Electron ABIs, and that constraint is gone. When VS Code ships a new Electron, a target is appended and republished; no floor bump, no stranded users.</p>
+    <p>If your VS Code's ABI isn't in the shipped set, activation now stops with an error naming your ABI and the shipped ones (instead of a cryptic <code>NODE_MODULE_VERSION</code> crash mid-index).</p>
+
+    <h2 id="v0-1-1">0.1.1</h2>
+    <h3>VS Code extension</h3>
+    <p><strong>This release fixes the <code>NODE_MODULE_VERSION 127</code> first-index crash that paying users hit on the <code>0.1.0</code> VSIX.</strong></p>
+    <p>The published <code>.vsix</code> is now built for VS Code's Electron runtime (Electron 42.3.0 / Node 24) and shipped as a separate package per <code>(os, arch)</code>. See <code>PUBLISHING.md</code> for the supported matrix and the runtime guard that now gives users a clear error message if their environment ends up incompatible after all.</p>
+    <p><strong>Breaking — minimum VS Code version is now 1.124.0.</strong> Older VS Code uses an older Electron / Node ABI; a single rebuilt <code>better-sqlite3</code> binary can't span both. Users on VS Code &lt; 1.124 will stay on the previous <code>0.1.0</code> release until v0.2 ships multi-ABI bundling.</p>
+    <p><strong>Currently unsupported (file an issue if this affects you):</strong> <code>win32-arm64</code>, <code>linux-arm64</code>, Alpine/musl Linux.</p>
+    <p>Smaller things:</p>
+    <ul>
+      <li><strong>Real error messages instead of silent indexing failures.</strong> The startup-index catch site now opens a notification + Output channel entry instead of swallowing to <code>console.error</code> where no user could see it. The same classifier covers NMV mismatch, glibc skew, musl/Alpine, wrong-arch binaries, and missing sqlite-vec platform packages.</li>
+      <li>New &quot;Open Context Engine&quot; Output channel containing the raw load error and timestamps for support tickets.</li>
+    </ul>
+
+    <h2 id="v0-1-0">0.1.0</h2>
+    <h3>VS Code extension</h3>
+    <p>Initial release of Open Context Engine:</p>
+    <ul>
+      <li>Semantic codebase search powered by local embeddings</li>
+      <li>AI chat with codebase context (OpenAI, Anthropic, Google)</li>
+      <li>Sidebar tree view of indexed files</li>
+      <li>Quick search (Ctrl+Shift+K)</li>
+      <li>Editor context menu: &quot;Explain with Context&quot;, &quot;Find Similar Code&quot;</li>
+      <li>Auto-indexing with file watcher</li>
+      <li>Supports OpenAI, Voyage AI, and Ollama embeddings</li>
+      <li>Full MCP server mode for Claude Code / Cursor integration</li>
+    </ul>
+    <!-- changelog:end -->
   </section>
 </main>
 
@@ -106,28 +337,50 @@
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

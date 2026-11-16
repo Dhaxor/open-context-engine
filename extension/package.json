@@ -22,18 +22,20 @@
     "vscode": "^1.103.0"
   },
   "categories": [
-    "Programming Languages",
-    "Machine Learning",
-    "Chat"
+    "AI",
+    "Chat",
+    "Machine Learning"
   ],
   "keywords": [
-    "semantic search",
-    "code indexing",
-    "AI",
-    "embeddings",
-    "RAG",
     "mcp",
-    "copilot alternative",
+    "mcp server",
+    "context engine",
+    "codebase context",
+    "code search",
+    "semantic search",
+    "ai agent",
+    "claude code",
+    "rag",
     "local-first"
   ],
   "activationEvents": [
@@ -597,14 +599,53 @@
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "command": { "type": "string", "description": "stdio: the program to start." },
-              "args": { "type": "array", "items": { "type": "string" } },
-              "env": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra environment variables. ${env:NAME} and ${workspaceFolder} are expanded." },
-              "cwd": { "type": "string" },
-              "url": { "type": "string", "description": "HTTP: a Streamable HTTP (or SSE) endpoint." },
-              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
-              "autoApprove": { "anyOf": [{ "type": "boolean" }, { "type": "array", "items": { "type": "string" } }], "description": "Tool names that never ask — or true for all of this server's tools." },
-              "disabled": { "type": "boolean" }
+              "command": {
+                "type": "string",
+                "description": "stdio: the program to start."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Extra environment variables. ${env:NAME} and ${workspaceFolder} are expanded."
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "description": "HTTP: a Streamable HTTP (or SSE) endpoint."
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "autoApprove": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "Tool names that never ask — or true for all of this server's tools."
+              },
+              "disabled": {
+                "type": "boolean"
+              }
             }
           }
         },

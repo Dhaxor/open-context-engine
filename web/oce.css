@@ -237,6 +237,34 @@ code, pre, .mono { font-family: var(--mono); }
 .plan .btn { justify-content: center; margin-top: auto; }
 .plan .fineprint { font-family: var(--mono); font-size: 11px; color: var(--ink-4); }
 
+/* ── long-form pages: docs, setup guides, field guides ──────────────── */
+.nav-links a[aria-current="page"] { color: var(--ink); }
+.hero .updated { margin-top: var(--s2); font-family: var(--mono); font-size: var(--t-meta); color: var(--ink-3); }
+section.doc { max-width: 860px; margin: 0 auto; padding: 26px 20px 56px; }
+section.doc h2 { font-size: 22px; margin: 36px 0 10px; }
+section.doc h3 { font-size: 17px; margin: 26px 0 8px; }
+section.doc p, section.doc li { font-size: 15px; line-height: 1.7; }
+section.doc p + p, section.doc p + pre, section.doc pre + p { margin-top: 12px; }
+section.doc ul, section.doc ol { margin: 8px 0 0; padding-left: 22px; }
+section.doc li + li { margin-top: 4px; }
+section.doc a { color: var(--prompt); }
+section.doc a:hover { text-decoration: underline; }
+section.doc pre { background: rgba(255, 255, 255, .04); border: 1px solid var(--edge); border-radius: var(--r-m); padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+section.doc code { font-size: .92em; }
+section.doc table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: var(--t-small); }
+section.doc th, section.doc td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--edge); }
+section.doc th { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--ink-3); letter-spacing: .04em; }
+section.doc td:first-child { color: var(--ink); font-weight: 500; }
+section.doc .table-wrap { overflow-x: auto; }
+section.doc .callout { margin-top: 16px; padding: 14px 16px; border: 1px solid var(--edge); border-left: 3px solid var(--prompt); border-radius: var(--r-s); background: var(--panel); }
+section.doc .step-tag { font-family: var(--mono); font-size: 12px; color: var(--prompt); letter-spacing: .06em; display: block; margin-bottom: 4px; }
+section.doc .faq h3 { font-size: 16px; margin: 20px 0 6px; }
+section.doc h2 .tagline { font-family: var(--sans); font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 8px; }
+section.doc h2 .date { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--ink-4); margin-left: 8px; }
+.clients { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--s3); }
+.clients a { font-family: var(--mono); font-size: var(--t-small); padding: 6px 12px; border: 1px solid var(--edge-hi); border-radius: 999px; color: var(--ink-2); }
+.clients a:hover { border-color: var(--prompt); color: var(--ink); }
+
 /* ── footer ──────────────────────────────────────────────────────────── */
 footer { border-top: 1px solid var(--edge); padding: var(--s6) 0 var(--s8); }
 .foot { display: flex; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; align-items: baseline; }

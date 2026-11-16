@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Desktop MCP setup: ask Claude about your code</title>
+<meta name="description" content="Let Claude Desktop search a local index of your repository over MCP: one command writes claude_desktop_config.json, and your code stays on disk.">
+<link rel="canonical" href="https://opencontextengine.com/claude-desktop">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Claude Desktop MCP setup: ask Claude about your code">
+<meta property="og:description" content="Let Claude Desktop search a local index of your repository over MCP: one command writes claude_desktop_config.json, and your code stays on disk.">
+<meta property="og:url" content="https://opencontextengine.com/claude-desktop">
+<meta property="og:image" content="https://opencontextengine.com/og/claude-desktop.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Claude Desktop MCP setup: ask Claude about your code">
+<meta name="twitter:description" content="Let Claude Desktop search a local index of your repository over MCP: one command writes claude_desktop_config.json, and your code stays on disk.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/claude-desktop.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Claude Desktop MCP setup: ask Claude about your code",
+  "description": "Add Open Context Engine to claude_desktop_config.json so Claude Desktop can search a local index of your repository.",
+  "about": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Claude Desktop"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine"
+    }
+  ],
+  "datePublished": "2026-11-16",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/claude-desktop.png",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
+  "mainEntityOfPage": "https://opencontextengine.com/claude-desktop"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Claude Desktop",
+      "item": "https://opencontextengine.com/claude-desktop"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">setup/claude-desktop <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Ask Claude Desktop about your code</h1>
+    <p class="sub">Claude Desktop can't see your repository on its own. Add Open Context Engine as an MCP server and Claude can search a local index of it — explain a module, trace a request, draft docs — while your code stays on disk.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
+  </section>
+
+  <section class="doc">
+    <h2 id="step-1"><span class="step-tag">step 1 · 1 min</span>Install</h2>
+    <pre>npm install -g @dhaxor/open-context     # Node 22+</pre>
+
+    <h2 id="step-2"><span class="step-tag">step 2 · 30 s</span>Add it to Claude Desktop</h2>
+    <p>Run this in the repository you want Claude to search:</p>
+    <pre>cd /path/to/your/repo
+oce mcp install claude-desktop</pre>
+    <p>It merges an <code>open-context</code> entry, pinned to this project, into Claude Desktop's config file:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>OS</th><th>config file</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td></tr>
+        <tr><td>Windows</td><td><code>%APPDATA%\Claude\claude_desktop_config.json</code></td></tr>
+        <tr><td>Linux</td><td><code>~/.config/Claude/claude_desktop_config.json</code></td></tr>
+      </tbody>
+    </table></div>
+    <pre>{
+  "mcpServers": {
+    "open-context": {
+      "command": "oce",
+      "args": ["mcp", "--workspace", "/path/to/your/repo"]
+    }
+  }
+}</pre>
+
+    <h2 id="step-3"><span class="step-tag">step 3 · 1 min</span>Restart Claude Desktop and verify</h2>
+    <p>Quit and reopen Claude Desktop. The <code>open-context</code> tools appear in the conversation's tools menu. Ask <em>"Give me a map of this codebase, then explain how authentication works"</em> — Claude calls <code>repo-map</code> and <code>codebase-retrieval</code>, and answers with real paths.</p>
+
+    <h2>Good questions for a desktop chat</h2>
+    <ul>
+      <li>"Explain the request lifecycle from the HTTP handler to the database." — retrieval follows the call graph.</li>
+      <li>"Where is <code>RateLimiter</code> defined, and who calls it?" — symbol tools answer exactly.</li>
+      <li>"Draft onboarding notes for this service." — the repo map gives the structure first.</li>
+    </ul>
+    <p>For edits, use an agent that can apply them — <a href="/claude-code">Claude Code</a>, <a href="/cursor">Cursor</a>, or the <a href="/vscode">VS Code extension</a> — on the same index.</p>
+
+    <h2>Several repositories</h2>
+    <pre>cd ~/code/api &amp;&amp; oce mcp install claude-desktop --name oce-api
+cd ~/code/web &amp;&amp; oce mcp install claude-desktop --name oce-web</pre>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>No tools after restarting</strong> — Claude Desktop starts without your shell's PATH on some systems; re-run with <code>--npx</code>.</li>
+      <li><strong>The server errors on start</strong> — run <code>oce mcp --workspace /path/to/your/repo</code> in a terminal to see why.</li>
+      <li><strong>Undo it</strong> — <code>oce mcp install claude-desktop --remove</code>.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>

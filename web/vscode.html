@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Context Engine for VS Code: agent and Copilot MCP</title>
+<meta name="description" content="A VS Code agent grounded in a local index of your code, with approvals, checkpoints and memory, plus an MCP server for Copilot agent mode.">
+<link rel="canonical" href="https://opencontextengine.com/vscode">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Open Context Engine for VS Code: agent and Copilot MCP">
+<meta property="og:description" content="A VS Code agent grounded in a local index of your code, with approvals, checkpoints and memory, plus an MCP server for Copilot agent mode.">
+<meta property="og:url" content="https://opencontextengine.com/vscode">
+<meta property="og:image" content="https://opencontextengine.com/og/vscode.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open Context Engine for VS Code: agent and Copilot MCP">
+<meta name="twitter:description" content="A VS Code agent grounded in a local index of your code, with approvals, checkpoints and memory, plus an MCP server for Copilot agent mode.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/vscode.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Open Context Engine for VS Code: agent and Copilot MCP",
+  "description": "The Open Context Engine VS Code extension, and how to add its MCP server to GitHub Copilot's agent mode.",
+  "about": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Visual Studio Code"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "GitHub Copilot"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine"
+    }
+  ],
+  "datePublished": "2026-11-16",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/vscode.png",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
+  "mainEntityOfPage": "https://opencontextengine.com/vscode"
+}
+</script>
+<style>
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; height: auto; border: 1px solid var(--edge); border-radius: var(--r-m); display: block; }
+  .shots figcaption { font-size: var(--t-small); color: var(--ink-3); margin-top: 6px; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "VS Code",
+      "item": "https://opencontextengine.com/vscode"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional" aria-current="page">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">setup/vscode <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">An AI agent in VS Code that shows its work</h1>
+    <p class="sub">The Open Context Engine extension puts an agent in the sidebar, grounded in a local index of your workspace — with a live plan, approvals before it acts, a review of what it changed, and checkpoints you can rewind. Using Copilot instead? Give its agent mode the same index over MCP.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">Install from the Marketplace</a>
+      <a class="btn btn-ghost" href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX (VSCodium, Cursor, Windsurf)</a>
+    </div>
+  </section>
+
+  <section class="doc">
+    <h2>The extension</h2>
+    <div class="shots">
+      <figure><img src="/img/agent-approval.png" width="420" height="900" loading="lazy" alt="The Open Context Engine sidebar in VS Code: a live plan, a sub-agent at work, and an edit waiting for approval"><figcaption>A plan, a sub-agent, and an edit waiting for your approval.</figcaption></figure>
+      <figure><img src="/img/agent-changes.png" width="420" height="900" loading="lazy" alt="A finished agent turn listing the files it changed, with Diff, Get review and Undo all"><figcaption>Every turn ends with its changes: diff, review, undo.</figcaption></figure>
+    </div>
+    <ul>
+      <li><strong>Approvals you choose:</strong> ask first, auto-edit (commands still ask), or full auto. The shell runs under the OS sandbox where there is one.</li>
+      <li><strong>Changes you control:</strong> a changes tray after every turn — one diff editor for all of it, per-file undo, and <em>Get review</em>, where the agent reviews its own diff against the surrounding code.</li>
+      <li><strong>Checkpoints:</strong> rewind the conversation and the files to any earlier turn — after a window reload too.</li>
+      <li><strong>Fix it where it broke:</strong> <em>Fix with Open Context agent</em> in the light bulb on any error, and <em>Fix Last Failed Command</em> from the terminal.</li>
+      <li><strong>Parallel sessions</strong> in their own git worktrees, with a notification when one finishes or needs you.</li>
+      <li><strong>The context window, visible:</strong> what the model sees, ranked, with pin and evict — and the memories it was reminded of, which you can read, correct or forget.</li>
+      <li><strong>Your MCP servers:</strong> add the ones you already use to <code>openContext.agent.mcpServers</code> and the agent can call them; anything that changes things asks first.</li>
+    </ul>
+    <p>It works with OpenAI, Anthropic, Google, Ollama or any OpenAI-compatible endpoint. Indexing is local; with Ollama and local embeddings, nothing leaves the machine.</p>
+
+    <h2 id="copilot">GitHub Copilot agent mode, over MCP</h2>
+    <p>If Copilot is your agent, give it Open Context Engine's tools instead. From the project root:</p>
+    <pre>npm install -g @dhaxor/open-context
+oce mcp install vscode</pre>
+    <p>That merges a server into <code>.vscode/mcp.json</code>, the workspace file VS Code reads:</p>
+    <pre>{
+  "servers": {
+    "open-context": {
+      "type": "stdio",
+      "command": "oce",
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
+    }
+  }
+}</pre>
+    <p>Commit it to share the setup with your team. For every workspace instead, <code>oce mcp install vscode --scope user</code> runs <code>code --add-mcp</code> for you. With the extension installed, <strong>Open Context: Set Up MCP for Another Tool…</strong> in the Command Palette does the same.</p>
+    <p>Then open Copilot Chat in agent mode and check the tools picker: the <code>open-context</code> tools — <code>codebase-retrieval</code>, <code>repo-map</code>, symbol definitions and references — are listed and can be toggled.</p>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li>VS Code 1.103 or newer.</li>
+      <li>Windows x64, macOS (Intel and Apple Silicon), or Linux x64/arm64 with glibc 2.34+. Remote SSH, WSL, Dev Containers and Codespaces work on the same platforms.</li>
+    </ul>
+    <p>Setting up a different client? <a href="/claude-code">Claude Code</a> · <a href="/cursor">Cursor</a> · <a href="/windsurf">Windsurf</a> · <a href="/claude-desktop">Claude Desktop</a>. What changed in each release is in the <a href="/changelog">changelog</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>

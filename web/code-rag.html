@@ -3,38 +3,62 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Code RAG — Retrieval-Augmented Generation for Your Codebase | Open Context Engine</title>
-<meta name="description" content="Code RAG retrieves the right source code into an LLM's context before it answers. How it works, why naive code RAG fails, and how to run it locally over your own repo — measured, not vibes.">
+<title>Code RAG: retrieval-augmented generation for codebases</title>
+<meta name="description" content="Code RAG retrieves the right source into an LLM's context before it answers. How it works, why naive code RAG fails, and how to run it locally.">
 <link rel="canonical" href="https://opencontextengine.com/code-rag">
-<meta property="og:title" content="Code RAG — Retrieval-Augmented Generation for Your Codebase">
-<meta property="og:description" content="How code RAG works, why line-chunked vector search fails on real repositories, and how to run measured, AST-aware RAG locally over your own codebase.">
-<meta property="og:url" content="https://opencontextengine.com/code-rag">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Code RAG: retrieval-augmented generation for codebases">
+<meta property="og:description" content="Code RAG retrieves the right source into an LLM's context before it answers. How it works, why naive code RAG fails, and how to run it locally.">
+<meta property="og:url" content="https://opencontextengine.com/code-rag">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Code RAG — Retrieval-Augmented Generation for Your Codebase">
-<meta name="twitter:description" content="Why naive code RAG fails on real repos, and what AST-aware chunking + hybrid retrieval + symbol expansion does differently.">
+<meta name="twitter:title" content="Code RAG: retrieval-augmented generation for codebases">
+<meta name="twitter:description" content="Code RAG retrieves the right source into an LLM's context before it answers. How it works, why naive code RAG fails, and how to run it locally.">
 <meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "Code RAG — Retrieval-Augmented Generation for Your Codebase",
   "description": "How code RAG works, why naive implementations fail on real repositories, and how to run measured, AST-aware RAG locally.",
-  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
-  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
   "mainEntityOfPage": "https://opencontextengine.com/code-rag",
   "about": [
-    { "@type": "Thing", "name": "retrieval-augmented generation" },
-    { "@type": "Thing", "name": "code search" },
-    { "@type": "Thing", "name": "software engineering" }
-  ]
+    {
+      "@type": "Thing",
+      "name": "retrieval-augmented generation"
+    },
+    {
+      "@type": "Thing",
+      "name": "code search"
+    },
+    {
+      "@type": "Thing",
+      "name": "software engineering"
+    }
+  ],
+  "datePublished": "2026-11-08",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og-image.png"
 }
 </script>
 <script type="application/ld+json">
@@ -45,27 +69,42 @@
     {
       "@type": "Question",
       "name": "What is code RAG?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Code RAG (retrieval-augmented generation over source code) indexes a codebase into searchable units, retrieves the most relevant snippets for a query or task, and puts them into the LLM's context before it answers or edits. It is how AI coding assistants answer questions about repos that are far larger than the model's context window." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Code RAG (retrieval-augmented generation over source code) indexes a codebase into searchable units, retrieves the most relevant snippets for a query or task, and puts them into the LLM's context before it answers or edits. It is how AI coding assistants answer questions about repos that are far larger than the model's context window."
+      }
     },
     {
       "@type": "Question",
       "name": "How is code RAG different from general RAG?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Code has structure that prose does not: functions, classes, imports, and call graphs. Good code RAG chunks along AST boundaries (not fixed line counts), fuses dense embeddings with exact keyword matching (identifiers like AbortWithStatusJSON are lexical queries, not semantic ones), expands results along the code graph (callers and callees), and resolves symbol definitions. General-purpose RAG pipelines skip all of this and it shows in accuracy." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Code has structure that prose does not: functions, classes, imports, and call graphs. Good code RAG chunks along AST boundaries (not fixed line counts), fuses dense embeddings with exact keyword matching (identifiers like AbortWithStatusJSON are lexical queries, not semantic ones), expands results along the code graph (callers and callees), and resolves symbol definitions. General-purpose RAG pipelines skip all of this and it shows in accuracy."
+      }
     },
     {
       "@type": "Question",
       "name": "Why does chunking matter for code RAG?",
-      "acceptedAnswer": { "@type": "Answer", "text": "A chunk that cuts a function in half embeds as neither half's meaning. AST-aware chunking keeps each chunk a complete semantic unit — a function, a class, a method — so embeddings describe real code, and class-level header chunks give the indexer a handle for methods defined far from their class. It is the single biggest accuracy lever in code RAG." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A chunk that cuts a function in half embeds as neither half's meaning. AST-aware chunking keeps each chunk a complete semantic unit — a function, a class, a method — so embeddings describe real code, and class-level header chunks give the indexer a handle for methods defined far from their class. It is the single biggest accuracy lever in code RAG."
+      }
     },
     {
       "@type": "Question",
       "name": "How do I run RAG on my own codebase locally?",
-      "acceptedAnswer": { "@type": "Answer", "text": "With Open Context Engine: npm install -g @dhaxor/open-context, then oce index (builds a local SQLite index with AST-aware chunks, hybrid retrieval, and a code graph), then oce search \"your question\" to query it, or claude mcp add oce -- oce mcp to serve it to Claude Code over MCP. Embeddings run in-process by default, so nothing leaves your machine." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "With Open Context Engine: npm install -g @dhaxor/open-context, then oce index (builds a local SQLite index with AST-aware chunks, hybrid retrieval, and a code graph), then oce search \"your question\" to query it, or oce mcp install claude-code to serve it to Claude Code over MCP. Embeddings run in-process by default, so nothing leaves your machine."
+      }
     },
     {
       "@type": "Question",
       "name": "How do you measure code RAG quality?",
-      "acceptedAnswer": { "@type": "Answer", "text": "With committed gold sets — query/expected-chunk pairs scored with recall@k, MRR, and nDCG in CI, the way tests are. Open Context Engine publishes its numbers on its benchmarks page: hybrid recall@10 of 0.943 on its own repo and parity (0.926) on Flask 3.1.2 where pure vector search previously lost. If a tool doesn't publish retrieval metrics, its accuracy claims are vibes." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "With committed gold sets — query/expected-chunk pairs scored with recall@k, MRR, and nDCG in CI, the way tests are. Open Context Engine publishes its numbers on its benchmarks page: hybrid recall@10 of 0.943 on its own repo and parity (0.926) on Flask 3.1.2 where pure vector search previously lost. If a tool doesn't publish retrieval metrics, its accuracy claims are vibes."
+      }
     }
   ]
 }
@@ -85,9 +124,24 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://opencontextengine.com/" },
-    { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://opencontextengine.com/guides" },
-    { "@type": "ListItem", "position": 3, "name": "Code RAG", "item": "https://opencontextengine.com/code-rag" }
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Guides",
+      "item": "https://opencontextengine.com/guides"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Code RAG",
+      "item": "https://opencontextengine.com/code-rag"
+    }
   ]
 }
 </script>
@@ -99,11 +153,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -117,6 +172,7 @@
     <div class="chunk">guides/code-rag <span class="score">1.00</span></div>
     <h1 style="font-size: var(--t-h1);">Code RAG: retrieval-augmented generation for your codebase</h1>
     <p class="sub">How RAG over source code works, why the naive recipe fails on real repositories, and how to run it locally — with retrieval quality you can measure.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
   </section>
 
   <section class="doc">
@@ -141,7 +197,7 @@
       <li><strong>Symbol expansion.</strong> When a retrieved snippet calls <code>validateToken()</code>, pull in <code>validateToken</code>'s definition alongside — the model sees the callee without a second round-trip.</li>
       <li><strong>A code graph.</strong> Import/call/definition edges extracted from the AST, so results ride with their callers and callees.</li>
       <li><strong>Compiler-grade symbol lookup.</strong> A language server turns "where is this defined / who references it" from fuzzy guessing into exact answers.</li>
-      <li><strong>Measurement.</strong> Committed gold sets scored with recall@k, MRR, and nDCG in CI — <a href="benchmarks">published numbers</a>, not vibes.</li>
+      <li><strong>Measurement.</strong> Committed gold sets scored with recall@k, MRR, and nDCG in CI — <a href="/benchmarks">published numbers</a>, not vibes.</li>
     </ul>
 
     <h2>Run code RAG locally in three commands</h2>
@@ -149,13 +205,13 @@
     <pre>npm install -g @dhaxor/open-context
 oce index                        # AST-aware chunks + hybrid index + code graph, in local SQLite
 oce search "where do we validate JWTs?"</pre>
-    <p>Embeddings run in-process (MiniLM by default — no API key), everything lives in local SQLite, and if the vector extension is unavailable the engine degrades to keyword-only BM25 instead of dying. To give an <a href="agentic-workflow">agentic workflow</a> this grounding, serve it over MCP — the <a href="mcp-server">MCP server guide</a> covers Claude Code and Cursor in one command each.</p>
+    <p>Embeddings run in-process (MiniLM by default — no API key), everything lives in local SQLite, and if the vector extension is unavailable the engine degrades to keyword-only BM25 instead of dying. To give an <a href="/agentic-workflow">agentic workflow</a> this grounding, serve it over MCP — the <a href="/mcp-server">MCP server guide</a> covers Claude Code and Cursor in one command each.</p>
 
     <h2>Measure before you trust</h2>
-    <p>The uncomfortable question for any code-RAG tool: <em>what's your recall@10?</em> If a vendor can't answer with a methodology — gold sets, scoring metrics, before/after for ranking changes — its accuracy claims are marketing. OCE treats retrieval quality like tests: committed gold sets (this repo, Flask 3.1.2, gin v1.10.0), CI baselines, and a public <a href="benchmarks">benchmarks page</a> generated from the eval harness's own reports. The harness ships with the product, so you can score it on your own codebase too.</p>
+    <p>The uncomfortable question for any code-RAG tool: <em>what's your recall@10?</em> If a vendor can't answer with a methodology — gold sets, scoring metrics, before/after for ranking changes — its accuracy claims are marketing. OCE treats retrieval quality like tests: committed gold sets (this repo, Flask 3.1.2, gin v1.10.0), CI baselines, and a public <a href="/benchmarks">benchmarks page</a> generated from the eval harness's own reports. The harness ships with the product, so you can score it on your own codebase too.</p>
 
     <h2>Why not just fine-tune on the codebase?</h2>
-    <p>A common alternative — training a model on your source — answers a different question. Fine-tuning shapes <em>how</em> a model writes; retrieval supplies <em>what</em> it knows, freshly, with citations. Code changes every commit, so frozen weights go stale where a re-indexed answer doesn't. The full comparison is in <a href="rag-vs-fine-tuning">RAG vs fine-tuning for code</a>.</p>
+    <p>A common alternative — training a model on your source — answers a different question. Fine-tuning shapes <em>how</em> a model writes; retrieval supplies <em>what</em> it knows, freshly, with citations. Code changes every commit, so frozen weights go stale where a re-indexed answer doesn't. The full comparison is in <a href="/rag-vs-fine-tuning">RAG vs fine-tuning for code</a>.</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
@@ -168,7 +224,7 @@ oce search "where do we validate JWTs?"</pre>
       <h3>Can code RAG run fully offline?</h3>
       <p>Yes. With OCE, embeddings run in-process with no API key and the index is local SQLite; keyword-only mode covers environments where vector search is unavailable. Nothing is uploaded.</p>
       <h3>How do I evaluate a code RAG system?</h3>
-      <p>Build or use committed gold sets and score recall@k, MRR, and nDCG — OCE's <a href="benchmarks">benchmarks page</a> shows the method and the numbers, and <code>oce eval</code> reproduces the harness on your own repo.</p>
+      <p>Build or use committed gold sets and score recall@k, MRR, and nDCG — OCE's <a href="/benchmarks">benchmarks page</a> shows the method and the numbers, and <code>oce eval</code> reproduces the harness on your own repo.</p>
     </div>
   </section>
 </main>
@@ -177,27 +233,50 @@ oce search "where do we validate JWTs?"</pre>
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

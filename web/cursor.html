@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cursor MCP setup: give Cursor your whole codebase</title>
+<meta name="description" content="Connect Cursor to a local index of your repo with one command: oce mcp install cursor. Hybrid code search, symbol lookups and repo maps for its agent.">
+<link rel="canonical" href="https://opencontextengine.com/cursor">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Cursor MCP setup: give Cursor your whole codebase">
+<meta property="og:description" content="Connect Cursor to a local index of your repo with one command: oce mcp install cursor. Hybrid code search, symbol lookups and repo maps for its agent.">
+<meta property="og:url" content="https://opencontextengine.com/cursor">
+<meta property="og:image" content="https://opencontextengine.com/og/cursor.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cursor MCP setup: give Cursor your whole codebase">
+<meta name="twitter:description" content="Connect Cursor to a local index of your repo with one command: oce mcp install cursor. Hybrid code search, symbol lookups and repo maps for its agent.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/cursor.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Cursor MCP setup: give Cursor your whole codebase",
+  "description": "Connect Cursor's agent to a local Open Context Engine index over MCP with one command.",
+  "about": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Cursor"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine"
+    }
+  ],
+  "datePublished": "2026-11-16",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/cursor.png",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
+  "mainEntityOfPage": "https://opencontextengine.com/cursor"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Doesn't Cursor already index my codebase?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Cursor has its own codebase indexing. Open Context Engine adds a local index you control — hybrid BM25 + vector search over AST chunks, a code graph, symbol definitions and references, and a repo map — that the same agent can call as MCP tools, and that Claude Code, VS Code and your CI can share."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where does the index live?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "In .open-context/ inside your project, as a SQLite database. Indexing and the default embeddings run in-process on your machine; nothing is uploaded by Open Context Engine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can one setup serve every project?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Use the project-level config (the default): it passes ${workspaceFolder}, so each project Cursor opens gets its own index. The user-level config (--scope user) is pinned to one project path."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Cursor",
+      "item": "https://opencontextengine.com/cursor"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional" aria-current="page">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">setup/cursor <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Give Cursor your whole codebase</h1>
+    <p class="sub">One command adds Open Context Engine to Cursor as an MCP server: hybrid code search, symbol lookups and a repo map over a local index of your project — for Cursor's agent to call before it edits.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
+  </section>
+
+  <section class="doc">
+    <h2 id="step-1"><span class="step-tag">step 1 · 1 min</span>Install</h2>
+    <pre>npm install -g @dhaxor/open-context     # Node 22+</pre>
+    <p>No API key is needed: the default embeddings run in-process (MiniLM), and with none at all the engine runs keyword-only and says so.</p>
+
+    <h2 id="step-2"><span class="step-tag">step 2 · 30 s</span>Add it to Cursor</h2>
+    <p>From the root of the project:</p>
+    <pre>oce mcp install cursor</pre>
+    <p>That writes (or merges into) <code>.cursor/mcp.json</code>:</p>
+    <pre>{
+  "mcpServers": {
+    "open-context": {
+      "command": "oce",
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
+    }
+  }
+}</pre>
+    <p>Servers already in the file are kept, and a file it can't parse is left alone. Add <code>--print</code> to see the change first, <code>--remove</code> to undo it, or <code>--scope user</code> to write <code>~/.cursor/mcp.json</code> instead (pinned to this project's path). If <code>oce</code> isn't on your PATH, the entry uses <code>npx -y @dhaxor/open-context</code>.</p>
+
+    <h2 id="step-3"><span class="step-tag">step 3 · 1 min</span>Index, then verify</h2>
+    <pre>oce index        # optional: the server also indexes on first start</pre>
+    <p>Open Cursor's settings, find the MCP section, and check that <code>open-context</code> is enabled with its tools listed. Then ask the agent something only the code can answer — <em>"where do we validate webhook signatures, and who calls it?"</em> — and it should call <code>codebase-retrieval</code> before it answers.</p>
+
+    <h2>What Cursor's agent gets</h2>
+    <ul>
+      <li><code>codebase-retrieval</code> — hybrid search (BM25 + vectors, fused and reranked) over AST-aware chunks, with callers and callees pulled in along the code graph.</li>
+      <li><code>repo-map</code> — the codebase's structure in a few thousand tokens, for broad questions.</li>
+      <li><code>find-symbol-definition</code> / <code>find-symbol-references</code> — compiler-grade when a language server is installed.</li>
+      <li><code>read-file</code>, <code>list-files</code>, <code>index-status</code>, and memory tools (<code>memory_remember</code>, <code>memory_recall</code>) that persist across sessions.</li>
+    </ul>
+
+    <h2>One index for Cursor and everything else</h2>
+    <p>The same command sets up <a href="/claude-code">Claude Code</a>, <a href="/vscode">VS Code</a>, <a href="/windsurf">Windsurf</a> and <a href="/claude-desktop">Claude Desktop</a>, and they all read the project's one index. A team can serve it once over HTTP instead:</p>
+    <pre>oce mcp --http --port 8940 --auth-token "$OCE_MCP_AUTH_TOKEN"
+
+// .cursor/mcp.json
+{ "mcpServers": { "open-context": {
+    "url": "http://127.0.0.1:8940/mcp",
+    "headers": { "Authorization": "Bearer &lt;the same token&gt;" } } } }</pre>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>The server shows an error in Cursor</strong> — run <code>oce mcp --workspace .</code> in a terminal: it prints the same startup error Cursor sees.</li>
+      <li><strong><code>oce</code>: command not found</strong> — Cursor started without your shell's PATH. Re-run <code>oce mcp install cursor --npx</code>, or install Node so <code>oce</code> is on the system PATH.</li>
+      <li><strong>Answers feel keyword-only</strong> — <code>oce status</code> shows the search mode; <code>oce setup --embeddings local</code> turns on in-process semantic search.</li>
+      <li><strong>Several projects</strong> — keep the project-level config; each window gets its own index through <code>${workspaceFolder}</code>.</li>
+    </ul>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>Doesn't Cursor already index my codebase?</h3>
+      <p>It has its own indexing. Open Context Engine adds a local index you control — hybrid search, a code graph, symbol tools and a repo map — that Cursor's agent calls as MCP tools, and that your other tools can share. The <a href="/comparison">comparison</a> covers the differences.</p>
+      <h3>Where does the index live?</h3>
+      <p>In <code>.open-context/</code> inside the project, as SQLite. Indexing and the default embeddings run on your machine; Open Context Engine uploads nothing.</p>
+      <h3>Can one setup serve every project?</h3>
+      <p>The project-level config does, via <code>${workspaceFolder}</code>. The user-level one is pinned to a single path.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>
