@@ -148,16 +148,18 @@ jobs:
       # The page renders the committed baselines, so the public numbers stay
       # exactly what the harness measured — new baselines land via the release
       # train and this job refreshes the rendered page from them.
+      # build:web regenerates benchmarks.html, then build-site gives it the
+      # shared head/nav/footer and moves its sitemap date if it changed.
       - run: npm run build:web
       - name: Commit the refreshed page
         run: |
-          if git diff --quiet web/benchmarks.html; then
-            echo "benchmarks.html already up to date"
+          if git diff --quiet -- web scripts/site-dates.json; then
+            echo "site already up to date"
             exit 0
           fi
           git config user.name "oce-nightly"
           git config user.email "nightly@opencontextengine.com"
-          git add web/benchmarks.html
+          git add web scripts/site-dates.json
           git commit -m "chore(site): regenerate benchmarks page from committed baselines"
           git push
       - name: Deploy to Cloudflare
@@ -170,6 +172,6 @@ jobs:
             exit 0
           fi
           npx wrangler deploy
-      - name: Ping IndexNow with the sitemap URLs
+      - name: Ping IndexNow with the pages that changed
         if: success()
         run: node scripts/indexnow-ping.mjs

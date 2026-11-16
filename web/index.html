@@ -3,24 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Open Context Engine — code retrieval for agentic workflows</title>
-<meta name="description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
+<title>Open Context Engine: local code context for AI coding agents</title>
+<meta name="description" content="Open-source, local-first context engine for AI coding agents: hybrid search over your repo, served to Claude Code, Cursor and VS Code over MCP.">
 <link rel="canonical" href="https://opencontextengine.com/">
-<meta property="og:title" content="Open Context Engine — code retrieval for agentic workflows">
-<meta property="og:description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
-<meta property="og:url" content="https://opencontextengine.com/">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Open Context Engine — code retrieval for agentic workflows">
-<meta name="twitter:description" content="Local-first code retrieval and a coding agent that grounds AI in your real codebase. Hybrid semantic + keyword search over an AST-aware index, served to any agent via MCP — fully local mode, MIT core.">
-<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Open Context Engine: local code context for AI coding agents">
+<meta property="og:description" content="Open-source, local-first context engine for AI coding agents: hybrid search over your repo, served to Claude Code, Cursor and VS Code over MCP.">
+<meta property="og:url" content="https://opencontextengine.com/">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open Context Engine: local code context for AI coding agents">
+<meta name="twitter:description" content="Open-source, local-first context engine for AI coding agents: hybrid search over your repo, served to Claude Code, Cursor and VS Code over MCP.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -29,17 +34,21 @@
       "@type": "WebSite",
       "name": "Open Context Engine",
       "url": "https://opencontextengine.com/",
-      "publisher": { "@id": "https://opencontextengine.com/#org" }
+      "publisher": {
+        "@id": "https://opencontextengine.com/#org"
+      }
     },
     {
       "@type": "Organization",
       "@id": "https://opencontextengine.com/#org",
       "name": "Open Context Engine",
       "url": "https://opencontextengine.com/",
-      "logo": "https://opencontextengine.com/og-image.png",
+      "logo": "https://opencontextengine.com/logo.png",
       "sameAs": [
         "https://github.com/Dhaxor/open-context-engine",
-        "https://www.npmjs.com/package/@dhaxor/open-context"
+        "https://www.npmjs.com/package/@dhaxor/open-context",
+        "https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine",
+        "https://open-vsx.org/extension/open-context/open-context-engine"
       ]
     }
   ]
@@ -52,17 +61,13 @@
   <div class="wrap nav-inner">
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
-      <a href="#retrieval">Product</a>
-      <a href="#trace">Trace</a>
-      <a href="#local" class="optional">Local-first</a>
-      <a href="#team">Team</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" class="optional">Docs</a>
-      <a href="agentic-workflow.html" class="optional">Agentic workflow</a>
-      <a href="mcp-server.html" class="optional">MCP server</a>
-      <a href="code-rag.html" class="optional">Code RAG</a>
-      <a href="guides.html" class="optional">Guides</a>
-      <a href="code-rag.html" class="optional">Code RAG</a>
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -75,18 +80,25 @@
   <section class="hero wrap">
     <div class="hero-grid">
       <div>
-        <h1>Your codebase, indexed.<br>Your AI, grounded.<br><span class="dim">Nothing leaves the machine.</span></h1>
-        <p class="sub">Open Context Engine turns any repo into a searchable knowledge base for AI — hybrid semantic + keyword retrieval, AST-aware chunking, and a code graph, served to Claude or Cursor over MCP, and to Trace, its own agent workspace. Local-first, MIT core, and it works with free models.</p>
+        <h1>Codebase context for AI coding agents.<br><span class="dim">Local, open source, over MCP.</span></h1>
+        <p class="sub">Open Context Engine indexes your repo on your machine — AST-aware chunks, hybrid semantic + keyword search, a code graph — and serves it to Claude Code, Cursor, VS Code, Windsurf and Claude Desktop over MCP, and to its own agent. MIT core, works with free models, and nothing leaves the machine.</p>
         <div class="hero-ctas">
           <button class="btn btn-primary" data-copy="npm install -g @dhaxor/open-context">Copy install command</button>
-          <a class="btn btn-ghost" href="pricing.html">Team pricing</a>
+          <a class="btn btn-ghost" href="/docs">Read the docs</a>
         </div>
+        <nav class="clients" aria-label="Set up a client">
+          <a href="/claude-code">Claude Code</a>
+          <a href="/cursor">Cursor</a>
+          <a href="/vscode">VS Code</a>
+          <a href="/windsurf">Windsurf</a>
+          <a href="/claude-desktop">Claude Desktop</a>
+        </nav>
         <div class="hero-stats num" aria-label="Measured retrieval quality">
           <span class="stat"><span class="k">recall@10</span><span class="v">0.943</span></span>
           <span class="stat"><span class="k">nDCG@10</span><span class="v">0.812</span></span>
           <span class="stat"><span class="k">mean latency</span><span class="v">251<em>ms</em></span></span>
           <span class="stat"><span class="k">languages</span><span class="v">13</span></span>
-          <span class="stat"><span class="k">tests</span><span class="v">918</span></span>
+          <span class="stat"><span class="k">tests</span><span class="v">1,165</span></span>
         </div>
       </div>
       <div class="term reveal" role="img" aria-label="An oce agent session answering a codebase question with retrieved files">
@@ -240,13 +252,19 @@ Reconciled: <span class="t-ok">3 files re-embedded</span>,
     <div class="wrap">
       <div class="chunk reveal">src/mcp/server.ts:1-149 <span class="score">0.93</span></div>
       <h2 class="reveal">Speaks MCP natively</h2>
-      <p class="lede reveal">Six retrieval and symbol tools over stdio for Claude Desktop, Claude Code, and Cursor — or a shared Streamable-HTTP endpoint with bearer auth for the whole team. A VS Code extension ships the same engine with chat, edit review, and index health.</p>
+      <p class="lede reveal">Retrieval, symbol, repo-map and memory tools for any MCP client, over stdio — or one shared Streamable-HTTP endpoint with bearer auth for a whole team. One command writes your client's config. Prefer an editor? The VS Code extension runs the same engine with an agent you can follow.</p>
       <div class="duo">
         <div class="card reveal">
-          <h3>Claude / Cursor</h3>
-          <div class="mono-block"><pre>{ <span class="t-dim">"mcpServers"</span>: { <span class="t-dim">"open-context"</span>: {
-    <span class="t-dim">"command"</span>: <span class="t-in">"oce"</span>,
-    <span class="t-dim">"args"</span>: [<span class="t-in">"mcp"</span>] } } }</pre></div>
+          <h3>One command per client</h3>
+          <div class="mono-block"><pre><span class="t-dim">$</span> <span class="t-in">oce mcp install claude-code</span>
+<span class="t-ok">Added "open-context" in .mcp.json</span>
+<span class="t-dim">also: cursor · vscode · windsurf · claude-desktop</span></pre></div>
+          <p style="margin-top: 12px;">Setup guides: <a href="/claude-code">Claude Code</a> · <a href="/cursor">Cursor</a> · <a href="/vscode#copilot">Copilot</a> · <a href="/windsurf">Windsurf</a> · <a href="/claude-desktop">Claude Desktop</a></p>
+        </div>
+        <div class="card reveal">
+          <h3>VS Code extension</h3>
+          <p>An agent in the sidebar with a live plan, approvals, a changes tray, checkpoints you can rewind, and memory you can edit — grounded in the same local index.</p>
+          <p style="margin-top: 12px;"><a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a> · <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a> · <a href="/vscode">More</a></p>
         </div>
         <div class="card reveal">
           <h3>Team endpoint</h3>
@@ -263,7 +281,7 @@ bearer auth · /health · watching</span></pre></div>
       <h2 class="reveal">Free for individuals. $25 per seat for teams.</h2>
       <p class="lede reveal" style="margin-left: auto; margin-right: auto;">The engine is MIT — index, search, MCP, and the agent are free forever. Teams pay for shared indexes, the embedding cache, policy locks, and multi-repo search.</p>
       <div class="hero-ctas reveal" style="justify-content: center;">
-        <a class="btn btn-primary" href="pricing.html">See pricing</a>
+        <a class="btn btn-primary" href="/pricing">See pricing</a>
         <a class="btn btn-ghost" href="https://github.com/Dhaxor/open-context-engine">Read the source</a>
       </div>
     </div>
@@ -271,10 +289,12 @@ bearer auth · /health · watching</span></pre></div>
   <section class="wrap reveal" id="faq" style="padding-top: 24px;">
     <h2 class="reveal" style="font-size: var(--t-h2, 28px);">Agentic workflow FAQ</h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 18px;">
-      <div class="result reveal"><h3>What is an agentic workflow?</h3><p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. <a href="agentic-workflow.html">Read the full guide</a>. For connecting agents to your code over MCP, see <a href="mcp-server.html">the MCP server guide</a>.</p></div>
+      <div class="result reveal"><h3>What is an agentic workflow?</h3><p>Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. <a href="/agentic-workflow">Read the full guide</a>. For connecting agents to your code over MCP, see <a href="/mcp-server">the MCP server guide</a>.</p></div>
       <div class="result reveal"><h3>Why is code retrieval the bottleneck?</h3><p>The agent's context window is smaller than your codebase. Hybrid retrieval over an AST-aware index decides what the model actually sees — and acts on.</p></div>
-      <div class="result reveal"><h3>How do I ground Claude Code or Cursor?</h3><p>Run the OCE MCP server over an indexed codebase: <code>claude mcp add oce -- oce mcp</code>. Steps in the <a href="docs.html">docs</a>.</p></div>
+      <div class="result reveal"><h3>How do I ground Claude Code or Cursor?</h3><p>Install, then one command: <code>oce mcp install claude-code</code> (or <code>cursor</code>, <code>vscode</code>, <code>windsurf</code>, <code>claude-desktop</code>). Step by step for <a href="/claude-code">Claude Code</a> and <a href="/cursor">Cursor</a>.</p></div>
       <div class="result reveal"><h3>Does it work offline?</h3><p>Yes — local MiniLM embeddings in-process, local SQLite storage, keyword-only fallback. Nothing is sent anywhere.</p></div>
+      <div class="result reveal"><h3>Is it an alternative to Augment's context engine?</h3><p>For giving agents codebase context over MCP, yes — MIT-licensed and indexed on your machine. <a href="/augment-alternative">What differs</a>, and how it compares with <a href="/comparison">Cursor, Copilot and other MCP servers</a>.</p></div>
+      <div class="result reveal"><h3>Can agents remember things across sessions?</h3><p>Yes — durable, local memory over MCP that you can read and correct. See <a href="/agent-memory">agent memory</a>.</p></div>
     </div>
   </section>
 </main>
@@ -283,35 +303,51 @@ bearer auth · /health · watching</span></pre></div>
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
-        <a href="#retrieval">Retrieval</a>
-        <a href="#trace">Trace</a>
-        <a href="#local">Local-first</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
-        <a href="docs.html">Docs</a>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
-        <a href="benchmarks.html">Benchmarks</a>
-        <a href="https://github.com/Dhaxor/open-context-engine#-quick-start">Quick start</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="agentic-workflow.html">Agentic workflow</a>
-        <a href="mcp-server.html">MCP server</a>
-        <a href="code-rag.html">Code RAG</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 
 <script type="application/ld+json">
 {
@@ -326,8 +362,32 @@ bearer auth · /health · watching</span></pre></div>
   "codeRepository": "https://github.com/Dhaxor/open-context-engine",
   "license": "https://opensource.org/licenses/MIT",
   "offers": [
-    { "@type": "Offer", "name": "Community", "price": "0", "priceCurrency": "USD" },
-    { "@type": "Offer", "name": "Team", "price": "25", "priceCurrency": "USD" }
+    {
+      "@type": "Offer",
+      "name": "Community",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    {
+      "@type": "Offer",
+      "name": "Team",
+      "price": "25",
+      "priceCurrency": "USD",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": "25",
+        "priceCurrency": "USD",
+        "unitText": "per seat per month"
+      }
+    }
+  ],
+  "softwareVersion": "0.9.0",
+  "image": "https://opencontextengine.com/og-image.png",
+  "sameAs": [
+    "https://github.com/Dhaxor/open-context-engine",
+    "https://www.npmjs.com/package/@dhaxor/open-context",
+    "https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine",
+    "https://open-vsx.org/extension/open-context/open-context-engine"
   ]
 }
 </script>
@@ -336,10 +396,54 @@ bearer auth · /health · watching</span></pre></div>
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    { "@type": "Question", "name": "What is an agentic workflow?", "acceptedAnswer": { "@type": "Answer", "text": "Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. Coding agents apply the loop to code: retrieve, edit, test, fix." } },
-    { "@type": "Question", "name": "Why is code retrieval the bottleneck in agentic workflows?", "acceptedAnswer": { "@type": "Answer", "text": "The agent's context window is smaller than your codebase, so retrieval decides what the model sees. Hybrid retrieval over an AST-aware index is the reliable way to fill that window." } },
-    { "@type": "Question", "name": "How do I ground Claude Code or Cursor in my codebase?", "acceptedAnswer": { "@type": "Answer", "text": "Run the Open Context Engine MCP server over an indexed codebase: npm install -g @dhaxor/open-context, oce index, then claude mcp add oce -- oce mcp." } },
-    { "@type": "Question", "name": "Does Open Context Engine work offline?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Local MiniLM embeddings run in-process with no API key, the index is local SQLite, and a keyword-only mode kicks in if vector search is unavailable." } }
+    {
+      "@type": "Question",
+      "name": "What is an agentic workflow?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Software where an LLM plans, calls tools, observes results, and loops until a goal is met — instead of answering once. Coding agents apply the loop to code: retrieve, edit, test, fix."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why is code retrieval the bottleneck in agentic workflows?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The agent's context window is smaller than your codebase, so retrieval decides what the model sees. Hybrid retrieval over an AST-aware index is the reliable way to fill that window."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I ground Claude Code or Cursor in my codebase?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Install Open Context Engine (npm install -g @dhaxor/open-context), then run one command in the project: oce mcp install claude-code — or cursor, vscode, windsurf, claude-desktop. It writes the client's MCP config for you."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Open Context Engine work offline?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Local MiniLM embeddings run in-process with no API key, the index is local SQLite, and a keyword-only mode kicks in if vector search is unavailable."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Open Context Engine an alternative to Augment's context engine?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For giving AI coding agents codebase context over MCP, yes: it is MIT-licensed, indexes on your machine, and needs no account for individual use."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can coding agents remember things across sessions?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Open Context Engine provides durable, local memory over MCP (memory_remember, memory_recall, memory_forget) that you can read and correct."
+      }
+    }
   ]
 }
 </script>

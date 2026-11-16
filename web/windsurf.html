@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Windsurf MCP setup: codebase context for Cascade</title>
+<meta name="description" content="Give Windsurf's Cascade agent hybrid search over a local index of your repo: oce mcp install windsurf writes the MCP config for you.">
+<link rel="canonical" href="https://opencontextengine.com/windsurf">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Windsurf MCP setup: codebase context for Cascade">
+<meta property="og:description" content="Give Windsurf's Cascade agent hybrid search over a local index of your repo: oce mcp install windsurf writes the MCP config for you.">
+<meta property="og:url" content="https://opencontextengine.com/windsurf">
+<meta property="og:image" content="https://opencontextengine.com/og/windsurf.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Windsurf MCP setup: codebase context for Cascade">
+<meta name="twitter:description" content="Give Windsurf's Cascade agent hybrid search over a local index of your repo: oce mcp install windsurf writes the MCP config for you.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/windsurf.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Windsurf MCP setup: codebase context for Cascade",
+  "description": "Add Open Context Engine to Windsurf's MCP config so Cascade can search a local index of your repository.",
+  "about": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Windsurf"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine"
+    }
+  ],
+  "datePublished": "2026-11-16",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/windsurf.png",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
+  "mainEntityOfPage": "https://opencontextengine.com/windsurf"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Windsurf",
+      "item": "https://opencontextengine.com/windsurf"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">setup/windsurf <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">Codebase context for Windsurf's Cascade</h1>
+    <p class="sub">Give Cascade the same retrieval your other tools get: hybrid code search, symbol lookups and a repo map over a local index of the project, added to Windsurf's MCP config by one command.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
+  </section>
+
+  <section class="doc">
+    <h2 id="step-1"><span class="step-tag">step 1 · 1 min</span>Install</h2>
+    <pre>npm install -g @dhaxor/open-context     # Node 22+</pre>
+
+    <h2 id="step-2"><span class="step-tag">step 2 · 30 s</span>Add it to Windsurf</h2>
+    <p>Windsurf keeps MCP servers in one global file, so run this in the project you want Cascade to search:</p>
+    <pre>cd /path/to/your/repo
+oce mcp install windsurf</pre>
+    <p>It merges this entry into <code>~/.codeium/windsurf/mcp_config.json</code>, pinned to the project's absolute path:</p>
+    <pre>{
+  "mcpServers": {
+    "open-context": {
+      "command": "oce",
+      "args": ["mcp", "--workspace", "/path/to/your/repo"]
+    }
+  }
+}</pre>
+    <p>Other servers in the file are kept; an unreadable file is left untouched and the entry is printed for you to paste. <code>--print</code> previews, <code>--remove</code> undoes.</p>
+
+    <h2 id="step-3"><span class="step-tag">step 3 · 1 min</span>Refresh and verify</h2>
+    <p>In Cascade's MCP settings, refresh the server list: <code>open-context</code> should appear with its tools. Ask Cascade a question only your code can answer — it should call <code>codebase-retrieval</code> and cite real files.</p>
+
+    <h2>More than one project</h2>
+    <p>Because the config is global, give each project its own server name:</p>
+    <pre>cd ~/code/api   &amp;&amp; oce mcp install windsurf --name oce-api
+cd ~/code/web   &amp;&amp; oce mcp install windsurf --name oce-web</pre>
+
+    <h2>What Cascade gets</h2>
+    <ul>
+      <li><code>codebase-retrieval</code> — hybrid BM25 + vector search over AST-aware chunks, expanded along the code graph.</li>
+      <li><code>repo-map</code>, <code>find-symbol-definition</code>, <code>find-symbol-references</code>, <code>read-file</code>, <code>list-files</code>.</li>
+      <li>Memory tools that carry facts about your codebase across sessions — see <a href="/agent-memory">agent memory</a>.</li>
+    </ul>
+    <p>Every tool reads the same local index your <a href="/claude-code">Claude Code</a>, <a href="/cursor">Cursor</a> and <a href="/vscode">VS Code</a> setups use. The full tool list is on the <a href="/mcp-server">MCP server page</a>.</p>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>The server doesn't start</strong> — run <code>oce mcp --workspace /path/to/your/repo</code> in a terminal to see the error Windsurf sees.</li>
+      <li><strong><code>oce</code> not found</strong> — re-run with <code>--npx</code> so Windsurf starts it through <code>npx -y @dhaxor/open-context</code>.</li>
+      <li><strong>Search seems keyword-only</strong> — <code>oce status</code>; then <code>oce setup --embeddings local</code> for in-process semantic search.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>

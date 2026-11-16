@@ -3,38 +3,62 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Open Context Engine vs Cursor, Copilot & Grep — Codebase Context Compared | Open Context Engine</title>
-<meta name="description" content="Cursor, Copilot, grep and OCE solve codebase context differently. An honest comparison: what each indexes, how retrieval works, when you need a dedicated engine — and when you don't.">
+<title>OCE vs Cursor, Copilot and other codebase context tools</title>
+<meta name="description" content="How Cursor, Copilot, grep, MCP servers and Open Context Engine give AI codebase context: what each indexes, where it runs, and when you need which.">
 <link rel="canonical" href="https://opencontextengine.com/comparison">
-<meta property="og:title" content="OCE vs Cursor, Copilot & Grep — Codebase Context Compared">
-<meta property="og:description" content="What Cursor, Copilot, grep and a dedicated retrieval engine each do for codebase context — an honest comparison with the tradeoffs spelled out.">
-<meta property="og:url" content="https://opencontextengine.com/comparison">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="OCE vs Cursor, Copilot and other codebase context tools">
+<meta property="og:description" content="How Cursor, Copilot, grep, MCP servers and Open Context Engine give AI codebase context: what each indexes, where it runs, and when you need which.">
+<meta property="og:url" content="https://opencontextengine.com/comparison">
+<meta property="og:image" content="https://opencontextengine.com/og/comparison.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="OCE vs Cursor, Copilot & Grep — Codebase Context Compared">
-<meta name="twitter:description" content="An honest comparison of codebase-context approaches: built-in IDE indexing vs grep vs a measured, local retrieval engine.">
-<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<meta name="twitter:title" content="OCE vs Cursor, Copilot and other codebase context tools">
+<meta name="twitter:description" content="How Cursor, Copilot, grep, MCP servers and Open Context Engine give AI codebase context: what each indexes, where it runs, and when you need which.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/comparison.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": "Open Context Engine vs Cursor, Copilot & Grep — Codebase Context Compared",
-  "description": "What each codebase-context approach indexes, how its retrieval works, and when a dedicated engine earns its keep.",
-  "author": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
-  "publisher": { "@type": "Organization", "name": "Open Context Engine", "url": "https://opencontextengine.com/" },
+  "headline": "OCE vs Cursor, Copilot and other codebase context tools",
+  "description": "What each codebase-context approach indexes, where it runs, and when a dedicated engine earns its keep — built-in editor context and MCP servers compared.",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
   "mainEntityOfPage": "https://opencontextengine.com/comparison",
   "about": [
-    { "@type": "Thing", "name": "Cursor" },
-    { "@type": "Thing", "name": "GitHub Copilot" },
-    { "@type": "Thing", "name": "code retrieval" }
-  ]
+    {
+      "@type": "Thing",
+      "name": "Cursor"
+    },
+    {
+      "@type": "Thing",
+      "name": "GitHub Copilot"
+    },
+    {
+      "@type": "Thing",
+      "name": "code retrieval"
+    }
+  ],
+  "datePublished": "2026-11-08",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/comparison.png"
 }
 </script>
 <script type="application/ld+json">
@@ -45,27 +69,42 @@
     {
       "@type": "Question",
       "name": "Do I need Open Context Engine if I already use Cursor?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Maybe not — Cursor's built-in indexing is good and self-contained. OCE adds value when you want: any client (Claude Code, CLI agents, CI bots) sharing one measured index; inspectable retrieval (an evidence rail showing what the model knew); compiler-grade symbol lookups; a local-only guarantee you can verify; or team-shared indexes built in CI. Many developers run both." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Maybe not — Cursor's built-in search is good and runs locally. OCE adds value when you want semantic and graph-aware retrieval, one measured index shared by several clients (Claude Code, CLI agents, CI), the evidence rail that shows what the model knew, or team-shared indexes built in CI. Many developers run both."
+      }
     },
     {
       "@type": "Question",
       "name": "How is OCE different from GitHub Copilot's context?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Copilot retrieves from open files and IDE-local context; it is excellent for in-editor completion and chat, but its retrieval isn't exposed as a tool to other agents, can't be measured or inspected, and is tied to Microsoft's surfaces. OCE is a standalone engine: hybrid retrieval with published recall numbers, served over MCP to any client, running fully locally." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Copilot's repository index is hosted by GitHub (files from folders not on GitHub are uploaded to build it) and serves Copilot. OCE keeps the index on your machine and serves it over MCP to any client — including Copilot's agent mode — with published retrieval numbers."
+      }
     },
     {
       "@type": "Question",
       "name": "Why not just use grep (or ripgrep) for codebase search?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Grep is unbeatable for exact strings and should stay in your toolkit — but it cannot answer concept or paraphrase queries ('how does auth middleware work?'), misses synonyms, and returns lists rather than ranked, symbol-expanded context. OCE keeps exact-match strength via BM25 fusion and adds semantic retrieval, symbol expansion and a code graph on top." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Grep is unbeatable for exact strings and should stay in your toolkit — but it cannot answer concept or paraphrase queries ('how does auth middleware work?'), misses synonyms, and returns lists rather than ranked, symbol-expanded context. OCE keeps exact-match strength via BM25 fusion and adds semantic retrieval, symbol expansion and a code graph on top."
+      }
     },
     {
       "@type": "Question",
       "name": "What does 'measured retrieval' mean in practice?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Retrieval quality is scored against committed gold sets with recall@k, MRR and nDCG in CI — the same way tests are. OCE publishes its numbers (hybrid recall@10 0.943 on its own codebase) and ships the harness, so you can score it on your own repo. Most alternatives don't publish retrieval metrics at all." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Retrieval quality is scored against committed gold sets with recall@k, MRR and nDCG in CI — the same way tests are. OCE publishes its numbers (hybrid recall@10 0.943 on its own codebase) and ships the harness, so you can score it on your own repo. Most alternatives don't publish retrieval metrics at all."
+      }
     },
     {
       "@type": "Question",
       "name": "Can I self-host OCE for a team?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The core is MIT and runs fully locally. For teams, build the index in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates pull it — only their local diff re-embeds. Policy locks can enforce local-only embeddings org-wide." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The core is MIT and runs fully locally. For teams, build the index in CI, publish it as an artifact (S3/HTTP/shared drive), and teammates pull it — only their local diff re-embeds. Policy locks can enforce local-only embeddings org-wide."
+      }
     }
   ]
 }
@@ -83,6 +122,32 @@
   .faq h3 { font-size: 16px; margin: 20px 0 6px; }
   .faq p { margin: 0 0 12px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Guides",
+      "item": "https://opencontextengine.com/guides"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Comparison",
+      "item": "https://opencontextengine.com/comparison"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -91,10 +156,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -106,54 +173,91 @@
 <main>
   <section class="hero wrap" style="padding-bottom: 0;">
     <div class="chunk">compare/context-options <span class="score">1.00</span></div>
-    <h1 style="font-size: var(--t-h1);">OCE vs Cursor, Copilot &amp; grep</h1>
-    <p class="sub">Four ways to give an AI your codebase's context — what each actually does, the tradeoffs spelled out, and when a dedicated engine earns its keep.</p>
+    <h1 style="font-size: var(--t-h1);">OCE vs Cursor, Copilot and MCP context tools</h1>
+    <p class="sub">The ways to give an AI your codebase's context — editor built-ins, grep, and the MCP servers people compare — what each actually does, where your code goes, and when a dedicated engine earns its keep.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
   </section>
 
   <section class="doc">
     <h2>The honest framing</h2>
-    <p><strong>Cursor and Copilot are excellent.</strong> If their built-in context covers your workflow, keep them — this page isn't a pitch to replace them. The question is narrower: <em>when do you need a dedicated, measurable retrieval engine on top?</em> The answer, in practice, is when any of these matter to you: using more than one client, verifying what the model knew, compiler-grade symbol accuracy, a hard local-only guarantee, or shared team indexes.</p>
+    <p><strong>Cursor and Copilot are excellent.</strong> If their built-in context covers your workflow, keep them — this page isn't a pitch to replace them. The question is narrower: <em>when do you need a dedicated, measurable retrieval engine on top?</em> In practice, when any of these matter: using more than one client, verifying what the model knew, semantic and graph-aware search, a local-only guarantee, or shared team indexes.</p>
+    <p>Facts about other products come from their own documentation, checked on 16 Nov 2026 — <a href="#sources">sources below</a>.</p>
 
-    <h2>Side by side</h2>
-    <table class="cmp">
-      <tr><th></th><th>Cursor</th><th>Copilot</th><th>grep / ripgrep</th><th>OCE</th></tr>
-      <tr><td><strong>What it is</strong></td><td>AI IDE with built-in codebase indexing</td><td>Completion + chat inside your editor</td><td>Exact text search</td><td>Standalone retrieval engine, served over MCP</td></tr>
-      <tr><td><strong>Retrieval</strong></td><td>Proprietary embedding index</td><td>Open files + IDE context</td><td>Literal match</td><td>Hybrid BM25 + vectors over AST chunks, adaptive fusion</td></tr>
-      <tr><td><strong>Works with</strong></td><td>Cursor only</td><td>VS Code / JetBrains surfaces</td><td>Any terminal</td><td>Any MCP client — Claude Code, Cursor, CLI agents, CI bots</td></tr>
-      <tr><td><strong>Symbol accuracy</strong></td><td>Index-based</td><td>Index-based</td><td>Exact strings only</td><td>Compiler-grade via language server, AST-grade fallback</td></tr>
-      <tr><td><strong>Retrieval you can measure</strong></td><td>Not published</td><td>Not published</td><td>Exactness only</td><td>recall@k / MRR / nDCG on committed gold sets, in CI</td></tr>
-      <tr><td><strong>Context inspectable</strong></td><td>No</td><td>No</td><td>You see raw lines</td><td>Evidence rail: every chunk, score, pin, eviction</td></tr>
-      <tr><td><strong>Local-only option</strong></td><td>Cloud embedding</td><td>Cloud service</td><td>Local</td><td>Local by default, policy-lockable</td></tr>
-      <tr><td><strong>Team-shared index</strong></td><td>No</td><td>No</td><td>—</td><td>Build in CI, publish artifact, teammates pull the diff</td></tr>
-      <tr><td><strong>Price</strong></td><td>$20/mo</td><td>$10–39/mo</td><td>Free</td><td>MIT core free · Team $25/seat/mo</td></tr>
-    </table>
+    <h2>Built-in context vs a dedicated engine</h2>
+    <div class="table-wrap"><table class="cmp">
+      <thead><tr><th></th><th>Cursor</th><th>GitHub Copilot</th><th>grep / ripgrep</th><th>OCE</th></tr></thead>
+      <tbody>
+        <tr><td>What it is</td><td>AI editor with built-in codebase search</td><td>Completion, chat and agent inside your editor</td><td>Exact text search</td><td>Standalone retrieval engine, served over MCP</td></tr>
+        <tr><td>Where the index lives</td><td>On your machine — Cursor's docs say its search index is built locally, without uploading code or storing embeddings</td><td>On GitHub — it indexes your GitHub repositories, and uploads files from other folders to build one</td><td>No index</td><td>On your machine — SQLite in the project</td></tr>
+        <tr><td>How it searches</td><td>A fast grep index</td><td>GitHub's repository index</td><td>Literal and regex match</td><td>BM25 + vectors over AST chunks, fused, expanded along the code graph</td></tr>
+        <tr><td>Who can use it</td><td>Cursor's agent</td><td>Copilot</td><td>Anything with a shell</td><td>Any MCP client — Claude Code, Cursor, Copilot, CLI agents, CI</td></tr>
+        <tr><td>Published retrieval metrics</td><td>None we know of</td><td>None we know of</td><td>—</td><td>recall@k, MRR, nDCG on committed gold sets</td></tr>
+        <tr><td>Price</td><td>Part of a Cursor plan</td><td>Part of a Copilot plan</td><td>Free</td><td>MIT core free · Team $25/seat/month</td></tr>
+      </tbody>
+    </table></div>
 
-    <h2>Where each approach wins</h2>
     <h3>Cursor</h3>
-    <p>The whole loop — editor, chat, agent, index — is one polished product. If you live in Cursor and want nothing else, its indexing is good and you should use it. OCE doesn't compete with the editor; it competes for the <em>retrieval layer</em>, and Cursor can even be pointed at OCE's HTTP MCP endpoint to share one index with your other tools.</p>
+    <p>The whole loop — editor, chat, agent, search — is one polished product, and its search runs locally. If you live in Cursor and want nothing else, use it. OCE competes for the <em>retrieval layer</em>, not the editor: add it to Cursor (<a href="/cursor">one command</a>) for semantic and graph-aware search, symbol tools and a repo map, on an index your other tools share.</p>
     <h3>Copilot</h3>
-    <p>Best-in-class inline completion and low-friction chat where your code already is. Its context is opaque and its retrieval isn't exposed as a tool — so for agents that need programmatic grounding, pair it with an engine rather than asking it to do retrieval itself.</p>
+    <p>Best-in-class completion and low-friction chat where your code already is. Its repository index lives with GitHub. If you'd rather keep the index on your machine — or use it outside Copilot — give Copilot's agent mode OCE's tools over MCP (<a href="/vscode#copilot">setup</a>).</p>
     <h3>grep / ripgrep</h3>
-    <p>Keep it forever. For exact identifiers, ripgrep remains the fastest tool on earth, and OCE's BM25 channel exists precisely because lexical match matters. What grep can't do: paraphrases, concept queries, ranked context, symbol expansion. The honest workflow is both — <code>rg</code> for exact, OCE for everything else.</p>
-    <h3>OCE</h3>
-    <p>Choose it when retrieval is load-bearing: grounding Claude Code or custom agents (<a href="claude-code">setup in three commands</a>), auditing what the model knew (<a href="context-engineering">evidence rail</a>), scoring retrieval quality instead of trusting it (<a href="benchmarks">published numbers</a>), or enforcing a local-only guarantee org-wide. It's infrastructure, not an IDE — and it composes with the tools above rather than replacing them.</p>
+    <p>Keep it forever. For exact identifiers ripgrep is the fastest tool there is, and OCE's BM25 channel exists because lexical match matters. What grep can't do: paraphrases, concept queries, ranked context, symbol expansion. The honest workflow is both.</p>
+
+    <h2>MCP servers and context engines</h2>
+    <p>If you're choosing a codebase-context server for an MCP client, these are the options people compare most:</p>
+    <div class="table-wrap"><table class="cmp">
+      <thead><tr><th></th><th>What it does</th><th>Where code is indexed</th><th>What you need</th><th>License</th></tr></thead>
+      <tbody>
+        <tr><td>Open Context Engine</td><td>Hybrid search (BM25 + vectors) over AST chunks, code graph, symbol tools, repo map, memory; plus a CLI agent and a VS Code extension</td><td>Your machine (SQLite)</td><td>Node 22; no account</td><td>MIT</td></tr>
+        <tr><td><a href="/augment-alternative">Augment Context Engine</a></td><td>Semantic codebase retrieval for any MCP client</td><td>Augment's cloud</td><td>Augment account and subscription; queries billed per token</td><td>Proprietary</td></tr>
+        <tr><td>claude-context (Zilliz)</td><td>Semantic code search: AST splitting, BM25 + dense vectors</td><td>A Milvus vector database — Zilliz Cloud or self-hosted</td><td>Milvus or Zilliz Cloud; an embedding provider (OpenAI by default, Ollama for local)</td><td>MIT</td></tr>
+        <tr><td>Serena</td><td>Symbol-level navigation and editing through language servers</td><td>No embedding index — language servers</td><td><code>uv</code>; no account</td><td>GPL-3.0 (app), MIT (SolidLSP)</td></tr>
+        <tr><td>Repomix</td><td>Packs a repository into one file for an LLM; regex grep over it</td><td>No persistent index — a packed snapshot</td><td>Node; no account</td><td>MIT</td></tr>
+        <tr><td>codebase-memory-mcp</td><td>A persistent knowledge graph of code with BM25 and bundled local embeddings</td><td>Your machine (SQLite)</td><td>Its binary; no account</td><td>MIT</td></tr>
+        <tr><td>Sourcegraph</td><td>Code search, definitions and references over MCP</td><td>Your Sourcegraph instance (single-tenant cloud or self-hosted)</td><td>An Enterprise plan</td><td>Proprietary</td></tr>
+        <tr><td>Greptile</td><td>AI code review; its MCP server serves review data</td><td>Greptile's service (self-hosting on Enterprise)</td><td>An account; GitHub App</td><td>Proprietary</td></tr>
+      </tbody>
+    </table></div>
+    <h3>How to choose</h3>
+    <ul>
+      <li><strong>You want semantic search without running a database</strong> — OCE and codebase-memory-mcp keep everything in one local SQLite file; claude-context needs Milvus.</li>
+      <li><strong>You want precise symbol edits</strong> — Serena's language-server tools are built for that, and it pairs well with a retrieval server rather than replacing one.</li>
+      <li><strong>You want a one-off snapshot for a chat</strong> — Repomix is the simplest tool for the job.</li>
+      <li><strong>You want an agent and an editor experience on top of the index</strong> — OCE ships both: <code>oce trace</code> and the <a href="/vscode">VS Code extension</a>, with approvals, checkpoints and memory.</li>
+      <li><strong>You need code to stay on your machines</strong> — rule out the hosted services, or self-host Sourcegraph or Greptile on their enterprise plans.</li>
+    </ul>
+    <p>Whatever you pick, measure it: OCE's eval harness (<code>oce eval</code>) scores retrieval on your own repository, and OCE's own numbers are on the <a href="/benchmarks">benchmarks page</a>.</p>
 
     <h2>The deciding question</h2>
-    <p><em>"Can you state, right now, what your coding agent's context contained at the step where it broke something?"</em> If the answer is no and that bothers you — that's the gap a dedicated, measured engine closes. If it doesn't, your built-in tooling is fine. Both are legitimate answers; only one of them is measurable.</p>
+    <p><em>"Can you state, right now, what your coding agent's context contained at the step where it broke something?"</em> If the answer is no and that bothers you — that's the gap a dedicated, measured engine closes. If it doesn't, your built-in tooling is fine.</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
       <h3>Do I need OCE if I already use Cursor?</h3>
-      <p>Not necessarily — Cursor's built-in indexing is self-contained and good. OCE earns its place when you want multi-client grounding, inspectable and measured retrieval, compiler-grade symbols, or a verifiable local-only mode. Many people run both.</p>
+      <p>Not necessarily — Cursor's built-in search is good and runs locally. OCE earns its place when you want semantic and graph-aware retrieval, one index shared by several clients, measured retrieval, or the evidence rail that shows what the model knew. Many people run both.</p>
       <h3>How is it different from Copilot's context?</h3>
-      <p>Copilot's retrieval isn't exposed to other agents, can't be measured, and is tied to Microsoft surfaces. OCE is a standalone engine with published recall numbers, served over MCP to any client.</p>
+      <p>Copilot's repository index is hosted by GitHub and serves Copilot. OCE keeps the index on your machine and serves it over MCP to any client — Copilot's agent mode included.</p>
       <h3>Should I replace grep with it?</h3>
       <p>No — keep ripgrep for exact strings. OCE keeps exact-match strength via BM25 and adds semantic retrieval, symbol expansion, and a code graph on top.</p>
       <h3>Is it really local?</h3>
       <p>Yes: in-process embeddings, local SQLite, stdio or localhost HTTP. A policy system can lock local-only mode org-wide with signatures that can't be loosened locally.</p>
       <h3>What does it cost?</h3>
-      <p>The core is MIT and free. Team features (shared indexes, policy locks, seat licensing) are $25/seat/month — details on the <a href="pricing">pricing page</a>.</p>
+      <p>The core is MIT and free. Team features (shared indexes, policy locks, seat licensing) are $25/seat/month — details on the <a href="/pricing">pricing page</a>.</p>
     </div>
+
+    <h2 id="sources">Sources</h2>
+    <ul>
+      <li>Cursor — <a href="https://cursor.com/docs/context/codebase-indexing" rel="nofollow">search and indexing</a>, <a href="https://cursor.com/docs/enterprise/privacy-and-data-governance" rel="nofollow">privacy and data governance</a></li>
+      <li>GitHub Copilot — <a href="https://docs.github.com/en/copilot/concepts/context/repository-indexing" rel="nofollow">repository indexing</a>, <a href="https://code.visualstudio.com/docs/copilot/reference/workspace-context" rel="nofollow">workspace context</a></li>
+      <li>Augment — <a href="https://docs.augmentcode.com/context-services/mcp/overview" rel="nofollow">Context Engine MCP</a>, <a href="https://docs.augmentcode.com/setup-augment/workspace-indexing" rel="nofollow">workspace indexing</a></li>
+      <li>claude-context — <a href="https://github.com/zilliztech/claude-context" rel="nofollow">github.com/zilliztech/claude-context</a></li>
+      <li>Serena — <a href="https://github.com/oraios/serena" rel="nofollow">github.com/oraios/serena</a></li>
+      <li>Repomix — <a href="https://github.com/yamadashy/repomix" rel="nofollow">github.com/yamadashy/repomix</a></li>
+      <li>codebase-memory-mcp — <a href="https://github.com/DeusData/codebase-memory-mcp" rel="nofollow">github.com/DeusData/codebase-memory-mcp</a></li>
+      <li>Sourcegraph — <a href="https://sourcegraph.com/docs/api/mcp" rel="nofollow">MCP server</a>, <a href="https://sourcegraph.com/pricing" rel="nofollow">pricing</a></li>
+      <li>Greptile — <a href="https://www.greptile.com/docs/mcp/overview" rel="nofollow">MCP server</a>, <a href="https://www.greptile.com/pricing" rel="nofollow">pricing</a></li>
+    </ul>
+    <p>All checked on 16 Nov 2026. Products change fast — <a href="mailto:hello@opencontextengine.com">tell us</a> if something here is out of date.</p>
   </section>
 </main>
 
@@ -161,28 +265,50 @@
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

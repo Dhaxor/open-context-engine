@@ -53,6 +53,10 @@ jobs:
       # this composed script checks Studio — plain `tsc --noEmit` missed it once.
       - run: npm run typecheck:core
       - run: npx vitest run
+      # The website: every page consistent (head, nav, links, dates, sitemap)
+      # and within its SEO rules. Fails with "run node scripts/build-site.mjs".
+      - if: matrix.os == 'ubuntu-22.04' && matrix.node == '22.22.0'
+        run: npm run check:web
 
   core-on-extension-sqlite:
     # The extension ships better-sqlite3 13 (Node-API, one binary for every

@@ -8,7 +8,10 @@
   },
   "assets": {
     "directory": "web",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // A path that matches nothing gets web/404.html with a real 404 status
+    // (it used to be an empty 404 body).
+    "not_found_handling": "404-page"
   },
   "compatibility_flags": [
     "nodejs_compat"

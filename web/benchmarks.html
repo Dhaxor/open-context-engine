@@ -3,13 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Benchmarks — Open Context Engine</title>
-<meta name="description" content="Measured retrieval quality on committed gold sets: recall@10, MRR, nDCG in keyword-only and hybrid modes, generated from the eval harness's own reports.">
+<title>Benchmarks: measured code retrieval quality</title>
+<meta name="description" content="Measured retrieval quality on committed gold sets: recall@10, MRR and nDCG in keyword-only and hybrid modes, generated from the eval harness's reports.">
+<link rel="canonical" href="https://opencontextengine.com/benchmarks">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Benchmarks: measured code retrieval quality">
+<meta property="og:description" content="Measured retrieval quality on committed gold sets: recall@10, MRR and nDCG in keyword-only and hybrid modes, generated from the eval harness's reports.">
+<meta property="og:url" content="https://opencontextengine.com/benchmarks">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Benchmarks: measured code retrieval quality">
+<meta name="twitter:description" content="Measured retrieval quality on committed gold sets: recall@10, MRR and nDCG in keyword-only and hybrid modes, generated from the eval harness's reports.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <style>
   .bench { border-collapse: collapse; width: 100%; font-size: 14px; }
   .bench th, .bench td { padding: 8px 10px; border-bottom: 1px solid var(--line, #1d2430); text-align: left; }
@@ -18,9 +34,29 @@
   .bench td.lbl { font-weight: 500; }
   .bench td.dim { opacity: .55; font-size: 12px; }
   .table-wrap { overflow-x: auto; }
-  h3 { margin: 28px 0 10px; }
+  main h2 { font-size: 20px; margin: 32px 0 10px; }
   .note { opacity: .75; font-size: 14px; max-width: 72ch; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Benchmarks",
+      "item": "https://opencontextengine.com/benchmarks"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -29,8 +65,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="docs.html" class="optional">Docs</a>
-      <a href="pricing.html">Pricing</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -47,7 +87,7 @@
   </section>
 
   <section class="wrap" style="padding-top: 8px;">
-    <h3>Open Context Engine's own gold set (44 cases)</h3>
+    <h2>Open Context Engine's own gold set (44 cases)</h2>
     <div class="table-wrap">
     <table class="bench">
       <thead><tr><th>configuration</th><th>mode</th><th>cases</th><th class="num">recall@10</th><th class="num">MRR</th><th class="num">nDCG@10</th><th class="num">hit-rate</th><th class="num">ctx-recall</th><th class="num">latency</th><th class="dim">measured</th></tr></thead>
@@ -89,7 +129,7 @@
       </tr>
     </table>
     </div>
-    <h3>Flask 3.1.2 — a codebase OCE had never seen (27 cases)</h3>
+    <h2>Flask 3.1.2 — a codebase OCE had never seen (27 cases)</h2>
     <div class="table-wrap">
     <table class="bench">
       <thead><tr><th>configuration</th><th>mode</th><th>cases</th><th class="num">recall@10</th><th class="num">MRR</th><th class="num">nDCG@10</th><th class="num">hit-rate</th><th class="num">ctx-recall</th><th class="num">latency</th><th class="dim">measured</th></tr></thead>
@@ -132,7 +172,7 @@
     </table>
     </div>
 
-    <h3>How to read this</h3>
+    <h2>How to read this</h2>
     <p class="note"><strong>keyword-only</strong> runs use BM25 alone (no embedding key, no vectors). <strong>hybrid</strong> fuses BM25 with vector similarity; since Oct 2026 the fusion weights adapt to query shape (definition-shaped queries lean BM25, paraphrases lean semantic) — the voyage rows above predate that change and are kept as the equal-weight reference. <strong>ctx-recall</strong> checks whether the gold file made it into the packed context an LLM actually receives. Gold sets are file-granular: a case passes when the gold file ranks in the top-10 unique files. Flask is an external, never-seen codebase — the honest test of a ranking change.</p>
   </section>
 </main>
@@ -141,26 +181,50 @@
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="docs.html">Docs</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

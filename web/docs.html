@@ -3,18 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Docs — Open Context Engine</title>
-<meta name="description" content="Task-based guides for Open Context Engine: connect Claude Code or Cursor via MCP, pick a search mode, share a team index, activate a license.">
+<title>Docs: install and connect Open Context Engine</title>
+<meta name="description" content="Install Open Context Engine, connect Claude Code, Cursor, VS Code or Windsurf with one command, pick a search mode, and share a team index.">
 <link rel="canonical" href="https://opencontextengine.com/docs">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Docs: install and connect Open Context Engine">
+<meta property="og:description" content="Install Open Context Engine, connect Claude Code, Cursor, VS Code or Windsurf with one command, pick a search mode, and share a team index.">
+<meta property="og:url" content="https://opencontextengine.com/docs">
+<meta property="og:image" content="https://opencontextengine.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Docs: install and connect Open Context Engine">
+<meta name="twitter:description" content="Install Open Context Engine, connect Claude Code, Cursor, VS Code or Windsurf with one command, pick a search mode, and share a team index.">
+<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <style>
   .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 24px; }
   .doc-card { border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 18px 20px; }
-  .doc-card h3 { margin: 0 0 8px; font-size: 16px; }
+  .doc-card h2 { margin: 0 0 8px; font-size: 16px; }
   .doc-card p { margin: 0 0 10px; font-size: 14px; opacity: .85; }
   .doc-card pre { margin: 0; font-size: 12.5px; overflow-x: auto; background: rgba(255,255,255,.04); padding: 10px 12px; border-radius: 8px; }
   .doc-card code, p code, li code { font-family: var(--mono, 'IBM Plex Mono', monospace); font-size: .92em; }
@@ -24,6 +39,26 @@
   section.doc pre { background: rgba(255,255,255,.04); border: 1px solid var(--line, #1d2430); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
   .tag { display: inline-block; font-family: var(--mono, monospace); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; opacity: .65; margin-bottom: 6px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -32,14 +67,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
-      <a href="agentic-workflow.html" class="optional">Agentic workflow</a>
-      <a href="mcp-server.html" class="optional">MCP server</a>
-      <a href="code-rag.html" class="optional">Code RAG</a>
+      <a href="/docs" aria-current="page">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -52,13 +85,13 @@
   <section class="hero wrap" style="padding-bottom: 0;">
     <div class="chunk">docs/index <span class="score">1.00</span></div>
     <h1 style="font-size: var(--t-h1);">Docs</h1>
-    <p class="sub">Task-based guides. The full command reference lives in the repo README and <code>oce --help</code>; these pages cover the paths people actually walk.</p>
+    <p class="sub">Task-based guides: install, connect Claude Code, Cursor, VS Code, Windsurf or Claude Desktop, pick a search mode, share a team index. The full command reference lives in the repo README and <code>oce --help</code>.</p>
   </section>
 
   <div class="wrap doc-grid">
     <div class="doc-card">
       <span class="tag">5 minutes</span>
-      <h3>Start free, stay local</h3>
+      <h2>Start free, stay local</h2>
       <p>Install, get a working model (free tiers first), index, search — no API key required for retrieval.</p>
       <pre>npm install -g @dhaxor/open-context
 oce setup          # picks a free model if you have one
@@ -67,15 +100,15 @@ oce search "auth middleware"</pre>
     </div>
     <div class="doc-card">
       <span class="tag">MCP</span>
-      <h3>Plug into Claude Code, Cursor, or any MCP client</h3>
-      <p>The engine speaks MCP over stdio and HTTP. Retrieval, files, and symbol tools become your assistant's ground truth.</p>
-      <pre>claude mcp add oce -- oce mcp
-# or, for HTTP clients:
-oce mcp --http --port 8940</pre>
+      <h2>Plug into Claude Code, Cursor, or any MCP client</h2>
+      <p>One command writes your client's MCP config. Retrieval, symbol, repo-map and memory tools become your assistant's ground truth.</p>
+      <pre>oce mcp install claude-code
+# or: cursor · vscode · windsurf · claude-desktop
+oce mcp install          # list them</pre>
     </div>
     <div class="doc-card">
       <span class="tag">Agent</span>
-      <h3>Run the Trace workspace</h3>
+      <h2>Run the Trace workspace</h2>
       <p>The agent with an evidence rail: see what's in context, pin it, evict it, rewind it.</p>
       <pre>oce trace        # browser workspace
 oce              # same thing, in the terminal</pre>
@@ -89,17 +122,35 @@ oce              # same thing, in the terminal</pre>
 oce bench                                    # indexing throughput on your machine</pre>
     <p>Free semantic options: <code>oce setup --embeddings ollama</code> (local, no key) or <code>--embeddings local</code> (in-process, no server). Voyage-code-3 gives the best code-retrieval numbers.</p>
 
-    <h2>Use with Claude Code</h2>
-    <p>Add the MCP server once per project (or <code>-s user</code> for all of them):</p>
-    <pre>claude mcp add oce --scope project -- oce mcp</pre>
-    <p>Claude Code then gets <code>codebase-retrieval</code>, <code>find-symbol-definition</code>, <code>find-symbol-references</code>, <code>read-file</code>, and <code>index-status</code> — all served from the local index. The first call indexes the workspace; after that, indexing is incremental.</p>
+    <h2 id="connect">Connect your MCP client</h2>
+    <p>Run this in the project you want indexed. It merges an <code>open-context</code> server into the client's own config (keeping the servers already there) and never overwrites a file it can't read:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>client</th><th>command</th><th>writes</th></tr></thead>
+      <tbody>
+        <tr><td><a href="/claude-code">Claude Code</a></td><td><code>oce mcp install claude-code</code></td><td><code>.mcp.json</code> — or <code>--scope user</code> for every project</td></tr>
+        <tr><td><a href="/cursor">Cursor</a></td><td><code>oce mcp install cursor</code></td><td><code>.cursor/mcp.json</code></td></tr>
+        <tr><td><a href="/vscode#copilot">VS Code (Copilot)</a></td><td><code>oce mcp install vscode</code></td><td><code>.vscode/mcp.json</code></td></tr>
+        <tr><td><a href="/windsurf">Windsurf</a></td><td><code>oce mcp install windsurf</code></td><td><code>~/.codeium/windsurf/mcp_config.json</code></td></tr>
+        <tr><td><a href="/claude-desktop">Claude Desktop</a></td><td><code>oce mcp install claude-desktop</code></td><td><code>claude_desktop_config.json</code></td></tr>
+      </tbody>
+    </table></div>
+    <p><code>--print</code> previews the change, <code>--remove</code> undoes it, and <code>--npx</code> starts the server through npx when <code>oce</code> isn't on the client's PATH. The client then gets <code>codebase-retrieval</code>, <code>repo-map</code>, <code>find-symbol-definition</code>, <code>find-symbol-references</code>, <code>read-file</code>, <code>list-files</code>, <code>index-status</code> and the memory tools — all served from the local index. The first start indexes the workspace; after that, indexing is incremental.</p>
 
-    <h2>Use with Cursor / other MCP clients</h2>
-    <p>Point the client at the HTTP endpoint with a bearer token, or run stdio:</p>
-    <pre>oce mcp --http --port 8940 --auth-token $OCE_MCP_AUTH_TOKEN</pre>
-    <pre>// .cursor/mcp.json
-{ "mcpServers": { "oce": { "url": "http://127.0.0.1:8940/mcp",
-                           "headers": { "Authorization": "Bearer $OCE_MCP_TOKEN" } } } }</pre>
+    <h2>One endpoint for a whole team</h2>
+    <p>Serve one index over Streamable HTTP with a bearer token, and point any HTTP-capable client at it:</p>
+    <pre>oce mcp --http --port 8940 --auth-token "$OCE_MCP_AUTH_TOKEN"
+
+// .cursor/mcp.json (any client that takes a URL works the same way)
+{ "mcpServers": { "open-context": {
+    "url": "http://127.0.0.1:8940/mcp",
+    "headers": { "Authorization": "Bearer &lt;the same token&gt;" } } } }</pre>
+
+    <h2>Use your own MCP servers in the agent</h2>
+    <p>The other direction: give OCE's agent (<code>oce agent</code>, <code>oce trace</code>, the <a href="/vscode">VS Code extension</a>) the tools of the MCP servers you already use. List them in <code>~/.open-context/config.json</code> — user-level only, so a cloned repository can never start programs:</p>
+    <pre>{ "mcpServers": {
+    "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"],
+                "env": { "GITHUB_TOKEN": "${env:GITHUB_TOKEN}" } } } }</pre>
+    <p>Read-only tools run freely; any other tool asks before it runs, in every approval mode, until you answer <em>always</em> or list it in the server's <code>autoApprove</code>.</p>
 
     <h2>Share one index across a team (Team plan)</h2>
     <p>Index once in CI, publish the artifact, and teammates pull it — only their local diff re-embeds, because identical code hashes to identical vectors:</p>
@@ -109,7 +160,7 @@ oce push-index https://indexes.example.com/upload --token $OCE_INDEX_TOKEN
 
 # Teammate: pull and go (their diff re-embeds, nothing else)
 oce pull-index https://indexes.example.com/team-index.tar</pre>
-    <p>Team features gate on an offline-verifiable license. See <a href="pricing.html">pricing</a> — activation is one command: <code>oce activate polar_lk_…</code>.</p>
+    <p>Team features gate on an offline-verifiable license. See <a href="/pricing">pricing</a> — activation is one command: <code>oce activate polar_lk_…</code>.</p>
 
     <h2>Activate a license</h2>
     <pre>oce activate polar_lk_xxxxxxxx     # the key from your Polar order email
@@ -130,30 +181,50 @@ oce license                        # plan, seats, expiry, grace window</pre>
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-        <a href="guides.html">Guides</a> · <a href="agentic-workflow.html">Agentic workflow</a> · <a href="claude-code.html">Claude Code setup</a>
-        <a href="mcp-server.html">MCP server</a>
-        <a href="code-rag.html">Code RAG</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

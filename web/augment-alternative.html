@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open-source alternative to Augment's Context Engine</title>
+<meta name="description" content="Open Context Engine vs Augment's Context Engine: an MIT-licensed, local-first code context engine for MCP clients. What differs, and when each fits.">
+<link rel="canonical" href="https://opencontextengine.com/augment-alternative">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Open-source alternative to Augment's Context Engine">
+<meta property="og:description" content="Open Context Engine vs Augment's Context Engine: an MIT-licensed, local-first code context engine for MCP clients. What differs, and when each fits.">
+<meta property="og:url" content="https://opencontextengine.com/augment-alternative">
+<meta property="og:image" content="https://opencontextengine.com/og/augment-alternative.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Open-source alternative to Augment's Context Engine">
+<meta name="twitter:description" content="Open Context Engine vs Augment's Context Engine: an MIT-licensed, local-first code context engine for MCP clients. What differs, and when each fits.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/augment-alternative.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "An open-source alternative to Augment's Context Engine",
+  "description": "How Open Context Engine compares with Augment Code's Context Engine for giving AI coding agents codebase context over MCP.",
+  "about": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Augment Context Engine"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Open Context Engine"
+    }
+  ],
+  "datePublished": "2026-11-16",
+  "dateModified": "2026-11-16",
+  "image": "https://opencontextengine.com/og/augment-alternative.png",
+  "author": {
+    "@type": "Organization",
+    "@id": "https://opencontextengine.com/#org",
+    "name": "Open Context Engine",
+    "url": "https://opencontextengine.com/"
+  },
+  "publisher": {
+    "@id": "https://opencontextengine.com/#org"
+  },
+  "mainEntityOfPage": "https://opencontextengine.com/augment-alternative"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is there an open-source alternative to Augment's Context Engine?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Open Context Engine is an MIT-licensed code context engine that indexes your repository on your own machine (AST-aware chunks, BM25 + vector search, a code graph) and serves it to MCP clients such as Claude Code, Cursor, VS Code, Windsurf and Claude Desktop. It needs no account for individual use."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where does Augment's Context Engine index code?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Augment's documentation says workspace indexing uploads your codebase to Augment's cloud, where its semantic search backend stores the embeddings. Open Context Engine keeps the index and, by default, the embeddings on your machine."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Open Context Engine better than Augment?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We haven't benchmarked Augment's Context Engine on our gold sets, so we make no quality claim. The differences we can state are structural: license, where code is indexed, account and pricing model. Open Context Engine's own retrieval numbers are published on its benchmarks page."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Comparison",
+      "item": "https://opencontextengine.com/comparison"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Augment alternative",
+      "item": "https://opencontextengine.com/augment-alternative"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#retrieval">Product</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
+      <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
+    </nav>
+    <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
+      npm i -g @dhaxor/open-context <span class="ic-copy">⧉</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap" style="padding-bottom: 0;">
+    <div class="chunk">compare/augment <span class="score">1.00</span></div>
+    <h1 style="font-size: var(--t-h1);">An open-source alternative to Augment's Context Engine</h1>
+    <p class="sub">Augment's Context Engine gives coding agents semantic search over your codebase, and it's now available to any MCP client. Open Context Engine does the same job as MIT-licensed software that indexes on your machine, needs no account, and has no per-query fees. Here's what actually differs.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
+  </section>
+
+  <section class="doc">
+    <h2>At a glance</h2>
+    <p>Facts about Augment are from its own documentation, checked on 16 Nov 2026 — <a href="#sources">sources below</a>. Pricing and plans change; check them before you decide.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Augment Context Engine (MCP)</th><th>Open Context Engine</th></tr></thead>
+      <tbody>
+        <tr><td>License</td><td>Proprietary — the Auggie CLI's license forbids reverse-engineering</td><td>MIT</td></tr>
+        <tr><td>Where code is indexed</td><td>Augment's cloud: the docs say workspace indexing uploads your codebase, and its backend stores the embeddings</td><td>Your machine: a SQLite index in the project, embeddings in-process by default</td></tr>
+        <tr><td>Account</td><td>Augment sign-in (<code>auggie login</code>); the CLI license requires an active subscription</td><td>None for individual use</td></tr>
+        <tr><td>Cost</td><td>Queries billed per token — the docs estimate roughly $0.03–$0.06 per query; paid plans from $20/month</td><td>Free. Team features (shared CI-built indexes, policy locks) $25/seat/month</td></tr>
+        <tr><td>Air-gapped use</td><td>Not possible — indexing runs in Augment's cloud</td><td>Supported: local embeddings, local index, a local LLM through Ollama</td></tr>
+        <tr><td>MCP clients</td><td>Quickstarts for 12, including Claude Code, Cursor, Codex, Zed, Copilot and Gemini CLI</td><td>Any MCP client; one-command setup for Claude Code, Cursor, VS Code, Windsurf and Claude Desktop</td></tr>
+        <tr><td>Beyond retrieval</td><td>Part of Augment's agent platform</td><td>A CLI agent (<code>oce agent</code>, <code>oce trace</code>), a VS Code extension, durable memory, an audit log</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>Where the difference matters</h2>
+    <h3>Your code stays put</h3>
+    <p>With Open Context Engine, chunking, embedding and search run in a local process against a local SQLite file. Retrieved snippets go to whichever LLM your agent already talks to — nothing extra is sent anywhere. That's the property security reviews ask about, and you can verify it in the source.</p>
+    <h3>No meter on retrieval</h3>
+    <p>An agent can call <code>codebase-retrieval</code> dozens of times in one task. Locally, that costs nothing. With per-query billing, retrieval-heavy agents become a line item.</p>
+    <h3>Measured in the open</h3>
+    <p>Open Context Engine's retrieval quality is scored on committed gold sets — its own repository and two codebases it had never seen — and the numbers are on the <a href="/benchmarks">benchmarks page</a>, regenerated from the harness's reports. We haven't run Augment against those sets, so this page makes no claim about which retrieves better. Run <code>oce eval</code> on your own repository to judge for your code.</p>
+
+    <h2>When Augment may fit better</h2>
+    <ul>
+      <li>You want a hosted service with nothing indexed or run on developers' machines — Augment's remote mode indexes from your GitHub repositories.</li>
+      <li>You already use Augment's agents and want one vendor for the agent and its context.</li>
+    </ul>
+
+    <h2>Switch in five minutes</h2>
+    <p>If you're using Augment's MCP server in Claude Code or Cursor today:</p>
+    <pre>npm install -g @dhaxor/open-context
+cd /path/to/your/repo
+oce mcp install claude-code      # or: cursor · vscode · windsurf · claude-desktop</pre>
+    <p>Your agent gets <code>codebase-retrieval</code> — the same tool name — plus <code>repo-map</code>, symbol definitions and references, and memory tools. Setup guides: <a href="/claude-code">Claude Code</a> · <a href="/cursor">Cursor</a> · <a href="/vscode">VS Code</a>. More tools compared on the <a href="/comparison">comparison page</a>.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <div class="faq">
+      <h3>Is there an open-source alternative to Augment's Context Engine?</h3>
+      <p>Open Context Engine: MIT-licensed, indexes on your machine (AST-aware chunks, BM25 + vectors, a code graph), and serves MCP clients such as Claude Code, Cursor, VS Code, Windsurf and Claude Desktop — no account for individual use.</p>
+      <h3>Where does Augment's Context Engine index code?</h3>
+      <p>Augment's docs say workspace indexing uploads your codebase to its cloud, where its semantic search backend stores the embeddings.</p>
+      <h3>Is Open Context Engine better than Augment?</h3>
+      <p>We haven't benchmarked Augment on our gold sets, so we don't claim that. The differences above are structural: license, where code is indexed, accounts and pricing.</p>
+    </div>
+
+    <h2 id="sources">Sources</h2>
+    <ul>
+      <li>Augment Context Engine MCP — <a href="https://docs.augmentcode.com/context-services/mcp/overview" rel="nofollow">overview</a> (local and remote modes, per-query pricing estimate, client quickstarts)</li>
+      <li>Augment — <a href="https://docs.augmentcode.com/setup-augment/workspace-indexing" rel="nofollow">workspace indexing</a> (codebase uploaded to Augment's cloud)</li>
+      <li>Auggie CLI — <a href="https://github.com/augmentcode/auggie/blob/main/LICENSE.md" rel="nofollow">license</a> (proprietary; requires an active subscription)</li>
+      <li>Augment — <a href="https://www.augmentcode.com/pricing" rel="nofollow">pricing</a></li>
+    </ul>
+    <p>All checked on 16 Nov 2026. Spotted something out of date? <a href="mailto:hello@opencontextengine.com">Tell us</a> and we'll fix it.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <span class="wordmark">oce<span class="caret">▍</span></span>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
+    </div>
+    <div class="cols">
+      <div><span class="col-h">product</span>
+        <a href="/#retrieval">Retrieval</a>
+        <a href="/#trace">Agent</a>
+        <a href="/#local">Local-first</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
+      </div>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
+        <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/site.js" defer></script>
+</body>
+</html>

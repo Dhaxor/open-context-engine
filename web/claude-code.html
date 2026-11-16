@@ -3,24 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How to Give Claude Code Your Whole Codebase (MCP Setup) | Open Context Engine</title>
-<meta name="description" content="Three commands to ground Claude Code in your real codebase: install OCE, index the repo, register the MCP server. Hybrid search, symbol lookups and repo maps — all local.">
+<title>Give Claude Code your whole codebase (MCP setup)</title>
+<meta name="description" content="One command connects Claude Code to a local index of your repo: oce mcp install claude-code. Hybrid code search, symbols and repo maps over MCP.">
 <link rel="canonical" href="https://opencontextengine.com/claude-code">
-<meta property="og:title" content="How to Give Claude Code Your Whole Codebase (MCP Setup)">
-<meta property="og:description" content="Three commands: install OCE, run oce index, claude mcp add oce -- oce mcp. Claude Code gets hybrid search, symbol definitions, repo maps — served from a local index.">
-<meta property="og:url" content="https://opencontextengine.com/claude-code">
 <meta property="og:type" content="article">
-<meta property="og:image" content="https://opencontextengine.com/og-image.png">
 <meta property="og:site_name" content="Open Context Engine">
+<meta property="og:title" content="Give Claude Code your whole codebase (MCP setup)">
+<meta property="og:description" content="One command connects Claude Code to a local index of your repo: oce mcp install claude-code. Hybrid code search, symbols and repo maps over MCP.">
+<meta property="og:url" content="https://opencontextengine.com/claude-code">
+<meta property="og:image" content="https://opencontextengine.com/og/claude-code.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Open Context Engine — local code context for AI coding agents">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="How to Give Claude Code Your Whole Codebase — Open Context Engine">
-<meta name="twitter:description" content="Install, index, register. Three commands to ground Claude Code in your real code — locally, with measured retrieval.">
-<meta name="twitter:image" content="https://opencontextengine.com/og-image.png">
+<meta name="twitter:title" content="Give Claude Code your whole codebase (MCP setup)">
+<meta name="twitter:description" content="One command connects Claude Code to a local index of your repo: oce mcp install claude-code. Hybrid code search, symbols and repo maps over MCP.">
+<meta name="twitter:image" content="https://opencontextengine.com/og/claude-code.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="oce.css?v=0.4.0">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230A0D12'/><text x='7' y='22' font-family='monospace' font-size='16' fill='%2345C4E9'>›</text><rect x='17' y='9' width='7' height='14' fill='%23E8EDF4'/></svg>">
+<link rel="stylesheet" href="/oce.css?v=0.9.0">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -28,12 +33,45 @@
   "name": "How to give Claude Code your whole codebase",
   "description": "Install Open Context Engine, index the repository, and register the MCP server so Claude Code retrieves from your real code.",
   "totalTime": "PT5M",
-  "tool": [{ "@type": "HowToTool", "name": "Claude Code" }, { "@type": "HowToTool", "name": "Open Context Engine" }],
+  "tool": [
+    {
+      "@type": "HowToTool",
+      "name": "Claude Code"
+    },
+    {
+      "@type": "HowToTool",
+      "name": "Open Context Engine"
+    }
+  ],
   "step": [
-    { "@type": "HowToStep", "position": 1, "name": "Install Open Context Engine", "text": "Install the CLI globally with npm: npm install -g @dhaxor/open-context (Node 22+).", "url": "https://opencontextengine.com/claude-code#step-1" },
-    { "@type": "HowToStep", "position": 2, "name": "Index the repository", "text": "From the repo root run: oce index. This builds a local SQLite index with AST-aware chunks, hybrid retrieval and a code graph, and keeps it live as files change.", "url": "https://opencontextengine.com/claude-code#step-2" },
-    { "@type": "HowToStep", "position": 3, "name": "Register the MCP server", "text": "Run: claude mcp add oce -- oce mcp. Claude Code now starts the Open Context Engine MCP server over stdio on every session.", "url": "https://opencontextengine.com/claude-code#step-3" },
-    { "@type": "HowToStep", "position": 4, "name": "Verify grounding", "text": "Ask Claude Code a grounding question such as 'where do we validate JWTs?' — it should call codebase-retrieval before answering, citing real files.", "url": "https://opencontextengine.com/claude-code#step-4" }
+    {
+      "@type": "HowToStep",
+      "position": 1,
+      "name": "Install Open Context Engine",
+      "text": "Install the CLI globally with npm: npm install -g @dhaxor/open-context (Node 22+).",
+      "url": "https://opencontextengine.com/claude-code#step-1"
+    },
+    {
+      "@type": "HowToStep",
+      "position": 2,
+      "name": "Index the repository",
+      "text": "From the repo root run: oce index. This builds a local SQLite index with AST-aware chunks, hybrid retrieval and a code graph, and keeps it live as files change.",
+      "url": "https://opencontextengine.com/claude-code#step-2"
+    },
+    {
+      "@type": "HowToStep",
+      "position": 3,
+      "name": "Register the MCP server",
+      "text": "Run: oce mcp install claude-code. It writes the server into the project's .mcp.json (or, with --scope user, registers it for every project). Claude Code then starts the Open Context Engine MCP server over stdio on every session.",
+      "url": "https://opencontextengine.com/claude-code#step-3"
+    },
+    {
+      "@type": "HowToStep",
+      "position": 4,
+      "name": "Verify grounding",
+      "text": "Ask Claude Code a grounding question such as 'where do we validate JWTs?' — it should call codebase-retrieval before answering, citing real files.",
+      "url": "https://opencontextengine.com/claude-code#step-4"
+    }
   ]
 }
 </script>
@@ -45,27 +83,42 @@
     {
       "@type": "Question",
       "name": "What tools does Claude Code get from the Open Context Engine MCP server?",
-      "acceptedAnswer": { "@type": "Answer", "text": "codebase-retrieval (hybrid semantic + keyword search over AST-aware chunks), repo-map (a budgeted structural outline of the codebase), find-symbol-definition and find-symbol-references (compiler-grade when a language server is installed), read-file, list-files, and index-status." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "codebase-retrieval (hybrid semantic + keyword search over AST-aware chunks), repo-map (a budgeted structural outline of the codebase), find-symbol-definition and find-symbol-references (compiler-grade when a language server is installed), read-file, list-files, and index-status."
+      }
     },
     {
       "@type": "Question",
       "name": "Does my code leave my machine?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Open Context Engine itself never uploads anything: indexing, embeddings (in-process MiniLM by default) and the SQLite index are entirely local, and the MCP server runs on stdio on your machine. The retrieved snippets go into Claude Code's context, which travels to your LLM provider as part of any normal Claude Code session — OCE adds nothing extra on the wire." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Open Context Engine itself never uploads anything: indexing, embeddings (in-process MiniLM by default) and the SQLite index are entirely local, and the MCP server runs on stdio on your machine. The retrieved snippets go into Claude Code's context, which travels to your LLM provider as part of any normal Claude Code session — OCE adds nothing extra on the wire."
+      }
     },
     {
       "@type": "Question",
       "name": "Does the index stay current as I edit?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. oce index watches the workspace and re-indexes on file change by default; pass --no-watch if you want a static index. Embeddings are cached by content hash, so identical code never re-embeds." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. oce index watches the workspace and re-indexes on file change by default; pass --no-watch if you want a static index. Embeddings are cached by content hash, so identical code never re-embeds."
+      }
     },
     {
       "@type": "Question",
       "name": "How large a repository can it handle?",
-      "acceptedAnswer": { "@type": "Answer", "text": "A worker-thread pool parallelizes parsing and embedding on large repos automatically; oce bench measures throughput on your machine. The team-sync path lets CI build and publish an index artifact so teammates only re-embed their local diff." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A worker-thread pool parallelizes parsing and embedding on large repos automatically; oce bench measures throughput on your machine. The team-sync path lets CI build and publish an index artifact so teammates only re-embed their local diff."
+      }
     },
     {
       "@type": "Question",
       "name": "Can I use the same index with Cursor or other agents?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes — run oce mcp --http --port 8940 --auth-token $TOKEN and point any HTTP MCP client (Cursor, CI bots, your own scripts) at the same local index. See the MCP server guide for details." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes — run oce mcp install cursor in the same project and Cursor gets the same local index and tools. For a shared endpoint, oce mcp --http --port 8940 --auth-token $TOKEN serves any HTTP MCP client."
+      }
     }
   ]
 }
@@ -81,6 +134,32 @@
   .faq h3 { font-size: 16px; margin: 20px 0 6px; }
   .faq p { margin: 0 0 12px; }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://opencontextengine.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs",
+      "item": "https://opencontextengine.com/docs"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Claude Code",
+      "item": "https://opencontextengine.com/claude-code"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -89,10 +168,12 @@
     <a href="/" class="wordmark" aria-label="Open Context Engine home">oce<span class="caret">▍</span></a>
     <nav class="nav-links" aria-label="Main">
       <a href="/#retrieval">Product</a>
-      <a href="benchmarks.html" class="optional">Benchmarks</a>
-      <a href="pricing.html">Pricing</a>
-      <a href="docs.html" style="color: var(--ink);">Docs</a>
-      <a href="guides.html">Guides</a>
+      <a href="/docs">Docs</a>
+      <a href="/claude-code" class="optional" aria-current="page">Claude Code</a>
+      <a href="/cursor" class="optional">Cursor</a>
+      <a href="/vscode" class="optional">VS Code</a>
+      <a href="/guides">Guides</a>
+      <a href="/pricing">Pricing</a>
       <a href="https://github.com/Dhaxor/open-context-engine" class="optional">GitHub</a>
     </nav>
     <button class="install-chip" data-copy="npm install -g @dhaxor/open-context" aria-label="Copy install command">
@@ -105,13 +186,14 @@
   <section class="hero wrap" style="padding-bottom: 0;">
     <div class="chunk">setup/claude-code <span class="score">1.00</span></div>
     <h1 style="font-size: var(--t-h1);">Give Claude Code your whole codebase</h1>
-    <p class="sub">Three commands to ground Claude Code in your real source: hybrid search, symbol definitions, repo maps — served from a local index over MCP. Five minutes, no cloud.</p>
+    <p class="sub">Install, index, and one command to register the server: Claude Code gets hybrid search, symbol definitions and repo maps, served from a local index of your repo over MCP. Five minutes, no cloud.</p>
+    <p class="updated">Updated <time datetime="2026-11-16">16 Nov 2026</time></p>
   </section>
 
   <section class="doc">
     <h2>Why Claude Code needs a retrieval server</h2>
     <p>Claude Code reads files on demand, but on any real repository its context window is a fraction of the codebase — so the quality of every answer depends on what its searches surface first. Back it with a measured retrieval engine and the difference shows up immediately: fewer hallucinated APIs, edits that account for callers, answers that cite the file you'd have opened.</p>
-    <p>Open Context Engine indexes your repo once (and keeps the index live), then serves it to Claude Code over the <a href="mcp-server">Model Context Protocol</a>. Setup is three commands:</p>
+    <p>Open Context Engine indexes your repo once (and keeps the index live), then serves it to Claude Code over the <a href="/mcp-server">Model Context Protocol</a>. Setup is three commands:</p>
 
     <h2 id="step-1"><span class="step-tag">step 1 · 1 min</span>Install</h2>
     <pre>npm install -g @dhaxor/open-context     # Node 22+</pre>
@@ -123,13 +205,15 @@ oce index</pre>
     <p>This parses your code with tree-sitter (13 languages), chunks along AST boundaries, embeds, and builds the BM25 + code-graph structures. It then <em>watches</em> the workspace — edits re-index automatically, and identical code never re-embeds thanks to the content-hash cache. On big repos, <code>oce bench</code> shows you the throughput.</p>
 
     <h2 id="step-3"><span class="step-tag">step 3 · 30 s</span>Register the MCP server</h2>
-    <pre>claude mcp add oce -- oce mcp</pre>
+    <pre>oce mcp install claude-code</pre>
+    <p>That writes an <code>open-context</code> server into the project's <code>.mcp.json</code> — commit it and everyone on the team gets the same setup (Claude Code asks each person to approve project servers once). For every project on your machine instead, <code>--scope user</code> runs <code>claude mcp add --scope user</code> for you. Prefer to do it by hand? <code>claude mcp add open-context -- oce mcp</code> is the same thing.</p>
     <p>That's the whole integration. Claude Code launches <code>oce mcp</code> over stdio per session and discovers the tools:</p>
     <ul>
       <li><code>codebase-retrieval</code> — hybrid search with symbol expansion</li>
       <li><code>repo-map</code> — the codebase's structure in a few thousand tokens</li>
       <li><code>find-symbol-definition</code> / <code>find-symbol-references</code> — compiler-grade with a language server, AST-grade without</li>
       <li><code>read-file</code>, <code>list-files</code>, <code>index-status</code></li>
+      <li><code>memory_remember</code>, <code>memory_recall</code>, <code>memory_forget</code> — notes that survive across sessions</li>
     </ul>
 
     <h2 id="step-4"><span class="step-tag">step 4 · 1 min</span>Verify the grounding</h2>
@@ -143,8 +227,8 @@ oce index</pre>
     <p>One server process serves every MCP client on the same index. Teams can go further: build the index in CI, publish it as an artifact, and have teammates <code>oce pull-index</code> so only their local diff re-embeds.</p>
 
     <h2>Where to go next</h2>
-    <p>Claude Code sessions through OCE also gain <a href="agent-memory">durable memory</a> — <code>memory_remember</code>, <code>memory_recall</code>, <code>memory_forget</code> — so preferences and codebase facts survive across sessions.</p>
-    <p>For Cursor and other clients, the <a href="mcp-server">MCP server guide</a>; for the retrieval concepts underneath, the <a href="code-rag">code RAG guide</a> and <a href="semantic-code-search">semantic code search</a>; for task-based setup and troubleshooting, the <a href="docs">docs</a>. Task-based alternatives are compared on the <a href="comparison">comparison page</a>.</p>
+    <p>Claude Code sessions through OCE also gain <a href="/agent-memory">durable memory</a> — <code>memory_remember</code>, <code>memory_recall</code>, <code>memory_forget</code> — so preferences and codebase facts survive across sessions.</p>
+    <p>For Cursor and other clients, the <a href="/mcp-server">MCP server guide</a>; for the retrieval concepts underneath, the <a href="/code-rag">code RAG guide</a> and <a href="/semantic-code-search">semantic code search</a>; for task-based setup and troubleshooting, the <a href="/docs">docs</a>. Task-based alternatives are compared on the <a href="/comparison">comparison page</a>.</p>
 
     <h2 id="faq">Frequently asked questions</h2>
     <div class="faq">
@@ -157,7 +241,7 @@ oce index</pre>
       <h3>How large a repo can it handle?</h3>
       <p>Parallel worker-thread indexing kicks in automatically on large repos; <code>oce bench</code> measures yours. For teams, CI-built shared indexes keep local setup instant.</p>
       <h3>Can I use it with Cursor too?</h3>
-      <p>Yes — run the HTTP endpoint (<code>oce mcp --http</code>) and point Cursor at <code>http://127.0.0.1:8940/mcp</code>. Same index, same tools.</p>
+      <p>Yes — <code>oce mcp install cursor</code> in the same project gives Cursor the same index and tools. See the <a href="/cursor">Cursor setup</a>, or <a href="/vscode">VS Code</a> and <a href="/windsurf">Windsurf</a>.</p>
     </div>
   </section>
 </main>
@@ -166,28 +250,50 @@ oce index</pre>
   <div class="wrap foot">
     <div>
       <span class="wordmark">oce<span class="caret">▍</span></span>
-      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;">Open Context Engine · MIT core · v0.9.0<br>No telemetry. No code leaves your machine.</p>
+      <p class="legal" style="margin-top: 12px;"><a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a></p>
     </div>
     <div class="cols">
       <div><span class="col-h">product</span>
         <a href="/#retrieval">Retrieval</a>
-        <a href="/#agent">Agent</a>
+        <a href="/#trace">Agent</a>
         <a href="/#local">Local-first</a>
-        <a href="guides.html">Guides</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/benchmarks">Benchmarks</a>
+        <a href="/changelog">Changelog</a>
       </div>
-      <div><span class="col-h">develop</span>
+      <div><span class="col-h">set up</span>
+        <a href="/claude-code">Claude Code</a>
+        <a href="/cursor">Cursor</a>
+        <a href="/vscode">VS Code</a>
+        <a href="/windsurf">Windsurf</a>
+        <a href="/claude-desktop">Claude Desktop</a>
+        <a href="/mcp-server">MCP server</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div><span class="col-h">learn</span>
+        <a href="/guides">Guides</a>
+        <a href="/agentic-workflow">Agentic workflow</a>
+        <a href="/code-rag">Code RAG</a>
+        <a href="/semantic-code-search">Semantic code search</a>
+        <a href="/context-engineering">Context engineering</a>
+        <a href="/agent-memory">Agent memory</a>
+        <a href="/rag-vs-fine-tuning">RAG vs fine-tuning</a>
+      </div>
+      <div><span class="col-h">compare</span>
+        <a href="/comparison">OCE vs Cursor &amp; Copilot</a>
+        <a href="/augment-alternative">Augment alternative</a>
+      </div>
+      <div><span class="col-h">get it</span>
         <a href="https://github.com/Dhaxor/open-context-engine">GitHub</a>
         <a href="https://www.npmjs.com/package/@dhaxor/open-context">npm</a>
-        <a href="benchmarks.html">Benchmarks</a>
-      </div>
-      <div><span class="col-h">contact</span>
-        <a href="mailto:hello@opencontextengine.com">hello@opencontextengine.com</a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=open-context.open-context-engine">VS Code Marketplace</a>
+        <a href="https://open-vsx.org/extension/open-context/open-context-engine">Open VSX</a>
       </div>
     </div>
   </div>
 </footer>
 
-<script src="site.js" defer></script>
+<script src="/site.js" defer></script>
 </body>
 </html>

@@ -2,7 +2,8 @@
 /**
  * Generates web/benchmarks.html from the committed eval reports, so the
  * public numbers can never drift from the ones the harness actually measured.
- * Run by `npm run build:web` (chained into `npm run deploy`).
+ * Run by `npm run build:web` (chained into `npm run deploy`), which then runs
+ * scripts/build-site.mjs to give the page the site's shared head, nav and footer.
  *
  * Each entry: report = path to a saved `oce eval --out` report. The page
  * renders recall@10 / MRR / nDCG@10 / hit-rate / ctx-recall + latency and the
@@ -50,7 +51,7 @@ function row(e) {
       </tr>`;
 }
 
-const sections = ENTRIES.map(({ group, items }) => `    <h3>${group}</h3>
+const sections = ENTRIES.map(({ group, items }) => `    <h2>${group}</h2>
     <div class="table-wrap">
     <table class="bench">
       <thead><tr><th>configuration</th><th>mode</th><th>cases</th><th class="num">recall@10</th><th class="num">MRR</th><th class="num">nDCG@10</th><th class="num">hit-rate</th><th class="num">ctx-recall</th><th class="num">latency</th><th class="dim">measured</th></tr></thead>
@@ -78,7 +79,7 @@ const html = `<!doctype html>
   .bench td.lbl { font-weight: 500; }
   .bench td.dim { opacity: .55; font-size: 12px; }
   .table-wrap { overflow-x: auto; }
-  h3 { margin: 28px 0 10px; }
+  main h2 { font-size: 20px; margin: 32px 0 10px; }
   .note { opacity: .75; font-size: 14px; max-width: 72ch; }
 </style>
 </head>
@@ -109,7 +110,7 @@ const html = `<!doctype html>
   <section class="wrap" style="padding-top: 8px;">
 ${sections}
 
-    <h3>How to read this</h3>
+    <h2>How to read this</h2>
     <p class="note"><strong>keyword-only</strong> runs use BM25 alone (no embedding key, no vectors). <strong>hybrid</strong> fuses BM25 with vector similarity; since Oct 2026 the fusion weights adapt to query shape (definition-shaped queries lean BM25, paraphrases lean semantic) — the voyage rows above predate that change and are kept as the equal-weight reference. <strong>ctx-recall</strong> checks whether the gold file made it into the packed context an LLM actually receives. Gold sets are file-granular: a case passes when the gold file ranks in the top-10 unique files. Flask is an external, never-seen codebase — the honest test of a ranking change.</p>
   </section>
 </main>

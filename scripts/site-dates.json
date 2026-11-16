@@ -1,0 +1,122 @@
+{
+  "404.html": {
+    "hash": "880c5b3fca239173",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "agent-memory.html": {
+    "hash": "e1020929e2a2d540",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "agentic-workflow.html": {
+    "hash": "e78ee29393fda252",
+    "published": "2026-11-02",
+    "modified": "2026-11-16"
+  },
+  "augment-alternative.html": {
+    "hash": "1fd8c7a494583b0c",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "benchmarks.html": {
+    "hash": "33ea595458738633",
+    "published": "2026-10-27",
+    "modified": "2026-11-16"
+  },
+  "changelog.html": {
+    "hash": "9b02b231dce2cbad",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "claude-code.html": {
+    "hash": "95440c601dcf54f8",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "claude-desktop.html": {
+    "hash": "af9cd5d764c8c306",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "code-rag.html": {
+    "hash": "2c96352f3b578adc",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "comparison.html": {
+    "hash": "0b63ee463ead60b4",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "context-engineering.html": {
+    "hash": "284e2560bbbd8db4",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "cursor.html": {
+    "hash": "fb42fb5e6daedbb7",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "docs.html": {
+    "hash": "76d16b763e9a86bb",
+    "published": "2026-10-27",
+    "modified": "2026-11-16"
+  },
+  "guides.html": {
+    "hash": "41ad464d3eb33cc1",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "index.html": {
+    "hash": "6d0fb2033f2b20e8",
+    "published": "2026-07-19",
+    "modified": "2026-11-16"
+  },
+  "mcp-server.html": {
+    "hash": "7e6974e1c8f1a524",
+    "published": "2026-11-03",
+    "modified": "2026-11-16"
+  },
+  "pricing.html": {
+    "hash": "457626d69f0bbf45",
+    "published": "2026-07-19",
+    "modified": "2026-11-08"
+  },
+  "rag-vs-fine-tuning.html": {
+    "hash": "775bce2f49182b38",
+    "published": "2026-11-08",
+    "modified": "2026-11-16"
+  },
+  "semantic-code-search.html": {
+    "hash": "89138b3ed8d2945f",
+    "published": "2026-11-08",
+    "modified": "2026-11-08"
+  },
+  "vscode.html": {
+    "hash": "fc40051cab592394",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "windsurf.html": {
+    "hash": "c39c652451a91f42",
+    "published": "2026-11-16",
+    "modified": "2026-11-16"
+  },
+  "_releases": {
+    "0.9.0": "2026-11-16",
+    "0.8.0": "2026-11-13",
+    "0.7.1": "2026-11-08",
+    "0.7.0": "2026-11-01",
+    "0.6.0": "2026-10-27",
+    "0.5.0": "2026-10-27",
+    "0.4.7": "2026-10-26",
+    "0.4.6": "2026-10-26",
+    "0.4.5": "2026-10-26",
+    "0.4.4": "2026-10-26",
+    "0.4.3": "2026-10-26",
+    "0.4.2": "2026-10-26",
+    "0.4.1": "2026-10-25"
+  }
+}
