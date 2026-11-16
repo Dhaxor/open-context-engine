@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 (unreleased) — the agent meets you where you work
+## 0.9.0 — the agent meets you where you work
 
 - **Your MCP servers, in the agent.** `mcpServers` in
   `~/.open-context/config.json` (the shape Claude Code and Cursor use:

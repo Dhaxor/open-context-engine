@@ -1,6 +1,6 @@
 # Change Log
 
-## 0.9.0 (unreleased) — the agent meets you where you work
+## 0.9.0 — the agent meets you where you work
 
 - **Fix with agent.** Errors and warnings get a **Fix with Open Context
   agent** quick fix: an agent turn with the problem and the code around it,
