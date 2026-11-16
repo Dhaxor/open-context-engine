@@ -39,6 +39,12 @@ export interface RewindResult {
   turn: number;
 }
 
+/** How much edit payload (whole before/after files) a saved conversation
+ *  keeps. Past it the OLDEST checkpoints are dropped: rewinding to checkpoint
+ *  N undoes the edits of every checkpoint after N, so only a contiguous run
+ *  ending at the newest one is still a set of places you can go back to. */
+export const MAX_SAVED_CHECKPOINT_BYTES = 8 * 1024 * 1024;
+
 export interface CheckpointStoreOptions {
   applier: EditApplier;
   /** Called after a rewind so the index reflects the restored files. */
@@ -140,6 +146,33 @@ export class CheckpointStore {
 
   clear(): void {
     this.checkpoints = [];
+    this.pending = [];
+  }
+
+  /**
+   * The checkpoints to save with the conversation, so Rewind still works after
+   * a window reload or a settings rebuild. Newest first until `maxBytes` of
+   * edit payload, returned oldest-first; edits of a turn still in flight are
+   * not a checkpoint yet and are not included.
+   */
+  export(maxBytes = MAX_SAVED_CHECKPOINT_BYTES): CheckpointRecord[] {
+    let bytes = 0;
+    let start = this.checkpoints.length;
+    for (let i = this.checkpoints.length - 1; i >= 0; i--) {
+      const size = this.checkpoints[i].edits.reduce(
+        (n, e) => n + (e.oldContents?.length ?? 0) + (e.newContents?.length ?? 0) + (e.diff?.length ?? 0), 0);
+      if (bytes + size > maxBytes) break;
+      bytes += size;
+      start = i;
+    }
+    return this.checkpoints.slice(start).map(c => ({ ...c, edits: [...c.edits] }));
+  }
+
+  /** Load saved checkpoints into an empty store (a resumed conversation). */
+  restore(records: readonly CheckpointRecord[]): void {
+    this.checkpoints = records
+      .filter(r => r && typeof r.hash === "string" && Array.isArray(r.edits))
+      .map(r => ({ ...r, edits: [...r.edits] }));
     this.pending = [];
   }
 

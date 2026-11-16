@@ -93,6 +93,77 @@ exports.run = async function run() {
     assert.ok(fs.existsSync(path.join(root, "hello.txt")), "the first turn's file survives a rewind to its own checkpoint");
   });
 
+  const attention = [];
+  step("checkpoints and their edits survive a settings rebuild", async () => {
+    // A settings change rebuilds the session. It used to carry only the
+    // messages, so Rewind and the changes tray silently disappeared. The
+    // change made here — a user-level MCP server — is what the next step uses.
+    const before = session.checkpoints().map(c => c.hash);
+    assert.ok(before.length >= 1, "a checkpoint to carry over");
+    const reset = new Promise(resolve => { const d = handles.traceHost.onDidReset(r => { d.dispose(); resolve(r); }); });
+    handles.traceHost.onDidNeedAttention(a => attention.push(a));
+    await vscode.workspace.getConfiguration("openContext").update("agent.mcpServers", {
+      echo: { command: process.env.OCE_E2E_NODE, args: [process.env.OCE_E2E_MCP_FIXTURE] },
+    }, vscode.ConfigurationTarget.Global);
+    await within("the rebuild the settings change triggers", reset, 60_000);
+
+    session = await handles.traceHost.sessionForTurn(null);
+    events.length = 0;
+    session.subscribe(env => events.push(env.event)); // snapshot + the retold transcript
+    assert.deepEqual(session.checkpoints().map(c => c.hash), before);
+    assert.ok(events.some(e => e.type === "edit" && e.edit.path === "hello.txt"), "the changes tray came back");
+    assert.ok(events.some(e => e.type === "checkpoint" && e.checkpoint.hash === before[0]), "the checkpoint came back");
+  });
+
+  step("the agent uses the user's MCP server: a read-only tool runs, a mutating one asks", async () => {
+    const state = await handles.traceHost.state();
+    assert.deepEqual((state.mcp || []).map(s => [s.name, s.state, s.tools]), [["echo", "connected", 3]], `MCP status: ${JSON.stringify(state.mcp)}`);
+
+    const before = events.length;
+    await within("the MCP echo turn", session.prompt("E2E-MCP-ECHO: use the echo tool"));
+    const mine = events.slice(before);
+    const texts = mine.filter(e => e.type === "text").map(e => e.text).join("");
+    const ran = mine.find(e => e.type === "tool_result" && e.name === "mcp__echo__echo");
+    assert.ok(ran && ran.ok, `the MCP tool ran (the model said: ${texts})`);
+    assert.ok(!mine.some(e => e.type === "approval_request"), "a read-only MCP tool runs without asking");
+    assert.match(texts, /MCP said: echo: from vscode/);
+    assert.ok(attention.some(a => a.kind === "finished" && a.sessionId === session.meta().id), "the finished turn was reported for notification");
+
+    const mark = events.length;
+    const turn = session.prompt("E2E-MCP-TICKET: file a ticket");
+    const ask = await waitFor("an approval for the mutating MCP tool", () => events.slice(mark).find(e => e.type === "approval_request"));
+    assert.equal(ask.request.title, "echo · create_ticket");
+    assert.ok(session.approve(ask.request.id, "allow"));
+    await within("the ticket turn", turn);
+    assert.ok(events.slice(mark).some(e => e.type === "tool_result" && e.name === "mcp__echo__create_ticket" && e.ok), "the approved MCP tool ran");
+  });
+
+  step("Fix with agent: the quick fix on a diagnostic starts a labelled turn", async () => {
+    const file = path.join(root, "broken.ts");
+    fs.writeFileSync(file, "const n: number = \"one\";\nexport default n;\n");
+    const uri = vscode.Uri.file(file);
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const range = new vscode.Range(0, 6, 0, 7);
+    const problem = new vscode.Diagnostic(range, "Type 'string' is not assignable to type 'number'.", vscode.DiagnosticSeverity.Error);
+    problem.source = "ts";
+    const diagnostics = vscode.languages.createDiagnosticCollection("oce-e2e");
+    diagnostics.set(uri, [problem]);
+    try {
+      const fix = await waitFor("the Fix with agent code action", async () => {
+        const all = await vscode.commands.executeCommand("vscode.executeCodeActionProvider", uri, range);
+        return (all || []).find(a => a.title === "Fix with Open Context agent");
+      }, 15_000);
+      const done = turnsEnded();
+      await vscode.commands.executeCommand(fix.command.command, ...(fix.command.arguments || []));
+      await waitFor("the fix turn to finish", () => turnsEnded() > done);
+      const start = events.filter(e => e.type === "turn_start").at(-1);
+      assert.equal(start.prompt, "Fix: Type 'string' is not assignable to type 'number'. (broken.ts:1)");
+      assert.match(events.filter(e => e.type === "text").map(e => e.text).join(""), /Fixed: `broken\.ts:1`/);
+    } finally {
+      diagnostics.dispose();
+    }
+  });
+
   for (const { name, fn } of steps) {
     const started = Date.now();
     try {

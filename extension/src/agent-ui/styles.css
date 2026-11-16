@@ -464,6 +464,37 @@ kbd {
 .entries li[data-evicted="true"] .link { text-decoration: line-through; color: var(--muted); }
 .entries li[data-pinned="true"] .score { color: var(--link); }
 .history li { display: flex; align-items: center; gap: 4px; }
+
+.mcp-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; }
+.mcp-line [data-state="failed"] { color: var(--err); }
+
+/* Memories: a form on top, then the notes grouped by kind. */
+.memory-form, .memories li.editing {
+  border: 1px solid var(--vscode-input-border, var(--border));
+  border-radius: var(--radius);
+  background: var(--vscode-input-background);
+}
+.memory-form:focus-within, .memories li.editing:focus-within { border-color: var(--focus); }
+.memory-form textarea, .memories li.editing textarea {
+  display: block; width: 100%; resize: vertical; min-height: 40px;
+  border: 0; outline: 0; padding: 6px 8px 2px; background: transparent;
+  color: var(--vscode-input-foreground);
+}
+.memory-form textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
+.memory-form-bar { display: flex; align-items: center; gap: 6px; padding: 2px 6px 6px; }
+.memory-form-bar select {
+  height: 22px; padding: 0 4px; border-radius: 4px; font-size: 0.86em;
+  border: 1px solid var(--vscode-dropdown-border, var(--border));
+  background: var(--vscode-dropdown-background, var(--vscode-input-background, var(--bg)));
+  color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground, var(--fg)));
+}
+.memory-error { margin: 0; padding: 0 8px 6px; color: var(--err); }
+.memory-group h3 { margin: 6px 0 2px; font-size: 0.86em; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.memories { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.memories li { display: flex; align-items: flex-start; gap: 2px; padding: 4px 2px 4px 6px; border-radius: 4px; }
+.memories li:not(.editing):hover { background: var(--fill); }
+.memories li.editing { flex-direction: column; align-items: stretch; padding: 0; }
+.memory-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .history-item { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 5px 8px; border-radius: 4px; text-align: left; }
 .history-item:hover { background: var(--fill); }
 .history-item[aria-current="true"] { background: var(--fill-strong); }

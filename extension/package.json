@@ -2,7 +2,7 @@
   "name": "open-context-engine",
   "displayName": "Open Context Engine",
   "description": "Local-first codebase indexing, semantic search, and an AI agent grounded in your code. Runs fully offline.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "open-context",
   "license": "MIT",
   "icon": "icon.png",
@@ -144,13 +144,47 @@
       },
       {
         "command": "openContext.showMemories",
-        "title": "Show Remembered Insights",
+        "title": "Show Memories",
         "category": "Open Context",
-        "icon": "$(notebook)"
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "openContext.setUpMcp",
+        "title": "Set Up MCP for Another Tool…",
+        "category": "Open Context",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "openContext.fixWithAgent",
+        "title": "Fix with Agent",
+        "category": "Open Context",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "openContext.fixLastCommand",
+        "title": "Fix Last Failed Command with Agent",
+        "category": "Open Context",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "openContext.fixTerminalSelection",
+        "title": "Ask Agent to Fix This",
+        "category": "Open Context"
+      },
+      {
+        "command": "openContext.rememberSelection",
+        "title": "Remember This…",
+        "category": "Open Context",
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "openContext.openMemoryFile",
+        "title": "Open Memories as Markdown",
+        "category": "Open Context"
       },
       {
         "command": "openContext.clearMemories",
-        "title": "Clear Remembered Insights",
+        "title": "Clear Memories",
         "category": "Open Context"
       },
       {
@@ -273,6 +307,23 @@
           "command": "openContext.findSimilar",
           "when": "editorHasSelection",
           "group": "openContext@2"
+        },
+        {
+          "command": "openContext.rememberSelection",
+          "when": "editorHasSelection",
+          "group": "openContext@3"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "openContext.fixTerminalSelection",
+          "when": "terminalTextSelected",
+          "group": "openContext@1"
+        },
+        {
+          "command": "openContext.fixLastCommand",
+          "when": "openContext.terminalFailed",
+          "group": "openContext@2"
         }
       ],
       "view/item/context": [
@@ -322,6 +373,16 @@
           "command": "openContext.debugRetrieval",
           "when": "view == openContext.chat",
           "group": "2_debug@2"
+        },
+        {
+          "command": "openContext.showMemories",
+          "when": "view == openContext.chat",
+          "group": "3_memory@1"
+        },
+        {
+          "command": "openContext.setUpMcp",
+          "when": "view == openContext.chat",
+          "group": "4_mcp@1"
         },
         {
           "command": "openContext.indexWorkspace",
@@ -527,6 +588,35 @@
           "type": "string",
           "default": "",
           "description": "Model for the reasoning tier (empty = provider default, e.g. claude-opus-4-7)"
+        },
+        "openContext.agent.mcpServers": {
+          "type": "object",
+          "default": {},
+          "scope": "machine",
+          "markdownDescription": "MCP servers whose tools the agent can use, in the same shape as Claude Code or Cursor: `{ \"github\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"], \"env\": { \"GITHUB_TOKEN\": \"${env:GITHUB_TOKEN}\" } }, \"linear\": { \"url\": \"https://mcp.linear.app/mcp\" } }`. Tools marked read-only run freely; every other tool asks before it runs, in every approval mode, unless you answer *always* or list it in that server's `autoApprove`. User settings only: a workspace cannot add servers, because a server is a program the agent starts. Servers in `~/.open-context/config.json` (shared with the `oce` CLI) are used too.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": { "type": "string", "description": "stdio: the program to start." },
+              "args": { "type": "array", "items": { "type": "string" } },
+              "env": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra environment variables. ${env:NAME} and ${workspaceFolder} are expanded." },
+              "cwd": { "type": "string" },
+              "url": { "type": "string", "description": "HTTP: a Streamable HTTP (or SSE) endpoint." },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+              "autoApprove": { "anyOf": [{ "type": "boolean" }, { "type": "array", "items": { "type": "string" } }], "description": "Tool names that never ask — or true for all of this server's tools." },
+              "disabled": { "type": "boolean" }
+            }
+          }
+        },
+        "openContext.agent.quickFix.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer **Fix with Open Context agent** in the light bulb on errors and warnings. It starts an agent turn with the problem and the code around it."
+        },
+        "openContext.agent.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Tell you when an agent session you are not looking at finishes a turn, fails, or is waiting for your approval — with a count on the Open Context icon until you look. Nothing is shown for the session on screen."
         },
         "openContext.agent.memory.enabled": {
           "type": "boolean",

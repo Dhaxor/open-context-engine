@@ -1,6 +1,9 @@
+import { createHash } from "crypto";
 import * as vscode from "vscode";
 import type { ApprovalMode } from "../../../src/agent/permissions";
 import type { LLMProvider } from "../../../src/agent/types";
+import type { McpServerConfig } from "../../../src/agent/mcp-client";
+import { loadUserMcpServers } from "../../../src/cli/config-file";
 import { ContextService } from "../services/ContextService";
 import { resolveLLMModel } from "../shared/model-settings";
 import type { SetupNeed } from "./protocol";
@@ -38,6 +41,10 @@ export interface AgentSettings {
     audit: boolean;
     limits: { maxSteps: number; maxTokens: number; historyTokenBudget: number; maxToolResultChars: number; maxRetries: number };
     mode: ApprovalMode;
+    /** The user's MCP servers whose tools the agent gets. */
+    mcpServers: Record<string, McpServerConfig>;
+    /** A digest of mcpServers — they can carry tokens, so only this is compared. */
+    mcpKey: string;
     /**
      * Every setting a built stack captures, so a change means rebuilding it.
      * The keys are compared separately (AgentSettings.apiKey / webSearchKey)
@@ -83,6 +90,10 @@ export async function readAgentSettings(): Promise<AgentSettings> {
     const memory = cfg.get<boolean>("agent.memory.enabled", true);
     const audit = cfg.get<boolean>("agent.audit.enabled", false);
     const mode = configuredApprovalMode();
+    const mcpServers = configuredMcpServers(svc.getIndexWorkspaceRoot());
+    const mcpKey = Object.keys(mcpServers).length
+        ? createHash("sha256").update(JSON.stringify(mcpServers)).digest("hex").slice(0, 16)
+        : "";
 
     const fingerprint = [
         provider, model, baseUrl ?? "", `edits=${includeEdits}`,
@@ -90,14 +101,31 @@ export async function readAgentSettings(): Promise<AgentSettings> {
         `web=${webSearch && !!webSearchKey}`, `route=${routing.enabled}:${routing.fastModel}:${routing.reasoningModel}`,
         `mem=${memory}`, `audit=${audit}`,
         `lim=${limits.maxSteps}:${limits.maxTokens}:${limits.historyTokenBudget}:${limits.maxToolResultChars}:${limits.maxRetries}`,
+        `mcp=${mcpKey}`,
     ].join("|");
 
     return {
         provider, model, baseUrl, apiKey, webSearchKey, includeEdits,
         shell: shellEnabled ? { enabled: true, allowlist: shellAllowlist, timeoutMs: shellTimeoutMs, sandbox: shellSandbox } : false,
         webSearch: webSearch && !!webSearchKey,
-        routing, memory, audit, limits, mode, fingerprint,
+        routing, memory, audit, limits, mode, mcpServers, mcpKey, fingerprint,
     };
+}
+
+/**
+ * The MCP servers the agent may start: `openContext.agent.mcpServers` from
+ * USER settings (the setting is machine-scoped, and a workspace value is
+ * ignored even so) over the CLI's ~/.open-context/config.json. A server is a
+ * program the agent launches — a folder you opened must not be able to choose
+ * it, and in a Restricted Mode window none is started at all.
+ */
+export function configuredMcpServers(workspaceRoot: string): Record<string, McpServerConfig> {
+    if (vscode.workspace.isTrusted === false) return {};
+    const fromSettings = vscode.workspace.getConfiguration("openContext").inspect?.<Record<string, McpServerConfig>>("agent.mcpServers")?.globalValue;
+    let fromFile: Record<string, McpServerConfig> = {};
+    try { fromFile = loadUserMcpServers(workspaceRoot || process.cwd()).servers; } catch {}
+    const merged = { ...fromFile, ...(fromSettings && typeof fromSettings === "object" && !Array.isArray(fromSettings) ? fromSettings : {}) };
+    return Object.fromEntries(Object.entries(merged).filter(([, v]) => v && typeof v === "object"));
 }
 
 /** The approval mode the settings ask for, falling back to auto-edit. */

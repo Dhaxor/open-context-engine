@@ -21,7 +21,7 @@
 import { ContextAgent } from "../agent/agent";
 import { AgentPlan } from "../agent/plan";
 import { ApprovalDecision, ApprovalMode, ApprovalRequest, PermissionManager } from "../agent/permissions";
-import { SessionStore } from "../agent/session-store";
+import { SessionStore, type SavedTrace } from "../agent/session-store";
 import { AgentMessage, EditProposal, StreamEvent } from "../agent/types";
 import { AuditLogger, hashEvent } from "../core/audit";
 import { CheckpointStore } from "./checkpoints";
@@ -56,8 +56,11 @@ export interface TraceSessionOptions {
   readFile?: (path: string) => Promise<string | null>;
   /** Run a shell command for `!`. Absent when policy disallows shell. */
   runCommand?: (command: string, signal?: AbortSignal) => Promise<string>;
-  /** The agent was restored from a saved session: replay it as the transcript. */
-  resumed?: { title: string; messages: readonly AgentMessage[] };
+  /** The agent was restored from a saved session: replay it as the transcript.
+   *  `trace` brings its checkpoints back (Rewind, the changes tray); `turns` is
+   *  the turn count it was saved at, which compaction can leave higher than
+   *  the user messages still in `messages`. */
+  resumed?: { title: string; messages: readonly AgentMessage[]; trace?: SavedTrace; turns?: number };
 }
 
 export type Unsubscribe = () => void;
@@ -82,6 +85,9 @@ export class TraceSession {
   /** In-memory hash chain used when auditing is off, so the spine still works.
    *  Hashes are real content hashes; they are simply not persisted. */
   private localPrev = "";
+  /** Turns compaction summarised out of the messages: turn N of the session is
+   *  user message N - turnOffset. Zero unless a compacted session was resumed. */
+  private turnOffset = 0;
 
   constructor(private opts: TraceSessionOptions) {
     this.opts.permissions.setAsk(req => this.requestApproval(req));
@@ -89,13 +95,29 @@ export class TraceSession {
     // A resumed conversation is retold into the buffer before anyone
     // subscribes, so the first client sees the history the agent already has.
     if (opts.resumed) {
-      const { events, turns } = transcriptEvents(opts.resumed.messages);
-      this.turn = turns;
+      const { messages, trace } = opts.resumed;
+      const userTurns = messages.filter(m => m.role === "user").length;
+      this.turnOffset = Math.max(0, (opts.resumed.turns ?? userTurns) - userTurns);
+      const checkpoints = trace?.checkpoints ?? [];
+      const { events, turns } = transcriptEvents(messages, { turnOffset: this.turnOffset, checkpoints });
+      this.turn = this.turnOffset + turns;
       this.title = opts.resumed.title;
-      this.opts.ledger.setTurn(turns);
+      this.opts.ledger.setTurn(this.turn);
+      // Rewinding needs the edits themselves, not just their events.
+      this.opts.checkpoints.restore(checkpoints);
+      if (trace?.chainPrev) this.localPrev = trace.chainPrev;
       for (const event of events) this.emit(event);
     }
   }
+
+  /** The timeline to carry into a rebuilt session (a settings change), so its
+   *  checkpoints and their edits survive the swap. */
+  exportTrace(): SavedTrace {
+    return { checkpoints: this.opts.checkpoints.export(), ...(this.localPrev ? { chainPrev: this.localPrev } : {}) };
+  }
+
+  /** Turns so far — what a saved session's `turns` must carry. */
+  turnCount(): number { return this.turn; }
 
   // ─── subscription ──────────────────────────────────────────────────────────
 
@@ -198,6 +220,16 @@ export class TraceSession {
   private emitContext(): void {
     this.emit({ type: "context", snapshot: this.opts.ledger.snapshot(this.opts.agent.getMessages()) });
   }
+
+  /**
+   * Wired as the agent's `onMemoryInjected` when the stack is built: the
+   * memories the system prompt was reminded of, so they show in the evidence
+   * rail like every other input the model saw. Re-injection on later steps of
+   * the same turn changes nothing and emits nothing.
+   */
+  readonly observeMemory = (entries: { id: string; kind: string; content: string }[]): void => {
+    if (this.opts.ledger.noteMemory(entries)) this.emitContext();
+  };
 
   // ─── edits ─────────────────────────────────────────────────────────────────
 
@@ -413,7 +445,7 @@ export class TraceSession {
   private persist(): void {
     if (!this.opts.sessionStore) return;
     try {
-      this.opts.sessionStore.save(this.opts.id, this.title || "untitled", this.opts.agent.exportSession(), this.turn);
+      this.opts.sessionStore.save(this.opts.id, this.title || "untitled", this.opts.agent.exportSession(), this.turn, undefined, this.exportTrace());
     } catch {}
   }
 
@@ -580,6 +612,7 @@ export class TraceSession {
     this.opts.checkpoints.clear();
     this.edits = [];
     this.turn = 0;
+    this.turnOffset = 0;
     this.title = "";
     this.emit({ type: "notice", level: "info", message: "Conversation cleared." });
     this.emitContext();
@@ -594,7 +627,7 @@ export class TraceSession {
     if (this.running) throw new Error("Interrupt the running turn before rewinding.");
     const result = await this.opts.checkpoints.rewindTo(hash);
 
-    this.opts.agent.loadMessages(truncateToTurn(this.opts.agent.getMessages(), result.turn));
+    this.opts.agent.loadMessages(truncateToTurn(this.opts.agent.getMessages(), result.turn - this.turnOffset));
     this.turn = result.turn;
     this.opts.ledger.setTurn(result.turn);
 

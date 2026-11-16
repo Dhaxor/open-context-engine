@@ -90,7 +90,9 @@ export type ViewAction =
   | { type: "switch-session" }
   /** A client-side problem (a failed POST). Kept off the event path so it
    *  cannot disturb the cursor the stream depends on. */
-  | { type: "local-error"; message: string };
+  | { type: "local-error"; message: string }
+  /** A client-side confirmation ("Remembered."), same path as local-error. */
+  | { type: "local-info"; message: string };
 
 let localNoticeId = -1;
 
@@ -102,6 +104,9 @@ export function reduce(state: ViewState, action: ViewAction): ViewState {
   }
   if (action.type === "local-error") {
     return pushNotice(state, localNoticeId--, "error", action.message);
+  }
+  if (action.type === "local-info") {
+    return pushNotice(state, localNoticeId--, "info", action.message);
   }
 
   const { envelope } = action;

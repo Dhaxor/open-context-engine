@@ -8,21 +8,44 @@
  * remembers. Folding the messages back into events gives every surface the
  * same history through the same reducer, with no second rendering path.
  *
- * What cannot be recovered is not invented: retrieval rankings, timings, edits
- * and checkpoints were never persisted, so a replayed turn shows its prompt,
- * the answer, and which tools ran — nothing that would claim more.
+ * Checkpoints are saved beside the conversation (SessionStore's timeline), so
+ * each turn's edits and its checkpoint are retold where the turn ends — the
+ * changes tray, per-edit undo, and "Rewind here" come back with it. What was
+ * never persisted is not invented: retrieval rankings and timings are gone, so
+ * a replayed turn shows its prompt, the answer, which tools ran, and what it
+ * changed — nothing that would claim more.
  */
 
 import type { AgentMessage } from "../agent/types";
+import type { CheckpointRecord } from "./checkpoints";
 import type { TraceEvent } from "./protocol";
 
-export function transcriptEvents(messages: readonly AgentMessage[]): { events: TraceEvent[]; turns: number } {
+export interface ReplayOptions {
+  /** Turns that came before the first remaining user message — compaction
+   *  summarised them away — so replayed turns keep their original numbers and
+   *  line up with the checkpoints saved under those numbers. */
+  turnOffset?: number;
+  checkpoints?: readonly CheckpointRecord[];
+}
+
+export function transcriptEvents(messages: readonly AgentMessage[], opts: ReplayOptions = {}): { events: TraceEvent[]; turns: number } {
   const events: TraceEvent[] = [];
+  const offset = Math.max(0, opts.turnOffset ?? 0);
+  const byTurn = new Map<number, CheckpointRecord>();
+  for (const c of opts.checkpoints ?? []) byTurn.set(c.turn, c);
   let turns = 0;
+  const closeTurn = () => {
+    const record = turns ? byTurn.get(offset + turns) : undefined;
+    if (!record) return;
+    const { edits, ...checkpoint } = record;
+    for (const edit of edits) events.push({ type: "edit", edit });
+    events.push({ type: "checkpoint", checkpoint });
+  };
   for (const m of messages) {
     if (m.role === "user") {
+      closeTurn();
       turns++;
-      events.push({ type: "turn_start", turn: turns, prompt: m.content });
+      events.push({ type: "turn_start", turn: offset + turns, prompt: m.content });
     } else if (m.role === "assistant") {
       if (m.content?.trim()) events.push({ type: "text", text: m.content });
       for (const call of m.toolCalls ?? []) events.push({ type: "tool_call", call });
@@ -36,5 +59,6 @@ export function transcriptEvents(messages: readonly AgentMessage[]): { events: T
       });
     }
   }
+  closeTurn();
   return { events, turns };
 }

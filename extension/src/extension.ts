@@ -4,6 +4,12 @@ import { ContextService } from "./services/ContextService";
 import { AgentView } from "./trace/AgentView";
 import { TraceHost } from "./trace/TraceHost";
 import { TracePanel } from "./trace/TracePanel";
+import { SessionNotifier } from "./trace/SessionNotifier";
+import {
+    FIX_COMMAND, FixCodeActionProvider, TerminalFailures, diagnosticAtCursor, diagnosticPrompt, terminalPrompt, terminalSelection,
+    type DiagnosticInfo, type FixPrompt,
+} from "./trace/fix-with-agent";
+import { MCP_CLIENTS, applyInstall, onPath, planInstall, serverCommand } from "../../src/cli/mcp-install";
 import { IndexedFilesProvider } from "./providers/IndexedFilesProvider";
 import { SearchProvider } from "./providers/SearchProvider";
 import { IndexHealthPanel } from "./health/IndexHealthPanel";
@@ -94,9 +100,99 @@ export async function activate(context: vscode.ExtensionContext): Promise<E2EHan
     SettingsPanel.onLicenseChanged = () => traceHost.notifyStateChanged();
     const treeProvider = new IndexedFilesProvider(context);
 
+    // Background sessions say when they finish or need an approval. "Watching"
+    // is either surface showing that session; the sidebar carries the badge.
+    const notifier = new SessionNotifier(traceHost, {
+        isWatching: id => agentView.isWatching(id) || TracePanel.isWatching(id),
+        onDidChangeVisibility: agentView.onDidChangeVisibility,
+        setBadge: (n, tooltip) => agentView.setBadge(n, tooltip),
+        open: sheet => agentView.open(sheet),
+    });
+
+    // "Fix with agent" from where the problem shows: a squiggle, a failed command.
+    const terminalFailures = new TerminalFailures();
+    const runFix = async (fsPath: string | null, fix: FixPrompt) => {
+        try {
+            const sessionId = await traceHost.promptFor(fsPath, fix.text, fix.label);
+            agentView.open({ sheet: "session", sessionId });
+        } catch (err: any) {
+            void vscode.window.showWarningMessage(String(err?.message ?? err));
+        }
+    };
+
+    context.subscriptions.push(
+        terminalFailures,
+        vscode.languages.registerCodeActionsProvider({ scheme: "file" }, new FixCodeActionProvider(), {
+            providedCodeActionKinds: FixCodeActionProvider.kinds,
+        }),
+        vscode.commands.registerCommand(FIX_COMMAND, async (uri?: vscode.Uri, info?: DiagnosticInfo) => {
+            const editor = vscode.window.activeTextEditor;
+            const target = uri ?? editor?.document.uri;
+            const diagnostic = info ?? (editor ? diagnosticAtCursor(editor) : undefined);
+            if (!target || !diagnostic) {
+                void vscode.window.showInformationMessage("No error or warning here to fix. Put the cursor on a squiggle, or use the light bulb.");
+                return;
+            }
+            const doc = await vscode.workspace.openTextDocument(target);
+            const root = traceHost.workspaceFor(target.fsPath) ?? svc.getIndexWorkspaceRoot();
+            const rel = root ? path.relative(root, target.fsPath).replace(/\\/g, "/") : path.basename(target.fsPath);
+            await runFix(target.fsPath, diagnosticPrompt({
+                relPath: rel.startsWith("..") ? target.fsPath : rel,
+                languageId: doc.languageId,
+                lines: doc.getText().split(/\r?\n/),
+                diagnostic,
+            }));
+        }),
+        vscode.commands.registerCommand("openContext.fixLastCommand", async () => {
+            const failure = terminalFailures.lastFailure();
+            if (!failure) {
+                void vscode.window.showInformationMessage("No failed terminal command yet. This needs terminal shell integration (on by default for bash, zsh, fish and PowerShell).");
+                return;
+            }
+            await runFix(failure.cwd ?? null, terminalPrompt({ commandLine: failure.commandLine, exitCode: failure.exitCode, cwd: failure.cwd, output: failure.output() }));
+        }),
+        // The same index, served to other tools over MCP — `oce mcp install` from the palette.
+        vscode.commands.registerCommand("openContext.setUpMcp", async () => {
+            const root = svc.getIndexWorkspaceRoot();
+            if (!root) { void vscode.window.showInformationMessage("Open a folder first — the MCP server indexes it."); return; }
+            const pick = await vscode.window.showQuickPick(
+                MCP_CLIENTS.map(c => ({
+                    label: c.label,
+                    description: c.defaultScope === "project" ? "this project's config" : "its global config, for this project",
+                    client: c.id,
+                })),
+                { title: "Add Open Context to an MCP client", placeHolder: "Which tool should get this codebase's search and memory?" },
+            );
+            if (!pick) return;
+            const installed = onPath("oce");
+            try {
+                const plan = planInstall({ client: pick.client, workspace: root, server: serverCommand(installed) });
+                const { status, file } = applyInstall(plan);
+                const where = path.relative(root, file).startsWith("..") ? file : path.relative(root, file);
+                const message = `${status === "unchanged" ? "Already set up" : status === "updated" ? "Updated" : "Added Open Context"} in ${where}. Restart ${plan.label} to pick it up.`
+                    + (installed ? "" : " It starts with npx; `npm i -g @dhaxor/open-context` makes it start faster.");
+                if (await vscode.window.showInformationMessage(message, "Open File") === "Open File") {
+                    await vscode.window.showTextDocument(vscode.Uri.file(file));
+                }
+            } catch (err: any) {
+                void vscode.window.showErrorMessage(String(err?.message ?? err));
+            }
+        }),
+        vscode.commands.registerCommand("openContext.fixTerminalSelection", async () => {
+            const selection = (await terminalSelection()).trim();
+            if (!selection) {
+                // Nothing selected: the useful reading is "the thing that just failed".
+                await vscode.commands.executeCommand("openContext.fixLastCommand");
+                return;
+            }
+            await runFix(null, terminalPrompt({ output: selection }));
+        }),
+    );
+
     context.subscriptions.push(
         traceHost,
         agentView,
+        notifier,
         vscode.window.registerWebviewViewProvider(AgentView.viewType, agentView, {
             // Keep the agent DOM (and any in-progress turn) alive when the panel is
             // hidden or moved, instead of tearing it down and losing the conversation.
@@ -329,15 +425,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<E2EHan
             traceHost.notifyStateChanged();
         }),
 
-        vscode.commands.registerCommand("openContext.showMemories", async () => {
+        // The memory panel in the sidebar: view, correct, forget, add.
+        vscode.commands.registerCommand("openContext.showMemories", () => agentView.open({ sheet: "memory" })),
+        vscode.commands.registerCommand("openContext.openMemoryFile", async () => {
+            // memories.md is the readable twin of memories.json (the source of truth).
             try {
                 const ctx = await svc.getContext();
-                const memPath = path.join(ctx.getWorkspaceRoot(), ".open-context", "memories.json");
+                const memPath = path.join(ctx.getWorkspaceRoot(), ".open-context", "memories.md");
                 const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(memPath));
                 await vscode.window.showTextDocument(doc, { preview: true });
             } catch {
                 vscode.window.showInformationMessage("No memories stored yet for this workspace.");
             }
+        }),
+        vscode.commands.registerCommand("openContext.rememberSelection", () => {
+            const editor = vscode.window.activeTextEditor;
+            const selection = editor?.document.getText(editor.selection).trim();
+            // Prefilled, not saved: a memory is a sentence the agent will be
+            // told is true, so the user gets to word it first.
+            agentView.open({ sheet: "memory", ...(selection ? { draft: selection.slice(0, 500) } : {}) });
         }),
 
         vscode.commands.registerCommand("openContext.clearMemories", async () => {

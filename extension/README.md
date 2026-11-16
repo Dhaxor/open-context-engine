@@ -34,11 +34,22 @@ the code you actually have, and it shows you which code it used.
 - **A changes tray** after every turn that edits files: open them all in one
   diff editor, undo or reapply, or **Get review** — the agent reviews its own
   diff against the surrounding code, as a turn you can follow up on.
-- **Checkpoints.** Rewind the conversation and the files to any earlier turn.
+- **Checkpoints.** Rewind the conversation and the files to any earlier turn —
+  after a window reload too.
 - **A shell that checks its work.** The agent can run your tests and builds.
   Commands run under the OS sandbox where there is one (macOS Seatbelt: no
   network, writes limited to the workspace; Linux bubblewrap: no network), and
   ask first unless you choose Full auto inside Seatbelt.
+
+## Fix it from where it broke
+
+- **Fix with Open Context agent** is in the light bulb on every error and
+  warning: the agent gets the problem and the code around it, and the turn
+  reads `Fix: …` in the transcript.
+- **A failed command in the terminal** — right-click → **Fix Last Failed
+  Command with Agent** hands over the command and its output (needs shell
+  integration, on by default). Select some output and choose **Ask Agent to
+  Fix This** for anything else.
 
 ## Grounded in your code
 
@@ -50,8 +61,15 @@ the code you actually have, and it shows you which code it used.
   evict what shouldn't be there.
 - **A repo map.** For broad questions the agent reads a compact outline of the
   codebase's structure first, instead of a dozen searches.
-- **Memory.** Insights the agent learns about your codebase carry across
-  sessions, and show in the context window when they are used.
+- **Memory you can read and correct.** What the agent learns about your
+  codebase — and what you tell it — carries across sessions and shows in the
+  context window when it is used. The bookmark button lists every memory:
+  correct one, forget one, or add your own (**Remember this** on an answer or
+  a selection, or `/remember` in the composer).
+- **Your MCP servers.** Add the servers you already use (GitHub, Linear, a
+  database…) to `openContext.agent.mcpServers` in your user settings and the
+  agent can use their tools. Read-only tools run freely; anything else asks
+  first, in every approval mode.
 - **AST-aware chunking for 13 languages:** TypeScript, JavaScript, Python, Go,
   Rust, Java, C#, C, C++, Ruby, PHP, Kotlin and Swift. Other text files are
   chunked by lines. Files re-index on save.
@@ -61,8 +79,10 @@ the code you actually have, and it shows you which code it used.
 ![Two sessions side by side, one working in its own git worktree](media/screenshots/agent-parallel.png)
 
 In a git repository, start a second session in its own worktree and branch —
-it works without touching your checkout. Review its diff (or have the agent
-review it), then land it: commit, merge, and close in one step.
+it works without touching your checkout. When it finishes a turn or needs an
+approval while you are elsewhere, a notification says so (with **Review**) and
+the Open Context icon shows a count. Review its diff (or have the agent review
+it), then land it: commit, merge, and close in one step.
 
 ## Trace in an editor tab
 
@@ -118,6 +138,9 @@ embeddings) to stay fully offline. There is no telemetry.
 | `openContext.agent.shell.enabled` | `true` | Lets the agent run commands (they ask first outside Full auto) |
 | `openContext.agent.shell.sandbox` | `true` | Runs agent commands under the OS sandbox |
 | `openContext.agent.memory.enabled` | `true` | Remembers codebase insights across sessions |
+| `openContext.agent.mcpServers` | `{}` | MCP servers whose tools the agent can use (user settings only) |
+| `openContext.agent.notifications.enabled` | `true` | Tells you when a session you are not watching finishes or needs you |
+| `openContext.agent.quickFix.enabled` | `true` | Offers **Fix with Open Context agent** on errors and warnings |
 | `openContext.autoIndex` | `true` | Re-indexes files as they change |
 
 ## The same engine elsewhere
@@ -125,7 +148,9 @@ embeddings) to stay fully offline. There is no telemetry.
 Open Context Engine also runs as a CLI and an MCP server for Claude Code,
 Cursor and other MCP clients — `npm install -g @dhaxor/open-context` (the
 unscoped `open-context-engine` on npm is an unrelated package) — and as Trace,
-an agent workspace for the terminal and the browser. See
+an agent workspace for the terminal and the browser. **Open Context: Set Up MCP
+for Another Tool…** (or `oce mcp install <client>`) adds this project's server
+to Claude Code, Cursor, VS Code, Windsurf, or Claude Desktop. See
 [opencontextengine.com](https://opencontextengine.com).
 
 ## License

@@ -12,13 +12,7 @@ import { createMcpStderrDiagnostics, Diagnostics } from "../core/diagnostics";
 import { buildRepoMap } from "../core/repo-map";
 import { createLspFinder, type LspFinder } from "../core/lsp";
 import { packageVersion } from "../version";
-import { SessionMemory, looksLikeSecret, type MemoryKind } from "../agent/session-memory";
-
-/** Cheap tag extraction shared with the memory store's own tagging. */
-function extractTagsPublic(content: string): string[] {
-  const words = content.match(/[A-Z][a-z]+[A-Z]\w+|[a-z_]{4,}/g) ?? [];
-  return [...new Set(words.map(w => w.toLowerCase()))].slice(0, 5);
-}
+import { SessionMemory, looksLikeSecret, memoryTags, type MemoryKind } from "../agent/session-memory";
 
 export interface CreateMCPServerOptions {
   /** When set, every MCP tool invocation is appended to the audit log. */
@@ -223,7 +217,7 @@ export async function createMCPServer(context: OpenContext, opts: CreateMCPServe
         kind,
         content,
         source: "mcp",
-        tags: Array.isArray(p.tags) ? p.tags.slice(0, 5).map(String) : extractTagsPublic(content),
+        tags: Array.isArray(p.tags) ? p.tags.slice(0, 5).map(String) : memoryTags(content),
         ...(p.supersedes ? { supersedes: String(p.supersedes) } : {}),
       });
       const replaced = entry.supersedes ? ` (supersedes ${entry.supersedes})` : "";

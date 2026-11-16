@@ -1,4 +1,5 @@
 import { unifiedDiff } from "../core/diff";
+import { describeMcpToolName } from "./mcp-client";
 import { AgentHooks, PreToolCallDecision, ToolCall } from "./types";
 
 /**
@@ -127,7 +128,10 @@ export function describeToolCall(call: ToolCall): ApprovalRequest {
       return { call, title: `delete ${a.path ?? "?"}`, preview: `rm ${a.path ?? "?"}` };
     case "run-command":
       return { call, title: `run: ${String(a.command ?? "").slice(0, 80)}`, preview: `$ ${a.command ?? ""}${a.cwd ? `   (cwd: ${a.cwd})` : ""}` };
-    default:
-      return { call, title: call.name, preview: JSON.stringify(a, null, 2).slice(0, 800) };
+    default: {
+      // An MCP server's tool: say whose it is — "github · create_issue" — not the wire name.
+      const mcp = describeMcpToolName(call.name);
+      return { call, title: mcp ? `${mcp.server} · ${mcp.tool}` : call.name, preview: JSON.stringify(a, null, 2).slice(0, 800) };
+    }
   }
 }

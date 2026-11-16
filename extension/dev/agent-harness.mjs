@@ -225,6 +225,12 @@ const HOST = String.raw`
 
   const post = (m) => window.postMessage(m, "*");
   let seq = 0;
+  const memories = [
+    { id: "m1", kind: "preference", content: "Use pnpm, never npm, in this repository.", source: "user", createdAt: ts(3600 * 5) },
+    { id: "m2", kind: "codebase_insight", content: "Token refresh is scheduled in src/auth/session.ts (scheduleRefresh), 60s before expiry.", source: "vscode-agent", createdAt: ts(86400) },
+    { id: "m3", kind: "codebase_insight", content: "API errors are normalised by src/api/client.ts before they reach the UI.", source: "mcp", createdAt: ts(86400 * 3) },
+    { id: "m4", kind: "fact", content: "Staging resets its database every night at 02:00 UTC.", source: "user", createdAt: ts(86400 * 6) },
+  ];
   const envelope = (event, agentId) => ({ seq: ++seq, ts: ts(), sessionId: "s1", ...(agentId ? { agentId } : {}), event });
 
   window.acquireVsCodeApi = () => ({
@@ -237,8 +243,12 @@ const HOST = String.raw`
   function handle(msg) {
     if (msg.kind === "ready") {
       post({ kind: "state", state: { setup: s.setup || null, provider: "anthropic", model: "claude-opus-5-5", plan: "pro",
-        activeFile: "src/auth/session.ts", hasSelection: scene === "welcome", parallel: true, shellEnabled: true } });
+        activeFile: "src/auth/session.ts", hasSelection: scene === "welcome", parallel: true, shellEnabled: true,
+        mcp: [{ name: "github", state: "connected", tools: 26 }, { name: "linear", state: "failed", tools: 0, error: "401 Unauthorized" }] } });
       post({ kind: "sessions", sessions: s.setup ? [] : sessions, parallel: true });
+      // ?open=memory[&draft=…]: what "Show Memories" / "Remember This…" do.
+      const params = new URLSearchParams(location.search);
+      if (params.get("open") === "memory") setTimeout(() => post({ kind: "open", sheet: "memory", ...(params.get("draft") ? { draft: params.get("draft") } : {}) }), 50);
     } else if (msg.kind === "subscribe") {
       if (!s.meta) { post({ kind: "connection", connected: false }); return; }
       seq = 0;
@@ -254,6 +264,19 @@ const HOST = String.raw`
         case "redoEdit": reply({ status: "applied" }); break;
         case "reviewSession": reply({ files: ["src/routes/login.ts"], untracked: ["src/middleware/rate-limit.ts"], diff: diff1, stat: { files: 2, added: 41, removed: 3 } }); break;
         case "confirm": reply(true); break;
+        case "memories": reply({ enabled: true, rows: memories }); break;
+        case "remember": {
+          const content = String(msg.params.content || "").trim();
+          if (content.length < 5) { post({ kind: "rpc-result", id: msg.id, ok: false, error: "A memory must be one note between 5 and 500 characters." }); break; }
+          const row = { id: "m" + Date.now(), kind: msg.params.kind || "preference", content, source: "user", createdAt: ts() };
+          memories.unshift(row); reply(row); break;
+        }
+        case "editMemory": {
+          const i = memories.findIndex(m => m.id === msg.params.id);
+          if (i >= 0) memories[i] = { ...memories[i], content: msg.params.content ?? memories[i].content, kind: msg.params.kind ?? memories[i].kind, source: "user", createdAt: ts() };
+          reply(memories[i]); break;
+        }
+        case "forgetMemory": { const i = memories.findIndex(m => m.id === msg.params.id); if (i >= 0) memories.splice(i, 1); reply({ ok: i >= 0 }); break; }
         default: reply(null);
       }
     }

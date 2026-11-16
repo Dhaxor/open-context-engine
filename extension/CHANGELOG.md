@@ -1,5 +1,41 @@
 # Change Log
 
+## 0.9.0 — the agent meets you where you work
+
+- **Fix with agent.** Errors and warnings get a **Fix with Open Context
+  agent** quick fix: an agent turn with the problem and the code around it,
+  labelled `Fix: …` in the transcript. A failed terminal command (with shell
+  integration) can be handed over with **Fix Last Failed Command with Agent**,
+  and selected terminal output with **Ask Agent to Fix This** — both in the
+  terminal's context menu. Turn the quick fix off with
+  `openContext.agent.quickFix.enabled`.
+- **Background sessions tell you.** When a session you are not looking at
+  finishes a turn, fails, or waits for an approval, you get a notification —
+  with **Review** for a parallel session — and a count on the Open Context
+  icon until you look. Nothing for the session on screen.
+  (`openContext.agent.notifications.enabled`.) Session tabs now show their
+  spinner while a turn runs, and a parallel session's changed-file count
+  updates after each turn.
+- **Your MCP servers, in the agent.** Add servers to
+  `openContext.agent.mcpServers` (user settings) or `~/.open-context/config.json`
+  and the agent gets their tools. Read-only tools run freely; any other tool
+  asks first in every mode until you answer *always* or list it in
+  `autoApprove`. A workspace cannot add servers, and none start in Restricted
+  Mode. The context sheet shows which servers connected.
+- **Set Up MCP for Another Tool…** adds this project's Open Context server to
+  Claude Code, Cursor, VS Code (Copilot), Windsurf, or Claude Desktop.
+- **Memories panel.** The bookmark button (or **Show Memories**) lists what
+  the agent remembers about the workspace — correct a note, forget it, or add
+  your own. **Remember this** on an answer or an editor selection drafts one;
+  `/remember <note>` saves one from the composer. Recalled memories now show
+  in the context window, and evicting one keeps it out of the next request.
+  Parallel sessions share the workspace's memories instead of each keeping
+  its own in a worktree that disappears when it lands.
+- **Rewind after a reload.** Checkpoints and the changes tray come back with
+  a resumed conversation — after a window reload, and after a settings change
+  rebuilds the session (which used to drop them). **Rewind here** is offered
+  on every earlier turn, not only on turns that edited files.
+
 ## 0.8.0 — the agent checks its own work
 
 - **Fixed: agent edits are saved to disk.** Since the first release the edit

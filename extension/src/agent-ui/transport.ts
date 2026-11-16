@@ -7,7 +7,7 @@
 
 import type { ApprovalDecision, ApprovalMode, TraceEnvelope } from "../../../src/trace/protocol";
 import type { ContextAction, TraceTransport, TraceTransportHandlers } from "../../../src/trace/studio/transport";
-import type { HistoryRow, HostMessage, HostState, SearchHit, SessionRow, Surface, WebviewMessage } from "../trace/protocol";
+import type { HistoryRow, HostMessage, HostSheet, HostState, MemoryKind, MemoryList, MemoryRow, SearchHit, SessionRow, Surface, WebviewMessage } from "../trace/protocol";
 
 interface VsCodeApi { postMessage(message: unknown): void }
 declare function acquireVsCodeApi(): VsCodeApi;
@@ -26,6 +26,8 @@ export interface HostHandlers {
   onCompose?: (text: string, send: boolean) => void;
   /** The viewed session id after a host-side swap (null = following the active one). */
   onSessionChanged?: (sessionId: string | null) => void;
+  /** A command or notification asked for a sheet. */
+  onOpen?: (sheet: HostSheet) => void;
 }
 
 export class VsCodeTransport implements TraceTransport {
@@ -100,6 +102,11 @@ export class VsCodeTransport implements TraceTransport {
       case "state": this.host.onState?.(m.state); return;
       case "sessions": this.host.onSessions?.(m.sessions, m.parallel); return;
       case "compose": this.host.onCompose?.(m.text, m.send); return;
+      case "open": {
+        const { kind: _kind, ...sheet } = m;
+        this.host.onOpen?.(sheet as HostSheet);
+        return;
+      }
     }
   }
 
@@ -149,7 +156,25 @@ export class VsCodeTransport implements TraceTransport {
   search(query: string) { return this.call<SearchHit[]>("search", { query }); }
   /** A review turn over a turn's edits (`ids`) or, without them, everything uncommitted. */
   reviewChanges(ids?: string[]) { return this.call<{ files: number }>("reviewChanges", ids ? { ids } : {}); }
-  command(name: "settings" | "index" | "studio" | "llmKey" | "health" | "folder") { return this.call("command", { name }).catch(() => {}); }
+  command(name: "settings" | "index" | "studio" | "llmKey" | "health" | "folder" | "memorySetting" | "memoryFile") { return this.call("command", { name }).catch(() => {}); }
+
+  // ─── memory ──────────────────────────────────────────────────────────────
+
+  memories() { return this.quiet<MemoryList | null>("memories", {}, null); }
+  /** Validation failures ("looks like a secret") are shown in the sheet, not as a notice. */
+  remember(content: string, kind: MemoryKind) { return this.attempt<MemoryRow>("remember", { content, kind }); }
+  editMemory(id: string, patch: { content?: string; kind?: MemoryKind }) { return this.attempt<MemoryRow>("editMemory", { id, ...patch }); }
+  forgetMemory(id: string) { return this.call<{ ok: boolean }>("forgetMemory", { id }); }
+  clearMemories() { return this.call<{ cleared: number }>("clearMemories"); }
+
+  /** A call whose failure the caller shows itself, so it raises no notice. */
+  private attempt<T>(method: string, params: Record<string, unknown>): Promise<T> {
+    const id = this.nextId++;
+    return new Promise<T>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject, quiet: true });
+      this.send({ kind: "rpc", id, method, params });
+    });
+  }
 
   private quiet<T>(method: string, params: Record<string, unknown>, fallback: T): Promise<T> {
     const id = this.nextId++;

@@ -14,6 +14,12 @@ export class TracePanel implements vscode.Disposable {
     private static current: TracePanel | undefined;
     private readonly bridge: TraceBridge;
 
+    /** Whether the Trace tab is on screen showing this session. */
+    static isWatching(sessionId: string): boolean {
+        const current = TracePanel.current;
+        return !!current && current.panel.visible && current.bridge.viewedSessionId() === sessionId;
+    }
+
     static show(extensionUri: vscode.Uri, host: TraceHost, review: EditReviewService): TracePanel {
         if (TracePanel.current) {
             TracePanel.current.panel.reveal();

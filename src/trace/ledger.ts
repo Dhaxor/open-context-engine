@@ -136,10 +136,14 @@ export class ContextLedger {
    *  as one acting on a bad retrieval. Evicting a memory row hides it from
    *  the rail and keeps it hidden on later turns (prior state is preserved);
    *  suppressing it from the next prompt injection is the agent's job. */
-  noteMemory(entries: { id: string; kind: string; content: string }[]): void {
+  noteMemory(entries: { id: string; kind: string; content: string }[]): boolean {
+    // The agent injects memories on every step of a turn; only a memory new
+    // to the window (or to this turn) changes what the rail should show.
+    let changed = false;
     for (const m of entries) {
       const id = `m:${m.id}`;
       const prior = this.entries.get(id);
+      if (!prior || prior.turn !== this.turn || prior.contents !== m.content) changed = true;
       const label = m.content.length > 72 ? `${m.content.slice(0, 72)}…` : m.content;
       this.entries.set(id, {
         id,
@@ -152,6 +156,13 @@ export class ContextLedger {
         contents: m.content,
       });
     }
+    return changed;
+  }
+
+  /** The user evicted this remembered memory from the window: keep it out of
+   *  the next system prompt too, not just out of the rail. */
+  isMemoryEvicted(memoryId: string): boolean {
+    return this.entries.get(`m:${memoryId}`)?.evicted ?? false;
   }
 
   pin(id: string): boolean { return this.setFlags(id, { pinned: true, evicted: false }); }

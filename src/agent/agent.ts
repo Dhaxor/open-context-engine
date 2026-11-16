@@ -285,6 +285,8 @@ export class ContextAgent {
   private router?: import("./model-router").ModelRouter;
   private memory?: import("./session-memory").SessionMemory;
   private memorySource: string;
+  private onMemoryInjected?: AgentConfig["onMemoryInjected"];
+  private memoryFilter?: AgentConfig["memoryFilter"];
   private audit?: AuditLogger;
   private hooks?: AgentHooks;
   private maxParallelTools: number;
@@ -311,6 +313,8 @@ export class ContextAgent {
     this.router = config.router;
     this.memory = config.memory;
     this.memorySource = config.memorySource ?? "agent";
+    this.onMemoryInjected = config.onMemoryInjected;
+    this.memoryFilter = config.memoryFilter;
     this.audit = config.audit;
     if (!this.router) {
       // No router: a single fixed caller is built up front, as before. With a
@@ -542,9 +546,10 @@ export class ContextAgent {
         // recallForPrompt returns "" when nothing relevant is remembered, and
         // also hands back the entries so the evidence rail can show exactly
         // what the model was reminded of.
-        const remembered = await this.memory.recallForPrompt(query);
+        const remembered = await this.memory.recallForPrompt(query, undefined, this.memoryFilter);
         if (remembered.text) {
           prompt += `\n\n${remembered.text}`;
+          try { this.onMemoryInjected?.(remembered.entries); } catch {}
           options.onMemoryInjected?.(remembered.entries);
         }
       } catch {}

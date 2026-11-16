@@ -37,3 +37,30 @@ describe("transcriptEvents", () => {
     expect(events.at(-1)).toMatchObject({ type: "tool_result", ok: false });
   });
 });
+
+describe("transcriptEvents with a saved timeline", () => {
+  const checkpoint = (turn: number, edits: any[] = []) => ({
+    seq: turn, hash: `h${turn}`, prev: "", short: `h${turn}`, ts: "", label: `t${turn}`, turn,
+    filesTouched: edits.length, restorable: edits.length > 0, edits,
+  });
+
+  it("retells each turn's edits and checkpoint where that turn ends", () => {
+    const e = { id: "e1", kind: "create" as const, path: "new.ts", newContents: "x", diff: "+x" };
+    const { events } = transcriptEvents(messages, { checkpoints: [checkpoint(1), checkpoint(2, [e])] });
+    const state = events.reduce(
+      (s, event, i) => reduce(s, { type: "event", envelope: { seq: i + 1, ts: "", sessionId: "s", event } }),
+      initialState,
+    );
+    expect(state.turns[0].checkpoint?.hash).toBe("h1");
+    expect(state.turns[1].blocks.at(-1)).toMatchObject({ kind: "edit", edit: { path: "new.ts" } });
+    expect(state.turns[1].checkpoint).toMatchObject({ hash: "h2", restorable: true });
+    expect(state.checkpoints.map(c => c.hash)).toEqual(["h1", "h2"]);
+  });
+
+  it("numbers turns after the ones compaction removed, so they meet their checkpoints", () => {
+    const { events, turns } = transcriptEvents(messages, { turnOffset: 5, checkpoints: [checkpoint(7)] });
+    expect(turns).toBe(2);
+    expect(events.filter(e => e.type === "turn_start").map(e => (e as any).turn)).toEqual([6, 7]);
+    expect(events.filter(e => e.type === "checkpoint")).toHaveLength(1);
+  });
+});

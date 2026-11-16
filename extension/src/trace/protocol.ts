@@ -54,7 +54,41 @@ export interface HostState {
   /** What agent shell commands run under: an OS sandbox kind, "none", or
    *  "off" when the shell tool is disabled. */
   shellSandbox: "seatbelt" | "bwrap" | "none" | "off";
+  /** The user's MCP servers and whether their tools reached the agent. */
+  mcp?: McpStatusRow[];
 }
+
+export interface McpStatusRow {
+  name: string;
+  state: "connected" | "failed" | "disabled" | "skipped";
+  tools: number;
+  error?: string;
+}
+
+export type MemoryKind = "preference" | "codebase_insight" | "fact" | "conversation_summary";
+
+/** One remembered note the agent is reminded of when it is relevant. */
+export interface MemoryRow {
+  id: string;
+  kind: MemoryKind;
+  content: string;
+  /** Who wrote it: "user", "vscode-agent", "cli-agent", "mcp"… */
+  source: string;
+  createdAt: string;
+}
+
+export interface MemoryList {
+  /** openContext.agent.memory.enabled — when off, nothing is remembered or injected. */
+  enabled: boolean;
+  rows: MemoryRow[];
+}
+
+/** A sheet the host can open in a webview (a command, a notification). */
+export type HostSheet =
+  | { sheet: "memory"; draft?: string }
+  | { sheet: "review"; sessionId: string }
+  /** Not a sheet: switch the view to this session ("Show" on a notification). */
+  | { sheet: "session"; sessionId: string };
 
 export interface SearchHit {
   path: string;
@@ -81,4 +115,7 @@ export type HostMessage =
   | { kind: "sessions"; sessions: SessionRow[]; parallel: boolean }
   | { kind: "state"; state: HostState }
   /** A command put text in the composer (e.g. "Explain with context"). */
-  | { kind: "compose"; text: string; send: boolean };
+  | { kind: "compose"; text: string; send: boolean }
+  /** A command or notification asked for a sheet ("Remember selection",
+   *  "Review" on a finished background session). */
+  | ({ kind: "open" } & HostSheet);

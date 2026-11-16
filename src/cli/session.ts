@@ -23,7 +23,9 @@ import { FsEditApplier } from "../agent/edit-tools";
 import { AuditLogger, defaultAuditDir } from "../core/audit";
 import { policyRequiresAudit } from "../core/policy";
 import { getLicense, isEntitled } from "../core/license";
-import { loadFileConfig } from "./config-file";
+import { loadFileConfig, loadUserMcpServers } from "./config-file";
+import type { McpToolHub } from "../agent/mcp-client";
+import { packageVersion } from "../version";
 import { Diagnostics } from "../core/diagnostics";
 import type { ContextLedger } from "../trace/ledger";
 import type { CheckpointStore } from "../trace/checkpoints";
@@ -183,6 +185,23 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
     }
   }
 
+  // The user's own MCP servers (user-level config only), connected before the
+  // stack so their tools are in the agent's first request. A server that fails
+  // is reported and skipped, never fatal.
+  let mcpHub: McpToolHub | undefined;
+  if (opts.mcp !== false) {
+    const { servers, warnings } = loadUserMcpServers(config.workspaceRoot);
+    for (const w of warnings) diag.progress(`⚠ ${w}\n`);
+    if (Object.keys(servers).length) {
+      const { McpToolHub } = await import("../agent/mcp-client");
+      mcpHub = await McpToolHub.connect(servers, { workspaceRoot: config.workspaceRoot, clientName: "oce-agent", clientVersion: packageVersion() });
+      for (const st of mcpHub.status()) {
+        if (st.state === "connected") diag.progress(`MCP ${st.name}: ${st.tools} tool${st.tools === 1 ? "" : "s"}\n`);
+        else if (st.state !== "disabled") diag.progress(`⚠ MCP ${st.name}: ${st.state}${st.error ? ` — ${st.error}` : ""}\n`);
+      }
+    }
+  }
+
   // Policy can strip capabilities the flags asked for — say so up front instead
   // of letting the agent discover missing tools mid-run.
   const policyBlocks: string[] = [];
@@ -212,9 +231,10 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
       traced,
       onEdit: (e) => editLog.push(e),
       onPolicyBlock: (cap, reason) => policyBlocks.push(`${cap}: ${reason}`),
+      ...(mcpHub ? { extraTools: { tools: mcpHub.tools(), alwaysAsk: mcpHub.alwaysAsk() } } : {}),
       sessionStore,
       sessionId: saved?.id ?? sessionId,
-      ...(saved ? { restore: saved.session } : {}),
+      ...(saved ? { restore: saved.session, restoreTurns: saved.turns, ...(saved.trace ? { restoreTrace: saved.trace } : {}) } : {}),
       meta: {
         ...(saved ? { title: saved.title } : {}),
         ...(opts.branch ? { branch: String(opts.branch) } : {}),
@@ -222,6 +242,7 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
       maxOutputLength: config.search?.maxOutputLength,
     });
   } catch (e: any) {
+    await mcpHub?.close();
     if (!saved) throw e;
     return fatal(`Could not resume session: ${e?.message ?? e}`);
   }
@@ -236,6 +257,7 @@ export async function buildSession(input: BuildSessionInput): Promise<BuiltSessi
   const close = async (): Promise<void> => {
     if (closed) return;
     closed = true;
+    await mcpHub?.close();
     await watcher?.stop();
     ctx.close();
   };

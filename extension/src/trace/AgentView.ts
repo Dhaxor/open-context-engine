@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { EditReviewService } from "../services/EditReviewService";
 import { TraceBridge } from "./TraceBridge";
 import type { TraceHost } from "./TraceHost";
+import type { HostSheet } from "./protocol";
 import { webviewHtml } from "./webview-html";
 
 /**
@@ -13,6 +14,11 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
     private view?: vscode.WebviewView;
     private bridge?: TraceBridge;
     private pending: { text: string; send: boolean } | null = null;
+    private pendingSheet: HostSheet | null = null;
+    private badge: vscode.ViewBadge | undefined;
+    private readonly visibilityEmitter = new vscode.EventEmitter<void>();
+    /** The sidebar was shown or hidden. */
+    readonly onDidChangeVisibility = this.visibilityEmitter.event;
     private markLoaded: () => void = () => {};
     /** Settles once a sidebar webview has loaded and spoken to the host. */
     readonly whenLoaded = new Promise<void>(resolve => { this.markLoaded = resolve; });
@@ -31,6 +37,9 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
         void this.bridge.whenLoaded.then(() => this.markLoaded());
         view.webview.html = webviewHtml(view.webview, this.extensionUri, "agent", "Open Context");
         if (this.pending) { this.bridge.compose(this.pending.text, this.pending.send); this.pending = null; }
+        if (this.pendingSheet) { this.bridge.open(this.pendingSheet); this.pendingSheet = null; }
+        view.badge = this.badge;
+        view.onDidChangeVisibility(() => this.visibilityEmitter.fire());
         view.onDidDispose(() => {
             this.bridge?.dispose();
             this.bridge = undefined;
@@ -50,6 +59,25 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
         else this.pending = { text, send };
     }
 
+    /** Show the sidebar with a sheet open (memories, a session's review). */
+    open(sheet: HostSheet): void {
+        this.focus();
+        if (this.bridge) this.bridge.open(sheet);
+        else this.pendingSheet = sheet;
+    }
+
+    /** Whether the sidebar is on screen and showing this session — then there
+     *  is nothing to notify about: the user is watching it happen. */
+    isWatching(sessionId: string): boolean {
+        return !!this.view?.visible && this.bridge?.viewedSessionId() === sessionId;
+    }
+
+    /** The count on the Open Context activity-bar icon: sessions waiting on you. */
+    setBadge(count: number, tooltip: string): void {
+        this.badge = count > 0 ? { value: count, tooltip } : undefined;
+        if (this.view) this.view.badge = this.badge;
+    }
+
     async newConversation(): Promise<void> {
         await this.host.newConversation(null).catch(err => vscode.window.showErrorMessage(String(err?.message ?? err)));
     }
@@ -57,5 +85,6 @@ export class AgentView implements vscode.WebviewViewProvider, vscode.Disposable 
     dispose(): void {
         this.bridge?.dispose();
         this.bridge = undefined;
+        this.visibilityEmitter.dispose();
     }
 }

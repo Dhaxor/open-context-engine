@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Block, Turn } from "../../../src/trace/view-model";
 import type { RetrievalTrace } from "../../../src/trace/protocol";
-import { changedFiles, describeTool, segment, summarize, turnEdits } from "./activity";
+import { changedFiles, describeTool, memoryDraft, segment, summarize, turnEdits } from "./activity";
 
 const trace = (over: Partial<RetrievalTrace> = {}): RetrievalTrace => ({
   id: "r1", query: "auth", chunks: [], stages: [], durationMs: 12, searchMode: "hybrid",
@@ -64,5 +64,21 @@ describe("changedFiles", () => {
       { path: "a.ts", kind: "str-replace", ids: ["e1", "e2"], added: 2, removed: 1 },
       { path: "b.ts", kind: "create", ids: ["e3"], added: 2, removed: 0 },
     ]);
+  });
+});
+
+describe("memoryDraft", () => {
+  it("drafts the first paragraph as plain text, keeping identifiers whole", () => {
+    expect(memoryDraft("Fixed. `Session.schedule()` now subtracts `REFRESH_SKEW_MS` (60s), so **the refresh** fires early.\n\nThe new test…"))
+      .toBe("Fixed. Session.schedule() now subtracts REFRESH_SKEW_MS (60s), so the refresh fires early.");
+    // A code span keeps every character; emphasis outside one is formatting.
+    expect(memoryDraft("```ts\ncode()\n```\n\n## Why\nThe `__init__` hook runs **first**.")).toBe("Why The __init__ hook runs first.");
+    expect(memoryDraft("x".repeat(600))).toHaveLength(500);
+  });
+});
+
+describe("describeTool for MCP tools", () => {
+  it("names the server and the tool in words", () => {
+    expect(describeTool("mcp__github__create_issue", { title: "Flaky auth test" })).toMatchObject({ icon: "plug", verb: "github · create issue", detail: "Flaky auth test" });
   });
 });

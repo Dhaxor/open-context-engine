@@ -177,6 +177,19 @@ The programmatic API mirrors all of this: `defaultAgentTools({ context })` stays
 
 ### 5. Connect to Claude / Cursor via MCP
 
+One command writes the config your client reads, merged into the servers already there:
+
+```bash
+oce mcp install claude-code      # .mcp.json in this project (--scope user: every project)
+oce mcp install cursor           # .cursor/mcp.json
+oce mcp install vscode           # .vscode/mcp.json (Copilot agent mode)
+oce mcp install windsurf         # ~/.codeium/windsurf/mcp_config.json
+oce mcp install claude-desktop   # claude_desktop_config.json
+oce mcp install                  # list them; --print previews, --remove undoes
+```
+
+Or run the server yourself:
+
 ```bash
 oce mcp --workspace ./my-project
 
@@ -383,6 +396,22 @@ Persistent settings live in `~/.open-context/config.json` (user) and `<workspace
   "chunkSize": 80
 }
 ```
+
+#### Your MCP servers, in the agent
+
+`mcpServers` in the **user** file gives `oce agent`, `oce trace`, and the VS Code agent the tools of the MCP servers you already use, in the shape every client uses:
+
+```jsonc
+{
+  "mcpServers": {
+    "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "${env:GITHUB_TOKEN}" } },
+    "linear": { "url": "https://mcp.linear.app/mcp", "headers": { "Authorization": "Bearer ${env:LINEAR_TOKEN}" } },
+    "postgres": { "command": "pg-mcp", "args": ["${workspaceFolder}/.env"], "autoApprove": ["query"] }
+  }
+}
+```
+
+The agent sees them as `mcp__<server>__<tool>`. A tool the server marks read-only runs freely; any other tool **asks before it runs in every approval mode, full-auto included**, until you answer "always" or list it in `autoApprove` (or set `"autoApprove": true`). Servers are read from `~/.open-context/config.json` only — a project's `.open-context/config.json` cannot add one, because a server is a program the agent starts and a cloned repo must not be able to start programs. `--no-mcp` skips them for a run.
 
 ### Search Configuration
 

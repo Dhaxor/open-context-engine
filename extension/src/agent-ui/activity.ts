@@ -107,8 +107,14 @@ export function describeTool(name: string, args?: Record<string, unknown>, runni
       return { tool: "web", icon: "globe", verb: v("Searching the web", "Searched the web"), detail: pick(args, "query") };
     case "repo-map":
       return { tool: "map", icon: "layers", verb: v("Mapping", "Mapped"), detail: pick(args, "pathPrefix") || "the codebase" };
-    default:
+    default: {
+      // An MCP server's tool (mcp__<server>__<tool>): say whose, in words.
+      const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
+      if (mcp) {
+        return { tool: "other", icon: "plug", verb: `${mcp[1]} · ${mcp[2].replace(/_/g, " ")}`, detail: pick(args, "query", "title", "name", "path", "url", "id") };
+      }
       return { tool: "other", icon: "layers", verb: name, detail: pick(args, "query", "path", "symbol", "command") };
+    }
   }
 }
 
@@ -227,4 +233,20 @@ function lineStat(diff: string): { added: number; removed: number } {
     else if (line.startsWith("-")) removed++;
   }
   return { added, removed };
+}
+
+/** A memory draft from an answer: its first paragraph, as plain text. Only
+ *  formatting is removed — code spans keep every character (`__init__`,
+ *  REFRESH_SKEW_MS), and emphasis is stripped only outside them. */
+export function memoryDraft(answer: string): string {
+  const para = answer.split(/\n\s*\n/).map(p => p.trim()).find(p => p && !p.startsWith("```")) ?? answer.trim();
+  return para
+    .replace(/^\s*(?:#{1,6}|>)\s*/gm, "")
+    // Odd parts are code spans (the capture group), even parts are prose.
+    .split(/(`+[^`]*`+)/g)
+    .map((part, i) => (i % 2 ? part.replace(/^`+|`+$/g, "") : part.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, "$2")))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
 }

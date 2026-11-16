@@ -288,12 +288,15 @@ export class SessionRegistry {
     return { ok: true, branch: entry.branch };
   }
 
-  /** Refresh each session's changed-file count, for the switcher. */
-  async refreshChanges(): Promise<void> {
+  /** Refresh each session's changed-file count, for the switcher — or just
+   *  one session's, when its turn has ended and nothing else moved. */
+  async refreshChanges(onlyId?: string): Promise<void> {
     if (!this.opts.worktrees) return;
     for (const entry of this.entries.values()) {
-      if (!entry.workspace) continue;
-      entry.changedFiles = await this.opts.worktrees.changedFiles(entry.workspace);
+      if (!entry.workspace || (onlyId && entry.id !== onlyId)) continue;
+      try {
+        entry.changedFiles = await this.opts.worktrees.changedFiles(entry.workspace);
+      } catch {}
     }
     this.changed();
   }
