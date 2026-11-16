@@ -340,15 +340,30 @@ function inline(s) {
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>');
 }
 
-/** The Markdown CHANGELOG.md uses: paragraphs, "- " lists with indented continuation lines. */
+/** The Markdown the changelogs use: paragraphs, "- " lists with indented
+ *  continuation lines, ``` fences, and ###/#### sub-headings. */
 function markdown(text) {
   const blocks = [];
   let list = null;
   let para = null;
+  let fence = null;
   const flushPara = () => { if (para) { blocks.push(`<p>${inline(para.join(" "))}</p>`); para = null; } };
   const flushList = () => { if (list) { blocks.push(`<ul>\n${list.map(i => `      <li>${inline(i.join(" "))}</li>`).join("\n")}\n    </ul>`); list = null; } };
   for (const raw of text.split("\n")) {
     const line = raw.replace(/\s+$/, "");
+    if (fence) {
+      if (/^\s*```/.test(line)) { blocks.push(`<pre><code>${esc(fence.join("\n"))}</code></pre>`); fence = null; }
+      else fence.push(raw);
+      continue;
+    }
+    if (/^\s*```/.test(line)) { flushPara(); flushList(); fence = []; continue; }
+    const heading = /^(#{3,4})\s+(.*)$/.exec(line);
+    if (heading) {
+      flushPara(); flushList();
+      const level = heading[1].length;
+      blocks.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      continue;
+    }
     if (!line.trim()) { flushPara(); continue; }
     const item = /^[-*] (.*)$/.exec(line);
     if (item) { flushPara(); (list ??= []).push([item[1]]); continue; }
@@ -356,6 +371,7 @@ function markdown(text) {
     flushList();
     (para ??= []).push(line.trim());
   }
+  if (fence) blocks.push(`<pre><code>${esc(fence.join("\n"))}</code></pre>`);
   flushPara(); flushList();
   return blocks.join("\n    ");
 }
@@ -462,6 +478,8 @@ function lint(file, html, meta) {
     problems.push(`internal link to ${href}, which is not a page`);
   }
   for (const [, href] of html.matchAll(/href="([a-z0-9-]+\.html)/g)) problems.push(`.html link ${href} (use /${href.replace(/\.html$/, "")})`);
+  // Markdown the changelog converter didn't understand shows up as raw text.
+  if (file === "changelog.html" && /```|<p>#{1,6} |<li>#{1,6} /.test(html)) problems.push("unrendered Markdown in the generated changelog");
   return problems.map(p => `${file}: ${p}`);
 }
 

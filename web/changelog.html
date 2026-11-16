@@ -201,7 +201,7 @@
 
     <h2 id="v0-4-4">0.4.4 <span class="tagline">npm package is `@dhaxor/open-context`</span> <span class="date">2026-10-26</span></h2>
     <p>npm's typosquat guard rejects the unscoped name <code>open-context</code> as too similar to the existing <code>opencontext</code>, and suggests the scoped form — which also can never be taken or impersonated. Install:</p>
-    <p>``<code>bash npm install -g @dhaxor/open-context </code>``</p>
+    <pre><code>npm install -g @dhaxor/open-context</code></pre>
     <p>Same CLI (<code>oce</code>), same code. The 0.4.2/0.4.3 tags taught us the two things that had to be fixed for any name to ship: the publish gate and the token.</p>
 
     <h2 id="v0-4-3">0.4.3 <span class="tagline">republish of 0.4.2</span> <span class="date">2026-10-26</span></h2>
@@ -209,17 +209,17 @@
 
     <h2 id="v0-4-2">0.4.2 <span class="tagline">npm package renamed to `open-context`</span> <span class="date">2026-10-26</span></h2>
     <p>The name <code>open-context-engine</code> on npm is owned by a different account, so no release from this repository could ever publish under it (0.4.0's changelog claimed an npm release that never happened — the publish was failing on the name all along). The package now ships as <strong><code>open-context</code></strong>: same CLI (<code>oce</code>), same code, versioned forward. The VS Code extension's Marketplace identity (<code>open-context.open-context-engine</code>) is unchanged.</p>
-    <p>``<code>bash npm install -g open-context </code>``</p>
+    <pre><code>npm install -g open-context</code></pre>
 
     <h2 id="v0-4-1">0.4.1 <span class="date">2026-10-25</span></h2>
-    <p>### Fixes</p>
+    <h3>Fixes</h3>
     <ul>
       <li><strong>The file watcher no longer strands stale chunks.</strong> A file rejected during a debounced flush — replaced with binary bytes, or unreadable at that instant — was parked for removal with no timer armed, so its old chunks stayed in the index until the next unrelated edit. The watcher now re-arms itself and completes the eviction.</li>
       <li><strong><code>oce watch</code> reports removals honestly.</strong> When additions and deletions landed in one debounce window, the <code>[reindex]</code> line always said <code>0 removed</code> because it relayed the add-result verbatim. Removals from the same window are folded into the report.</li>
       <li><strong><code>oce index</code> closes its store before exit.</strong> Process teardown masked it, but the open handle kept the database locked against <code>oce clean</code> on Windows and left WAL files behind.</li>
       <li><strong><code>release-check.sh</code> runs on Windows dev machines.</strong> It assumed npm's POSIX <code>$PREFIX/bin/oce</code> layout; Windows npm puts the shim at the prefix root.</li>
     </ul>
-    <p>### Internal</p>
+    <h3>Internal</h3>
     <ul>
       <li>All pending dependency majors landed: TypeScript 7, vitest 5 (with an explicit vite 8 devDependency — vitest 5 takes vite as a required peer), openai 7, chokidar 6, ignore 7, markdown-it 15, @types/node 26, vsce 4.</li>
       <li>The 1,025-line <code>src/cli/index.ts</code> is now <code>io</code>/<code>config</code>/six command modules plus a thin entry point, with 33 tests running the real commands in-process (keyword-only path, no keys needed).</li>
@@ -236,7 +236,7 @@
 
     <h2 id="v0-4-0">0.4.0 <span class="tagline">first public release</span></h2>
     <p>The first version published to npm. Earlier version numbers were internal.</p>
-    <p>### Trace — the agent workspace</p>
+    <h3>Trace — the agent workspace</h3>
     <ul>
       <li><strong><code>oce trace</code></strong> opens the workspace in your browser; bare <strong><code>oce</code></strong> opens it full-screen in the terminal. Both render one event stream from one session, so they cannot disagree.</li>
       <li><strong>Evidence rail</strong> — what is in the model's context window right now: ranked retrieved chunks with fusion scores, the graph edge that pulled each one in, and a token budget split into retrieval / files / history / system. Pinned chunks survive compaction; evicted chunks are removed from the next request by re-rendering the original tool result without them.</li>
@@ -248,13 +248,13 @@
       <li><strong>Reconnect-safe</strong> — the event stream replays from a cursor, so a dropped connection or a second window never loses the session.</li>
       <li><strong>Desktop shell</strong> (<code>desktop/</code>, build from source) — Electron wrapper with attention-only notifications, a menu, and <code>trace://</code> deep links.</li>
     </ul>
-    <p>### Getting started without paying</p>
+    <h3>Getting started without paying</h3>
     <ul>
       <li><strong><code>oce setup</code></strong> lists every way to get a working model and records your choice. Presets for free providers: Ollama (local), Google Gemini, Groq, Cerebras, OpenRouter free models — <code>oce trace -p groq</code> just works with a key.</li>
       <li><strong>No embedding key required.</strong> With no embedding provider configured, the engine runs keyword (BM25) search instead of failing. This fallback refuses to run if it would discard an existing vector index — one that actually holds chunks; an empty one left by a failed first index is rebuilt.</li>
       <li>A missing key now names the free options instead of dead-ending.</li>
     </ul>
-    <p>### Fixes</p>
+    <h3>Fixes</h3>
     <ul>
       <li><code>oce status</code> no longer wipes the index when run with a different embedding provider than the index was built with; it reports the mismatch instead.</li>
       <li>Switching to another embedding model of the same dimension (for example two 768-dimension Ollama models) now rebuilds the index. Before, the old model's vectors stayed and queries from the new model ranked against them at random. The index records which model built it.</li>
